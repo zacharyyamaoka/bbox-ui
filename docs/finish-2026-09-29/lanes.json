@@ -51,7 +51,13 @@
     "claude/visual-language-reports-moc-279480 (adds apps/vocab-boards + lockfile: dispatcher runs pnpm install)",
     "claude/visual-lang-design-issues-1e94f4, claude/python-syntax-visualization-b86806, claude/native-file-dialog-research-2026-09-22, claude/file-navigator-slow-4354e7, claude/library-vs-host-rule-2026-09-19 (docs + reports)",
     "PORT, do not merge: claude/host-less-shell-2026-09-19 (293 behind; graft shell/ kit, apps/bbox-no-host, contract suite; resolve .gitignore + engineFree.test.ts by hand, the a18c906 way)",
-    "simple-reactflow-whiteboard: merge claude/open-as-library-2026-09-19 into its local main; never push"
+    "LAND (report-only, clean): claude/component-proposal, claude/libavoid-routing-comparison-e5175e",
+    "PORT host-less-shell WITH its pnpm-workspace.yaml entry for apps/bbox-no-host and the lockfile",
+    "PORT claude/harden-menu-kit-533e7171 — a real `git merge` (rename detection) with the 6 conflicts resolved per branch-dispositions.json portHunks; regenerate public/r, never merge it; then npx shadcn build + node docs/validate_registry_payloads.mjs",
+    "PORT claude/orthogonal-design-styles-8d71d7 — the seven new skins (he asked for them): skin.ts lists/labels/blurbs, skin.css token blocks, Styles.stories gallery, skin.test assertions — onto main's newer versions",
+    "PORT claude/w1-anchor-layout — PortLayoutFn registry + AnchorSlotCard + the ellipse story, onto main's rewritten portEdge.tsx",
+    "PORT small hunks: notebook-lab-work-order-472c22's four trunk fixes (codeEditor deferred commit on unmount, portEdge 'anchored' mode, wireLayer scale-correct centres, blockPort data-editable) + its report builders; worktree-agent-a45de5bb9101da160's StepIn bench (stepIn/tokens.ts + test + story under components/); node-editor-library-research-41b089's report builders + docs/report_feedback.py + the .claude/feedback.md top entry; board-url-2026-09-20's handoff half (boardLinkFor beside launchConfig's boardHref, create_review_board.mjs prints it, SKILL.md bullet rewritten for the files host)",
+    "DONORS, not ports: claude/beautiful-bt-registry → L-REG; claude/create-page-latest's NumberInput machine → L-INSPECTOR. Every other branch: archive (listed in branch-dispositions.json, deleted by nobody)"
    ],
    "items": [
     "P-101"
@@ -65,8 +71,8 @@
    ],
    "size": "M",
    "acceptance": [
-    "stacked merge of the first ten already simulated clean on 2026-09-29 (tip 587b950): typecheck 0 errors, studio 10 red = the same 10 as main, storybook-basics failures only in the known-flaky set",
-    "after each merge: pnpm -r typecheck; studio + storybook-basics suites; diff the failure set against the W0 baseline"
+    "after each merge/port: rules.verify, failing set ⊆ EXPECTED_RED",
+    "branch-dispositions.json: every land/port done or explained in LEDGER; P-101 verified to reach tldraw's paste-at-cursor"
    ]
   },
   {
@@ -75,7 +81,8 @@
    "title": "De-flake the browser suites",
    "model": "sonnet",
    "extra": [
-    "storybook-basics: DraftBar focus, DevPanel 'Callbacks Carry The Row Id' / 'Interactions', FileNavigatorGeometry viewport contract, FitToContentHosts 'Drag A Member' (RF + tldraw), BlockPortHosts DOM-canvas port order"
+    "storybook-basics: DraftBar focus, DevPanel 'Callbacks Carry The Row Id' / 'Interactions', FileNavigatorGeometry viewport contract, FitToContentHosts 'Drag A Member' (RF + tldraw), BlockPortHosts DOM-canvas port order",
+    "donor fix: claude/region-wall-intersection-1bd334 changed Grouping.stories.tsx expectAllWiresResolved to also wait for a g[data-wire-id] (it failed 3/3 full-suite runs) — port that hunk"
    ],
    "items": [],
    "clusters": [],
@@ -116,15 +123,49 @@
    ]
   },
   {
+   "id": "B-DEPS",
+   "wave": "W2",
+   "title": "Dispatcher barrier — every new package and dependency, installed once",
+   "owner": "dispatcher",
+   "model": "opus",
+   "extra": [
+    "elkjs in APP (L-ROUTE); react-arborist in apps/storybook-basics (L-INSPECTOR)",
+    "apps/bbox-reactflow skeleton: package.json (@xyflow/react, react, the trunk alias like APP's vite config), registered in pnpm-workspace.yaml, lockfile updated",
+    "simple-reactflow-whiteboard: add a git worktree of claude/open-as-library-2026-09-19 at /home/bam/simple-reactflow-whiteboard-lib (never merge into its main, never push), build its dist/, and depend on it from apps/bbox-reactflow by file: path pinned to that commit",
+    "docs: add an @source for apps/storybook-basics/src in apps/docs/src/app/global.css and whatever import alias the docs need for trunk demos; confirm with one throwaway demo, then remove it"
+   ],
+   "items": [],
+   "clusters": [],
+   "writeSet": [
+    "APP/package.json",
+    "apps/storybook-basics/package.json",
+    "apps/bbox-reactflow/package.json",
+    "pnpm-workspace.yaml",
+    "pnpm-lock.yaml",
+    "apps/docs/src/app/global.css",
+    "apps/docs/tsconfig.json|next.config (alias only)"
+   ],
+   "dependsOn": [
+    "W1-LAND"
+   ],
+   "size": "M",
+   "acceptance": [
+    "pnpm install --frozen-lockfile clean; pnpm -r typecheck clean",
+    "a trunk component renders on a docs page with its Tailwind classes generated (headless screenshot, measured non-zero border)"
+   ]
+  },
+  {
    "id": "B-SCHEMA",
    "wave": "W2",
    "title": "BARRIER — shape schema v2: every new prop in ONE migration",
    "model": "opus",
    "extra": [
+    "STEP 1 — persisted-state inventory: read EVERY item and cluster scheduled in this file (and docs/finish-2026-09-29/residuals.json) and list each piece of state that must be stored, into docs/finish-2026-09-29/schema-inventory.md. Anything whose storage cannot be settled without Zach goes to deferred with the reason. Only then write props.",
     "ss-block: sizes per view {simple,port,expanded} (P-015/P-212), sizeMode hug|fixed (P-141/P-166), portLayout inline|offset (P-107), portMode auto|free + freeOffsets (P-118), functionPort (P-134), showHeaderDivider/showFooterDivider (P-133), titleSize/titleFont (P-177), memberLayout/memberGap/memberGutter/expandedWeights/blockType (P-188), definitionId (P-074/P-109), view += 'value' (P-059)",
     "ss-wire: label + labelFraction (P-156/P-171), startMarker/endMarker (P-096)",
     "ss-code: lineNumbers, fontSizePx (P-127)",
-    "every default renders exactly today's pixels; props only, no behaviour"
+    "every default renders exactly today's pixels; props only, no behaviour",
+    "known from the Codex audit and must be in: header/footer VISIBILITY (buildBlockMenu's four toggles, not only the two dividers), showCard (P-130), ss-port slot members + persistent default-member deletion (P-201/P-208), block slot lists header L/C/R · body · footer L/C/R (P-194), labelOrigin/secondaryOrigin (P-119), wire animated state + arc routing kind (P-121, cluster 10 P-434), port filled override / hidden / frozen and rail enable + parking (clusters 7, 8)"
    ],
    "items": [],
    "clusters": [],
@@ -149,30 +190,36 @@
   },
   {
    "id": "B-SHELL-P1",
-   "wave": "W3",
+   "wave": "W2",
    "title": "BARRIER on chrome/ — lift the chrome behind HostPort (host-less shell P1)",
    "model": "opus",
    "extra": [
     "docs/WORK-ORDER-HOST-LESS-SHELL.md §P1, decisions D1–D5 frozen (host-native document, shell reads a derived scene)",
-    "start by re-confirming the §4.2 chrome disposition table against the tree at gate time — Two Faces and truthful branching have moved it"
+    "start by re-confirming the §4.2 chrome disposition table against the tree at gate time — Two Faces and truthful branching have moved it",
+    "runs BESIDE B-SCHEMA (disjoint write sets) and both merge before any W3 lane is cut, so no canvas lane shares chrome/ with the lift",
+    "the host-less order's chrome gate compares against main; evaluate it against claude/finish-2026-09-29 instead, treating every W1-merged, ported or archived branch as dispositioned. The only live chrome writer is the peer's EXT-SWITCHER lane: leave chrome/{sites,legacyApp,siteStatus}.ts app-side and untouched (they are host-supplied rows)",
+    "point focusLens.tsx, compareView.tsx and problems.ts at the host port's cached scene() instead of useDocumentScene (the per-tick rebuild residual)",
+    "extend chromeActionsAreWired.test.ts's scan to TRUNK/shell and re-home its quarantine entries"
    ],
    "items": [],
    "clusters": [],
    "writeSet": [
     "TRUNK/shell/**",
-    "APP/src/chrome/**",
+    "APP/src/chrome/** except the peerOwned files",
     "APP/src/App.tsx",
     "APP/src/main.tsx",
-    "apps/bbox-no-host/**"
+    "apps/bbox-no-host/**",
+    "APP/src/chromeActionsAreWired.test.ts (scan scope + quarantine re-homing only)"
    ],
    "dependsOn": [
-    "B-SCHEMA"
+    "G-FLAKE",
+    "G-STALE"
    ],
    "size": "L",
    "acceptance": [
     "hostContract suite green for the fake host AND the tldraw host; the three deliberately broken fakes still go red",
     "engineFree.test: nothing under TRUNK/shell imports tldraw or @xyflow/react",
-    "every studio smoke that touched chrome still green, unmodified",
+    "no red outside EXPECTED_RED; no chrome smoke edited",
     "apps/bbox-no-host renders every window on the fake host (headless screenshot)"
    ]
   },
@@ -187,14 +234,15 @@
     "P-013",
     "P-116",
     "P-058",
-    "P-150"
+    "P-123"
    ],
    "clusters": [
     9,
     10
    ],
    "defaults": [
-    "Q-P013"
+    "Q-P013",
+    "Q-P123"
    ],
    "writeSet": [
     "APP/src/shapes/wire/wireGesture.ts",
@@ -202,17 +250,24 @@
     "APP/src/shapes/wire/terminalRebind.ts",
     "APP/src/shapes/wire/portAvailability.ts",
     "TRUNK/scene/edgeValidation.ts",
-    "TRUNK/scene/interactions/magnet/**"
+    "TRUNK/scene/interactions/magnet/**",
+    "APP/src/chrome/ShareMenu/validationLevelHost.ts (or its post-lift home)",
+    "APP/src/chrome/problems.ts polarity rows (or post-lift home)",
+    "APP/src/settingsAreWired.test.ts (remove the quarantine entries this lane makes live)",
+    "TRUNK/scene/lint.ts (the fan-out / hidden-port rules only)"
    ],
    "dependsOn": [
-    "B-SCHEMA"
+    "B-SCHEMA",
+    "B-SHELL-P1"
    ],
    "size": "L",
    "acceptance": [
-    "P-098: a drag starting on a dot while a title is being edited, in readonly, or with a non-select tool creates no cable",
+    "P-098: with the SELECT tool, a press-drag from a dot draws a cable; while a title/port label is being edited, in readonly, or with any tool other than select/wire/arrow, it creates nothing",
+    "wire or arrow tool: click a dot, move, click a legal dot = one cable (Q-P013); A then click a port starts a port edge (cluster 10 P-316)",
     "P-221: a new cable's index is below the lowest node shape it connects (not global sendToBack)",
-    "P-116: release within the magnet radius of a legal dot connects to the nearest LEGAL one; a dotted proposal is painted while dragging",
-    "P-058: an expanded block's own port can wire to an inner member through the inner face"
+    "P-116: release within the magnet radius connects to the nearest LEGAL dot; a dotted proposal is painted while dragging",
+    "P-058: an expanded block's own port wires to an inner member through the inner face",
+    "allowSamePolarity, allowHiddenPorts, allowFanOut each gate a real wiring attempt — mutation-tested (remove the gate → red); direction derived from the wall (Q-P123)"
    ]
   },
   {
@@ -240,13 +295,18 @@
     "APP/src/app.css"
    ],
    "dependsOn": [
-    "B-SCHEMA"
+    "B-SCHEMA",
+    "B-SHELL-P1"
    ],
    "size": "M",
    "acceptance": [
     "crossing='halo' paints a casing in --bbox-canvas and never over a block body (measured on a fixture)",
     "a wire label is created by double-click, dragged along the cable, persisted as labelFraction, rendered by the trunk TraceBadge",
-    "delayed variant shows its badge; variant is pickable from the pill"
+    "delayed variant shows its badge; command setWireVariant(ids, v) exists and is tested — its pill control is L-PILL's",
+    "edge colour (cluster 11) renders from props"
+   ],
+   "extra": [
+    "residuals P-189 (a control point paints above the label) and P-187 (a per-cable panel section: delay + animation) — mechanism here, panel rows via L-INSPECTOR's schema"
    ]
   },
   {
@@ -264,16 +324,22 @@
     "APP/src/shapes/wire/wireGeometry.ts",
     "APP/src/shapes/wire/tidyWires.ts",
     "APP/src/document/autoLayout.ts",
-    "APP/src/chrome/ContextualPopupMenu/arrangeActions.ts"
+    "APP/src/chrome/ContextualPopupMenu/arrangeActions.ts (or its post-lift home) — this lane is its one owner"
    ],
    "dependsOn": [
-    "B-SCHEMA"
+    "B-SCHEMA",
+    "B-SHELL-P1",
+    "B-DEPS"
    ],
    "size": "L",
    "acceptance": [
     "no routed segment crosses a block rect on the 3-level fixture board; paint and hit geometry agree",
     "Tidy converts routes back to props.pins; cables with pins are treated as locked",
     "Auto-layout writes positions only, one undo step; elkjs installed by the dispatcher in W2, cited per docs/ALGORITHM-PROVENANCE.md"
+   ],
+   "extra": [
+    "residuals P-111 (reset a whole cable's route to automatic, gated on it having pins) and P-081 (bends on straight/curved routings)",
+    "region frames are obstacles too, not only block rects (CONTROL-FLOW-PLAN §11 item 1)"
    ]
   },
   {
@@ -292,33 +358,42 @@
     "P-059",
     "P-086",
     "P-183",
-    "P-169"
+    "P-169",
+    "P-185",
+    "P-146",
+    "P-177"
    ],
    "clusters": [
     13,
     14
    ],
    "defaults": [
-    "Q-P166"
+    "Q-P166",
+    "Q-P146"
    ],
    "writeSet": [
-    "APP/src/shapes/block/BlockFace.tsx (header/size/view regions)",
+    "APP/src/shapes/block/BlockShapeUtil.tsx (METHODS only: onResize, canResizeChildren, canEdit — props are B-SCHEMA's; onDragShapesIn/Out stay L-MEMBERS')",
+    "APP/src/shapes/block/BlockFace.tsx (header, title typography, footer, size, view)",
+    "APP/src/shapes/block/BlockFooterMenu.tsx",
     "APP/src/shapes/shared/measure.ts",
-    "APP/src/chrome/ContextualPopupMenu/selectionActions.ts (setBlockView)",
-    "APP/src/chrome/ContextualPopupMenu/viewHotkeys.tsx",
     "APP/src/shapes/region/RegionFace.tsx",
-    "APP/src/chrome/FocusLens/focusVisibility.ts"
+    "APP-side adapters left by P1 for setBlockView / view hotkeys / focus visibility — this lane is their one owner"
    ],
    "dependsOn": [
-    "B-SCHEMA"
+    "B-SCHEMA",
+    "B-SHELL-P1"
    ],
    "size": "L",
    "acceptance": [
-    "P-190 live bug: resizing an expanded block leaves member geometry unchanged (canResizeChildren false) — a test that did not exist",
+    "P-190 live bug: resizing an expanded block leaves member geometry unchanged (canResizeChildren false, as RegionShapeUtil already does) — a test that did not exist",
     "expanded→simple→expanded restores the authored expanded size",
-    "value view reachable by hotkey and pill; simple view hides ports at rest and reveals on hover",
-    "children of a non-expanded block are neither painted nor hit-testable",
-    "multi-select 1/2/3 flips every selected block"
+    "simple view hides ports at rest and reveals on hover; children of a non-expanded block are neither painted nor hit-testable",
+    "commands exist and are tested: setViewFor(ids, view) incl. 'value', fitToContent(ids) for blocks AND regions (replacing OpenPython.tsx's open-time region auto-fit, which says 'owed upstream … delete this') (Q-P166)",
+    "selected-then-click on a block title/description opens editing at any delay without breaking drag-from-title (P-044)",
+    "block footer dropdown: Duplicate and Delete (Q-P146); step in/out rows are L-NAV's"
+   ],
+   "extra": [
+    "mechanism halves whose CONTROLS are L-PILL's / L-MENU-CONTEXT's: value view (P-059), title size/font rendering (P-177), header/footer + divider visibility rendering (P-133), multi-select view flip command (cluster 13)"
    ]
   },
   {
@@ -347,7 +422,8 @@
     "TRUNK/components/blockPort.layout.ts"
    ],
    "dependsOn": [
-    "B-SCHEMA"
+    "B-SCHEMA",
+    "B-SHELL-P1"
    ],
    "size": "L",
    "notes": "P-107 and P-119 are blocked on the inspector (P-057) only for their CONTROLS. This lane ships the rendering from the B-SCHEMA props; L-INSPECTOR's field schema supplies the rows later.",
@@ -364,8 +440,7 @@
    "title": "Standalone ports: indicator, direction, paint states, defaults",
    "model": "sonnet",
    "items": [
-    "P-099",
-    "P-123"
+    "P-099"
    ],
    "clusters": [
     4,
@@ -379,18 +454,20 @@
     "APP/src/shapes/port/PortShapeUtil.tsx",
     "APP/src/shapes/port/PortFace.tsx",
     "TRUNK/skin/portVariants.ts",
-    "TRUNK/scene/portDeclaration.ts",
-    "APP/src/chrome/ShareMenu/validationLevelHost.ts",
-    "APP/src/chrome/problems.ts (polarity rows only)"
+    "TRUNK/scene/portDeclaration.ts"
    ],
    "dependsOn": [
-    "B-SCHEMA"
+    "B-SCHEMA",
+    "B-SHELL-P1"
    ],
    "size": "M",
    "acceptance": [
     "the selection indicator is the dot's circle, not the token rect",
-    "allowSamePolarity, allowHiddenPorts and allowFanOut each gate a real wiring attempt (mutation-tested: remove the gate → red)",
-    "'= default' is its own segment, not swept into type (cluster 6 minus P-451)"
+    "'= default' is its own segment, not swept into type (cluster 6 minus P-451)",
+    "port paint states: filled override, hidden, frozen render from the B-SCHEMA props (cluster 7)"
+   ],
+   "extra": [
+    "P-185's port-label half: selected-then-click opens the label editor (the block half is L-BLOCK-VIEWS')"
    ]
   },
   {
@@ -418,7 +495,9 @@
    ],
    "dependsOn": [
     "B-SCHEMA",
-    "L-BLOCK-VIEWS"
+    "B-SHELL-P1",
+    "L-BLOCK-VIEWS",
+    "L-PORTS-RAIL"
    ],
    "size": "L",
    "acceptance": [
@@ -439,7 +518,8 @@
     "P-068",
     "P-075",
     "P-128",
-    "P-091"
+    "P-091",
+    "P-127"
    ],
    "clusters": [
     18
@@ -453,13 +533,18 @@
     "TRUNK/scene/expressionNamespace.ts"
    ],
    "dependsOn": [
-    "B-SCHEMA"
+    "B-SCHEMA",
+    "B-SHELL-P1"
    ],
    "size": "L",
    "acceptance": [
     "completion is packages/bbox-ui completionMenu ported, not re-invented: ':' offers types, '=' offers variables, a bare name offers nothing",
     "expand opens a stock Dialog on the same document; Esc closes; edits survive",
-    "rendered↔source toggle maps a click to the caret"
+    "rendered↔source toggle maps a click to the caret",
+    "CodeFace consumes lineNumbers and fontSizePx (P-127 mechanism); commands exist and are tested — the pill controls are L-PILL's"
+   ],
+   "extra": [
+    "cluster 18: the code cell's origin badge, re-bind/detach and width control live here; the BLOCK-face origin badge is a follow-up (BlockFace belongs to other lanes)"
    ]
   },
   {
@@ -480,13 +565,16 @@
     "APP/src/chrome/problems.ts (subject index only)"
    ],
    "dependsOn": [
-    "B-SCHEMA",
-    "L-WIRE-PAINT"
+    "L-WIRE-PAINT",
+    "L-WIRE-GESTURE"
    ],
    "size": "M",
    "acceptance": [
     "one findings-by-subject store feeds the Problems panel, the on-shape flag (top-right) and the wire squiggle",
     "a finding inside a folded container rolls up to the container's flag (trunk scene/bubble.ts surfaceFindings)"
+   ],
+   "extra": [
+    "INVALID-STATES-PLAN.md:247-251: next / previous issue commands (F8 / Shift+F8, IDE-style) walking the Problems list and revealing each"
    ]
   },
   {
@@ -509,14 +597,13 @@
     "TRUNK/scene/linking.ts"
    ],
    "dependsOn": [
-    "B-SCHEMA",
     "L-MEMBERS"
    ],
    "size": "L",
    "acceptance": [
     "two blocks sharing a definitionId: editing one propagates to the other in one undo step (trunk reconcileDefinitions)",
-    "go-to-definition moves the camera and isolates; mutates no view",
-    "a blank member added from the pill; naming it links it"
+    "go-to-definition moves the camera and DIMS the rest via the focus lens — never hides (parity-backlog P-211; focusVisibility.ts distinguishes the two)",
+    "addBlankMember(blockId) command exists and is tested; naming the member links it — the pill control is L-PILL's"
    ]
   },
   {
@@ -532,10 +619,11 @@
     "APP/src/shapes/glyph/**",
     "APP/src/shapes/registry.ts",
     "APP/src/shapes/types.ts",
-    "APP/src/chrome/Toolbar/families.tsx (one dock row)"
+    "APP/src/chrome/families.tsx (the host tool catalogue; one dock row) — this lane is its one owner"
    ],
    "dependsOn": [
-    "B-SCHEMA"
+    "B-SCHEMA",
+    "B-SHELL-P1"
    ],
    "size": "M",
    "acceptance": [
@@ -555,21 +643,25 @@
     24
    ],
    "extra": [
-    "docs/COMPARISON-NEXT-STEPS.md N1 (propertyRows over diff), N7 (diff3Scene merge math), N8 (appearance diff profile) — all unblocked"
+    "docs/COMPARISON-NEXT-STEPS.md: N1 is ALREADY BUILT (editor/propertyRows.ts) — ledger it done; build N7 (diff3Scene) and N8 (appearance diff profile) and S5 (useLinkedCameras → turn on canOverlay, compareView.tsx:338-342 passes false; he approved overlay with a blend slider). N2/N3/N6 are deferred (they write trunk components W3 lanes own). P-448 pixel diff is excluded — COMPARISON-NEXT-STEPS:149-170 rules against a second engine."
    ],
    "writeSet": [
     "TRUNK/scene/sceneDiff.ts",
     "TRUNK/scene/diff3Scene.ts",
     "TRUNK/editor/sceneCompare.ts",
-    "TRUNK/editor/compareModel.ts"
+    "TRUNK/editor/compareModel.ts",
+    "TRUNK/hosts/useLinkedCameras.ts",
+    "the compare view's post-lift home (APP/src/chrome/CompareView/** or TRUNK/shell) — this lane is its one owner"
    ],
    "dependsOn": [
-    "W1-LAND"
+    "B-SHELL-P1"
    ],
    "size": "L",
    "acceptance": [
-    "a renamed-id block matches on the name rung; an unmatchable one reports 'unmatched'",
-    "diff3Scene: property-level merge with conflicts named, pure, unit-tested against hand-built cases"
+    "a renamed-id block matches on the name rung; an unmatchable one reports 'unmatched' (P-191)",
+    "diff3Scene: property-level merge with conflicts named, pure, unit-tested against hand-built cases (N7)",
+    "appearance-only changes are classified by the N8 profile and shown apart from structural ones",
+    "Compare overlay mode works with linked cameras and a blend slider (S5); canOverlay is true in the app"
    ]
   },
   {
@@ -579,8 +671,7 @@
    "model": "sonnet",
    "items": [
     "P-239",
-    "P-126",
-    "P-185"
+    "P-126"
    ],
    "clusters": [
     12,
@@ -594,13 +685,14 @@
     "docs/excalidraw-parity-inventory.md"
    ],
    "dependsOn": [
-    "B-SCHEMA"
+    "B-SCHEMA",
+    "B-SHELL-P1"
    ],
    "size": "L",
    "acceptance": [
-    "a newly placed block/code/port is in editing state",
-    "selected-then-click opens editing at any delay without breaking drag-from-title (P-044)",
-    "inventory lists every Excalidraw gesture as supported/unsupported and the smoke asserts the supported set"
+    "a newly placed block/code/port is in editing state (P-126)",
+    "the inventory lists every Excalidraw gesture as supported/unsupported and the smoke asserts the supported set (P-239)",
+    "resize handles hide while editing (cluster 34)"
    ]
   },
   {
@@ -631,13 +723,19 @@
     "APP/src/chrome/DevMenu/devtools.tsx (quick switcher feed)"
    ],
    "dependsOn": [
-    "B-SHELL-P1"
+    "B-SHELL-P1",
+    "L-BLOCK-VIEWS",
+    "L-PORTS-RAIL"
    ],
    "size": "L",
    "acceptance": [
     "right-click on a block renders the trunk ComponentContextMenu built by buildBlockMenu; every row runs a real command (no row whose action is a no-op — the dead-control guard counts)",
     "Add port ▸ side works on a portless block",
-    "Turn into ▸ Block/Code/Port on a stock geo; double-click on empty canvas is unchanged"
+    "Turn into ▸ Block/Code/Port on a stock geo; double-click on empty canvas is unchanged",
+    "header/footer + divider visibility rows (buildBlockMenu's four toggles) drive the B-SCHEMA props that L-BLOCK-VIEWS renders"
+   ],
+   "extra": [
+    "residual P-197: 'Wrap in ▸ Block / Branch' beside Group, and 'Turn into' (Q-P178)"
    ]
   },
   {
@@ -648,27 +746,31 @@
    "items": [
     "P-052",
     "P-102",
-    "P-127",
-    "P-076",
-    "P-177"
+    "P-076"
    ],
    "clusters": [
     15
    ],
    "writeSet": [
-    "APP/src/chrome/ContextualPopupMenu/**",
-    "TRUNK/editor/controlStrip.tsx",
-    "TRUNK/editor/controlRegistry.ts"
+    "the pill's post-lift home under TRUNK/shell/** + TRUNK/editor/controlStrip.tsx + TRUNK/editor/controlRegistry.ts, and its APP-side wiring",
+    "— this lane is the pill's ONE owner"
    ],
    "dependsOn": [
-    "B-SHELL-P1"
+    "B-SHELL-P1",
+    "L-WIRE-PAINT",
+    "L-BLOCK-VIEWS",
+    "L-CODE",
+    "L-LINKING"
    ],
    "size": "M",
    "acceptance": [
-    "pill hides while getEditingShapeId() is set and in readonly",
-    "code cell: line numbers and font size controls",
+    "pill hides while getEditingShapeId() is set and in readonly (P-052, P-102)",
+    "each control in extra calls the named command; the test drives the control and asserts the board changed",
     "P-076 re-scoped against Two Faces first: build only what the four-trigger bar still lacks",
     "title size is its own control, never tied to line width (his 09-24 ask A1)"
+   ],
+   "extra": [
+    "CONTROLS for mechanisms merged earlier: wire variant (P-121, L-WIRE-PAINT), value view + multi-select view flip (P-059, cluster 13, L-BLOCK-VIEWS), title size/font (P-177, L-BLOCK-VIEWS), code line numbers + font size (P-127, L-CODE), add blank member (P-210, L-LINKING)"
    ]
   },
   {
@@ -700,11 +802,14 @@
     "TRUNK/editor/instanceNavigator.tsx",
     "TRUNK/components/scrubNumber.tsx",
     "TRUNK/shell/** (panels wiring only)",
-    "APP/src/chrome/inspectorFollowsSelection.ts"
+    "APP/src/chrome/inspectorFollowsSelection.ts",
+    "APP/src/shapes/block/BlockFace.tsx member/slot region (P-194) — L-MEMBERS and L-PORTS-RAIL have merged by then"
    ],
    "dependsOn": [
     "B-SHELL-P1",
-    "L-MEMBERS"
+    "L-MEMBERS",
+    "L-PORTS-RAIL",
+    "B-DEPS"
    ],
    "size": "L",
    "acceptance": [
@@ -715,7 +820,12 @@
     "skin picker under Settings › Appearance sets data-bbox-skin",
     "the controls owed by earlier lanes appear as schema rows, no panel code: portLayout (P-107), portMode (P-118), sizeMode (P-141), the port annotation after the colon (P-119)",
     "P-200 port list ships without row/branch grouping (P-060 is deferred)",
-    "P-194 block slots compose with the trunk Bar inside header/footer"
+    "P-194 block slots compose with the trunk Bar inside header/footer",
+    "tiers: a field marked Advanced is hidden at Simple and shown at Advanced (P-092)"
+   ],
+   "extra": [
+    "DONORS, cited, ported into the trunk — never rebuilt: packages/schema/src/resolve.ts (override → inherited → preset → default cascade + FieldTrace, which gives reset-to-default), packages/panel fieldModel.ts (multi-selection resolution), fieldTiers.ts (Simple/Advanced/Expert, his 2026-09-11 pick — residual P-092), ComponentInspector/sections/members; packages/inspector ScrubNumber; claude/create-page-latest's NumberInput clamp/snap machine — all adapted to rules.text",
+    "residual P-014: two typing runs in the same inspector field are two undo steps"
    ]
   },
   {
@@ -745,10 +855,14 @@
    ],
    "size": "L",
    "acceptance": [
-    "draft.smoke (7) and menus.smoke's View/Preferences/Export case go green UNMODIFIED — acceptance committed on 09-21; the latter times out today waiting for Export rows",
-    "boot reopens the most recent board",
-    "an external edit offers a reload toast (1500ms single-flight, donor nextSyncAction cited)",
-    "Export ▸ .tldr flatten and SVG"
+    "draft.smoke (7) and menus.smoke's View/Preferences/Export case go green UNMODIFIED — the latter needs Export ▸ SVG and PNG rows (menus.smoke.test.tsx:150-153) as well as .tldr",
+    "boot reopens the most recent board (P-105)",
+    "an external edit offers a reload toast (1500ms single-flight, donor nextSyncAction cited) (P-176)",
+    "P-087/P-443: .bbox files are written in an envelope with a format version; a future version is refused with a readable message; legacy plain files still open"
+   ],
+   "extra": [
+    "P-087/P-443 envelope + future-format guard (a residual of PREMISE-FALSE P-012/P-087 the first plan dropped): APP/src/chrome/FileMenu/fileActions.ts:69-70 still writes plain serializeTldrawJson(editor)",
+    "cluster 22: save retry with backoff and a moved/deleted banner"
    ]
   },
   {
@@ -772,17 +886,25 @@
    "writeSet": [
     "APP/src/document/depthModel.ts",
     "APP/src/document/viewportHistory.ts",
-    "TRUNK/shell/** (title bar crumbs + arrows only)",
-    "APP/src/chrome/frames.ts"
+    "TRUNK/shell/** (title bar crumbs, arrows, help menu only)",
+    "APP/src/chrome/frames.ts (or its post-lift home)",
+    "APP/src/chromeActionsAreWired.test.ts (remove the quarantine entries this lane makes live)"
    ],
    "dependsOn": [
-    "B-SHELL-P1"
+    "B-SHELL-P1",
+    "L-LINKING"
    ],
    "size": "M",
    "acceptance": [
     "enter a block = zoom-to-fit + focus lens; crumbs show ancestry; Esc steps out",
     "title-bar ←/→ and Alt+←/→ walk viewport history; mouse 4/5 still walk selection history",
     "window title = board name"
+   ],
+   "extra": [
+    "block footer step in / step out rows (P-146's other half)",
+    "cluster 20: SAVED VIEWS in the Frames panel only — pages and cross-file imports are deferred",
+    "cluster 30: the help menu shows the running release (App.tsx HelpMenu: null today)",
+    "cluster 29: window title = board name; click the title to rename"
    ]
   },
   {
@@ -791,19 +913,18 @@
    "title": "The React Flow host behind the same shell (host-less shell P3)",
    "model": "opus",
    "extra": [
-    "apps/bbox-reactflow over simple-reactflow-whiteboard (local path pin, never pushed) + the trunk's hosts/reactFlowHost.tsx node views",
-    "the one shippable host (tldraw licence) — this is what bbox-ui.com's canvas demos iframe"
+    "apps/bbox-reactflow (skeleton + deps from B-DEPS) over simple-reactflow-whiteboard's open-as-library worktree (never merged into its main, never pushed) + the trunk's hosts/nodeViews.tsx",
+    "the one shippable host (tldraw licence) — bbox-ui.com's canvas demos iframe it"
    ],
    "items": [],
    "clusters": [],
    "writeSet": [
-    "apps/bbox-reactflow/**",
-    "TRUNK/hosts/reactFlow*.tsx",
-    "/home/bam/simple-reactflow-whiteboard (local commits only)"
+    "apps/bbox-reactflow/src/**",
+    "TRUNK/hosts/nodeViews.tsx (the node-view donor; do NOT edit the bench host TRUNK/hosts/reactFlowHost.tsx)"
    ],
    "dependsOn": [
     "B-SHELL-P1",
-    "W1-LAND"
+    "B-DEPS"
    ],
    "size": "L",
    "acceptance": [
@@ -847,13 +968,19 @@
    "extra": [
     "EXPECTED_UNINSTALLABLE → ∅: port, block, block-region, labeled-group, block-node-reactflow, block-shape-tldraw",
     "adapters import copied siblings, declared as registryDependencies (CLAUDE.md 'The two adapters cannot be installed by anyone')",
-    "block-node-reactflow sources the trunk's React Flow node views"
+    "block-node-reactflow sources the trunk's React Flow node views",
+    "W5 re-runs the generator and the install check after every trunk change has merged",
+    "DONOR: claude/beautiful-bt-registry — blockNodeReactflow.tsx + .layout.ts + story (re-checked against main's BlockPort API), the bbox-block-layout item; re-express block-port-node-reactflow as registryDependencies, never its stale file list",
+    "CONTROL-FLOW-PLAN §11 item 6: region/loop/branch presets as registry items"
    ],
    "items": [],
    "clusters": [],
    "writeSet": [
     "registry.json",
+    "docs/build_menu_registry_items.py (the generator — registry.json is generated, never hand-edited)",
     "packages/adapter-*/src/**",
+    "packages/bbox-ui/src/** (import specifiers only — frozen-v1 behaviour unchanged, proven by its own tests)",
+    "TRUNK/components/glyph.tsx (import of @bbox-ui/glyph-content only)",
     "docs/verify_registry_install.py",
     "CLAUDE.md (registry section)"
    ],
@@ -868,31 +995,38 @@
   },
   {
    "id": "L-DOCS-COMPONENTS",
-   "wave": "W3",
+   "wave": "W4",
    "title": "Docs pages — components",
    "model": "sonnet",
    "extra": [
-    "one page per registry item in the components family, the port.mdx shape: hero preview → install → features → usage → examples → props"
+    "family table (the acceptance author writes it first, into docs/finish-2026-09-29/docs-families.md): components = every registry:ui item that renders a component + registry:lib bbox-layout and bbox-skin; editor = the editor kit; scene+hosts = scene libs + block-node-reactflow + block-shape-tldraw"
    ],
    "items": [],
    "clusters": [],
    "writeSet": [
     "apps/docs/content/docs/components/**",
-    "apps/docs/src/registry/new-york-v4/examples/*-demo.tsx (components)",
-    "apps/docs/src/registry/registry-examples.ts (append-only, dispatcher merges)"
+    "apps/docs/src/registry/new-york-v4/examples/*-demo.tsx (components)"
    ],
    "dependsOn": [
-    "W1-LAND"
+    "B-DEPS",
+    "L-REG",
+    "L-WIRE-PAINT",
+    "L-PORTS-RAIL",
+    "L-PORTS-SHAPE",
+    "L-MEMBERS",
+    "L-CODE",
+    "L-GLYPH"
    ],
    "size": "L",
    "acceptance": [
-    "every components-family registry item has a page with a live demo and a <ComponentSource> (never pasted code)",
+    "every page in the family has a live demo and a <ComponentSource>; the lane RETURNS its demo names and the dispatcher registers all of them in apps/docs/src/registry/registry-examples.ts at merge (one writer)",
+    "headless: every new page's demo mounts — no 'not found in registry' text, a measured non-empty box",
     "pnpm docs:build green"
    ]
   },
   {
    "id": "L-DOCS-EDITOR",
-   "wave": "W3",
+   "wave": "W4",
    "title": "Docs pages — editor kit",
    "model": "sonnet",
    "items": [],
@@ -902,11 +1036,19 @@
     "apps/docs/src/registry/new-york-v4/examples/*-demo.tsx (editor)"
    ],
    "dependsOn": [
-    "W1-LAND"
+    "B-DEPS",
+    "L-REG",
+    "L-INSPECTOR",
+    "L-PILL",
+    "L-MENU-CONTEXT",
+    "L-FILES",
+    "L-NAV"
    ],
    "size": "L",
    "acceptance": [
-    "same as L-DOCS-COMPONENTS for the editor family"
+    "every page in the family has a live demo and a <ComponentSource>; the lane RETURNS its demo names and the dispatcher registers all of them in apps/docs/src/registry/registry-examples.ts at merge (one writer)",
+    "headless: every new page's demo mounts — no 'not found in registry' text, a measured non-empty box",
+    "pnpm docs:build green"
    ]
   },
   {
@@ -915,33 +1057,40 @@
    "title": "Docs pages — scene + hosts, and the canvas iframe",
    "model": "sonnet",
    "extra": [
-    "canvas demos iframe the React Flow host (never inline; never tldraw on a public page)"
+    "canvas demos iframe the React Flow host (never inline; never tldraw on a public page)",
+    "owns the build step that puts the host in the static site: vite build --base /embed/reactflow/ of apps/bbox-reactflow into apps/docs/public/embed/reactflow (a docs prebuild script); the headless check runs against the EXPORTED apps/docs/out, not docs:dev"
    ],
    "items": [],
    "clusters": [],
    "writeSet": [
     "apps/docs/content/docs/scene/**",
     "apps/docs/content/docs/hosts/**",
-    "apps/docs/src/registry/new-york-v4/examples/*-demo.tsx (scene/hosts)"
+    "apps/docs/src/registry/new-york-v4/examples/*-demo.tsx (scene/hosts)",
+    "apps/docs/package.json (prebuild script only)",
+    "apps/docs/public/embed/** (generated)"
    ],
    "dependsOn": [
     "L-RF-HOST",
-    "L-REG"
+    "L-REG",
+    "B-DEPS"
    ],
    "size": "M",
    "acceptance": [
-    "pnpm preflight green (the exact Cloudflare sequence)",
+    "every page in the family has a live demo and a <ComponentSource>; the lane RETURNS its demo names and the dispatcher registers all of them in apps/docs/src/registry/registry-examples.ts at merge (one writer)",
+    "headless: every new page's demo mounts — no 'not found in registry' text, a measured non-empty box",
+    "pnpm docs:build green",
+    "build-only preflight per rules.g5Preflight green",
     "no page imports tldraw"
    ]
   },
   {
    "id": "B-RENAME",
    "wave": "W5",
-   "title": "BARRIER at the end — apps/systemsketch → apps/bbox-tldraw",
+   "title": "BARRIER at the end — apps/systemsketch → apps/studio",
    "model": "sonnet",
    "extra": [
-    "package name, vite alias, vitest config, scripts/*, assets/*.desktop, CLAUDE.md, ARCHITECTURE.md, README.md, skills/bbox-review-board, docs that give run commands (history docs keep the old path)",
-    "gate: scripts/chrome_gate.sh-style check that no live peer worktree has a modification under apps/systemsketch newer than 2h — if one does, skip the rename and record it"
+    "git mv apps/systemsketch apps/studio (D3); package name; root package.json script; @trunk alias consumers; vitest config; scripts that name the path INCLUDING the peer's files — rules.peerOwned is lifted for this lane once EXT-SWITCHER has merged; skills/bbox-review-board (SKILL.md, create_review_board.mjs), apps/systemsketch/CLAUDE.md, CLAUDE.md, ARCHITECTURE.md, README.md; dated history docs keep the old path",
+    "remaining user-visible 'SystemSketch' display strings that name THIS app (session.tsx:386,544,758, appSettings.tsx:335, dock.tsx:256 as of 705847c) become 'bbox studio'; strings naming the archived app ('Switch to old SystemSketch', ~/SystemSketch, the envelope's application field) stay"
    ],
    "items": [],
    "clusters": [],
@@ -954,11 +1103,12 @@
    ],
    "size": "M",
    "acceptance": [
-    "git grep -n 'apps/systemsketch' outside docs/*-20*.md history returns nothing",
-    "suite counts identical before and after",
-    "the dock launch still opens the studio (headless: the launcher's --status reads the new path)"
+    "git grep -n 'apps/systemsketch' outside dated history docs returns nothing",
+    "git grep -n 'SystemSketch' in the app's src shows only references to the ARCHIVED app, each listed in the commit",
+    "suite counts identical before and after, including python3 -m pytest -q scripts/tests",
+    "the switcher config still resolves the app (static check; serving needs the runtime branch — see D11)"
    ],
-   "notes": "Moved to the end on 2026-09-29: a peer session's stable_preview_switcher lane is rewriting the app's launch scripts and chrome/{sites,legacyApp,siteStatus}.ts right now. Renaming mid-run would collide with it and shift every in-flight lane's paths (the a18c906 hazard). At the end nothing is in flight, and the rename carries every merged lane along."
+   "notes": "Moved to the end on 2026-09-29: a peer session's stable_preview_switcher lane is rewriting the app's launch scripts and chrome/{sites,legacyApp,siteStatus}.ts right now. Renaming mid-run would collide with it and shift every in-flight lane's paths (the a18c906 hazard). At the end nothing is in flight, and the rename carries every merged lane along. Target is apps/studio, the destination ARCHITECTURE.md:162 already settled (Zach 09-21: 'lets call the app bbox studio'); the display strings became 'bbox studio' in 7cdabba."
   },
   {
    "id": "W5-VERIFY",
@@ -967,17 +1117,20 @@
    "owner": "dispatcher",
    "model": "opus",
    "extra": [
-    "full suites twice on the integration tip; registry verify; preflight",
+    "rules.verify FIVE consecutive times on the final tip, plus python3 -m pytest -q scripts/tests (G2); build-only preflight (rules.g5Preflight); python3 docs/build_menu_registry_items.py --check and a public/r freshness check after `npx shadcn build` (commit the regenerated files)",
     "Codex read-only judge on the whole integration diff against WORK-ORDER.md",
     "headless journeys on both hosts → hero video; bbox-review-board boards for canvas changes",
     "report: /home/bam/bbox-ui/reports/media/finish-2026-09-29.html",
-    "cleanup per D8; stop every server the run started"
+    "cleanup: LIST candidate branches/worktrees (merged, ported, archived, the stale integrator merge) with evidence — delete nothing, abort nothing (Zach's call)",
+    "stop every server the run started and hand over one-line relaunch commands (global rule: no long-lived review endpoint)"
    ],
    "items": [],
    "clusters": [],
    "writeSet": [
     "docs/finish-2026-09-29/LEDGER.md",
-    "docs/build_finish_report.py"
+    "docs/build_finish_report.py",
+    "registry.json",
+    "public/r/**"
    ],
    "dependsOn": [
     "B-RENAME"
@@ -1035,11 +1188,6 @@
    "ask": "Q-P124"
   },
   {
-   "id": "P-146",
-   "why": "Block footer with Duplicate/Delete collides with doNotBuild 'Delete / Duplicate in the selection pill'. Default: drop.",
-   "ask": "Q-P146"
-  },
-  {
    "id": "P-179",
    "why": "Drag-policy unification — his note 'This is not entirely true' is unexplained.",
    "ask": "Q-P179"
@@ -1053,6 +1201,11 @@
    "id": "P-236",
    "why": "A file view is a Clank plugin in its own repo (global rule), not a package here.",
    "ask": "Q-P236"
+  },
+  {
+   "id": "P-150",
+   "why": "Inner-face cable geometry spans wireGeometry.ts (L-ROUTE) and BlockFace (three owners) and needs P-058's scope model merged first; scheduling it would add a fourth writer to both. After W3, as a follow-up.",
+   "ask": ""
   }
  ],
  "deferredClusters": [
@@ -1111,6 +1264,78 @@
   {
    "cluster": 32,
    "why": "Low-value settings polish"
+  }
+ ],
+ "rules": {
+  "writeSets": "Write sets are REISSUED by each lane's acceptance author against the tree at dispatch (after B-SHELL-P1 moved chrome into TRUNK/shell). A canvas lane never edits TRUNK/shell/**. A tldraw-side adapter that P1 leaves under APP/src/chrome/** has exactly ONE owning lane, named in its writeSet here; nobody else edits it.",
+  "mechanismVsControl": "Canvas lanes deliver the MECHANISM plus a named command (a function the chrome can call) and prove it with a test that calls the command. The user-facing CONTROL (pill row, menu row, inspector row) is delivered by the one chrome lane that owns that surface, which runs after the mechanism merged and must cite the file:line where the control calls the command. An item is DONE only when both halves merged.",
+  "expectedRed": "LEDGER.md carries EXPECTED_RED: the W0 failing set (10 studio tests) plus the FLAKY_FILES allowance (a failure in those files is re-run once alone and counts only if it fails again). A merge may not add a red outside EXPECTED_RED. G-FLAKE merging removes the flaky allowance; G-STALE removes corner.smoke + the burger order; L-FILES removes draft.smoke x7 + the menus View/Preferences/Export case. The dispatcher updates the list at each such merge.",
+  "peerOwned": "Never edit: APP/stable-preview.json, scripts/launch_systemsketch.py, scripts/tests/*launch*, assets/bbox-ui.desktop, APP/src/chrome/{sites,legacyApp,siteStatus}.ts, APP/devFileHost.ts, scripts/dock_icon.py, scripts/launch_bboxui.py — a peer session's switcher lane (EXT-SWITCHER) owns them.",
+  "g5Preflight": "G5 uses a BUILD-ONLY preflight: pnpm docs:build, npx shadcn@latest build, python3 docs/verify_registry_install.py --dir <scratch>. scripts/preflight.sh's origin/main ancestry check fails by design on an unpushed integration branch; never 'fix' it by pushing.",
+  "coverage": "Every item in a lane's items AND every id in its scheduled clusters (untriaged-clusters.md) gets exactly one LEDGER line: done (user action file:line or tested command), done-already, obsolete, or follow-up (outside this lane's write set; named for W5). The acceptance author writes a test or a line for each; never widens a write set to reach one.",
+  "text": "Every new text or number field writes on each keystroke (no local buffer committed on blur — the P-030 rule) and joins the P-030 block in APP/src/textEditing.smoke.test.tsx; every new gesture is ONE undo step (APP/src/document/gestureHistory.ts). Donors that buffer until blur (packages/panel NumberInput, packages/inspector ScrubNumber) are adapted, not copied.",
+  "guards": "W1 brings two ratchet tests that fail in BOTH directions: APP/src/settingsAreWired.test.ts (QUARANTINE of dead settings) and APP/src/chromeActionsAreWired.test.ts (quarantined chrome callbacks). A lane that makes a quarantined entry live removes it from the quarantine in the same commit; B-SHELL-P1 extends chromeActionsAreWired's scan to TRUNK/shell.",
+  "longRuns": "Suites longer than the 10-minute Bash cap: start them with `nohup ... > <log> 2>&1 & echo $! > <pid>` and wait with repeated `timeout 570 tail --pid=$(cat <pid>) -f /dev/null`; never a foreground sleep; never kill another process's run on port 63315 — wait for it.",
+  "verify": "The integration check after every merge: `pnpm -r typecheck`; `pnpm -r --workspace-concurrency=1 test` (every package's tests, one at a time because of the shared browser port); `python3 -m pytest -q scripts/tests` when scripts/ or a launcher changed. Compare the failing set to EXPECTED_RED."
+ },
+ "deferredResiduals": [
+  {
+   "id": "P-092/P-014/P-189/P-187/P-111/P-081/P-197/P-087",
+   "why": "NOT deferred — scheduled: P-092, P-014 → L-INSPECTOR; P-189, P-187 → L-WIRE-PAINT; P-111, P-081 → L-ROUTE; P-197 → L-MENU-CONTEXT; P-087 → L-FILES."
+  },
+  {
+   "id": "P-125",
+   "why": "Grabbing an expanded block by port text or footer is drag-policy work — decided together with P-179."
+  },
+  {
+   "id": "P-108",
+   "why": "Comments surface waits on cluster 17 (deferred); the layers surface is P-083's instance tree (L-INSPECTOR)."
+  },
+  {
+   "id": "P-159",
+   "why": "Compare ghost overlay and was/now chips need diff paint in trunk components (N2), which W3 lanes own — after W3."
+  },
+  {
+   "id": "P-195",
+   "why": "Diff paint owned by trunk components (N2, then N3/N6) writes block/port/trace, which W3 lanes own — after W3."
+  },
+  {
+   "id": "P-163",
+   "why": "URL fetch proxy for the glyph picker needs a server-side guard (SSRF); no server lane in this run."
+  },
+  {
+   "id": "P-186",
+   "why": "The four wheel bindings and modifierWheelZoomsOppositely stay quarantined in settingsAreWired.test.ts; wiring them needs a history seam per binding."
+  },
+  {
+   "id": "P-205",
+   "why": "Drift resolution spans the code cell (L-CODE) and Compare (L-COMPARE); after both land."
+  }
+ ],
+ "deferredOther": [
+  {
+   "what": "pyblocks halves of the Python backend (pyblocks branches claude/lane-pb-pyblocks-scene-projection-2026-09-18, claude/lane-scv-scv-definitions-partition-2026-09-18, 988 behind pyblocks main, conflicting)",
+   "why": "another repo; Open Python needs them. Default Q-PYBLOCKS: leave pyblocks alone; the G1 evidence says so."
+  },
+  {
+   "what": ".systemsketch importer (85 old boards in ~/SystemSketch open in the archived app)",
+   "why": "the vocabulary mapping needs Zach (SYSTEMSKETCH-REBUILD-PLAN §8.4, §11). Default Q-IMPORTER: not built; G3 reads 'replaces the archived app for new work'."
+  },
+  {
+   "what": "the temporary variant switch (chrome/DevMenu/variantSwitch.tsx: 5 port styles, 10 region drawings)",
+   "why": "his pick is pending (D10); v1 stays the default and the switch stays."
+  },
+  {
+   "what": "COMPARISON-NEXT-STEPS N2, N3, N6",
+   "why": "diff paint inside components W3 lanes own — after W3."
+  },
+  {
+   "what": "cluster 20 pages + cross-file imports; the dock library cell ('Coming soon', P-232)",
+   "why": "product calls; saved views ship in L-NAV."
+  },
+  {
+   "what": "the block-face origin badge (cluster 18)",
+   "why": "BlockFace has three owners already; follow-up after W3."
   }
  ]
 }

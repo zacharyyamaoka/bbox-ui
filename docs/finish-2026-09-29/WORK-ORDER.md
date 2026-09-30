@@ -23,6 +23,66 @@ and `untriaged-clusters.md` (the 229 never-triaged items, clustered).
 >   G-FLAKE and G-STALE directly. Where the text below says otherwise, `lanes.json`
 >   wins.
 
+> **Amended again 2026-09-29 after a Codex audit (gpt-6-astra, xhigh, read-only;
+> verdict UNSOUND, 16 findings).** `lanes.json` carries every fix and wins over
+> any sentence below:
+> - `rules` block: write sets are re-issued at dispatch against the post-lift
+>   tree; every seam has exactly one writer; mechanism vs control (a canvas lane
+>   ships a tested command, the one chrome lane owning that surface ships the
+>   control); one shrinking `EXPECTED_RED` list replaces the contradictory test
+>   gates; the peer's files are named off-limits; G5 uses a build-only preflight
+>   (preflight.sh's origin/main check fails on any unpushed branch — never push to
+>   satisfy it).
+> - **B-SCHEMA starts with a persisted-state inventory** of every scheduled item,
+>   cluster and residual. The audit named seven kinds of state the first list
+>   missed.
+> - **B-SHELL-P1 moves into W2**, beside B-SCHEMA (disjoint), so no canvas lane
+>   ever shares `chrome/` with the lift. Its gate is evaluated against the
+>   integration branch, not main.
+> - **B-DEPS** (dispatcher) installs every dependency, registers
+>   `apps/bbox-reactflow` in the workspace, links the whiteboard through a
+>   worktree, and wires the docs site for trunk demos. Docs lanes return their
+>   demo names; the dispatcher alone registers them.
+> - Ownership moves: P-123 and the validation gates go to L-WIRE-GESTURE (it owns
+>   `edgeValidation.ts`). P-185 and P-177 go to L-BLOCK-VIEWS, which owns
+>   `BlockShapeUtil` methods and the block header. P-127 goes to L-CODE. P-146 is
+>   restored to L-BLOCK-VIEWS. P-150 is deferred. L-PILL now runs after the lanes
+>   whose controls it adds. L-REG may fix `packages/bbox-ui` imports, the trunk
+>   `glyph.tsx` import, and the generator. The React Flow host's donor is
+>   `hosts/nodeViews.tsx`.
+> - Behaviour fixes: go-to-definition dims and never hides; the wire guard
+>   separates select, wire/arrow and other tools; Export needs SVG **and PNG**;
+>   the P-087 envelope/version guard is scheduled in L-FILES; G2 is five runs on
+>   the final tip.
+> - Not taken: finding 16 ("leave a retained review endpoint running"). His
+>   global rule says to stop every server the run started and hand over one-line
+>   relaunch commands.
+
+> **Amended a third time 2026-09-29, from the W0 inventory**
+> (`branch-dispositions.json`, `residuals.json`, `completeness-critic.md`, all
+> read-only Sonnet/Opus sweeps). `lanes.json` carries every change:
+> - **W1 grows.** Two report-only lands. Ports of the menu-kit hardening, the
+>   seven orthogonal skins, the anchor-layout registry, the notebook-lab trunk
+>   fixes, the StepIn bench, the board-URL handoff half, and the research
+>   builders. Two branches become donors (the React Flow registry spike for
+>   L-REG; create-page-latest's NumberInput for L-INSPECTOR). Every other branch
+>   is listed as archive and deleted by nobody.
+> - **New rules:** coverage per item AND per cluster id (G3 counts both); text
+>   fields write per keystroke and gestures are one undo step (P-030); the two
+>   ratchet guard tests W1 brings move with the lanes that wire their entries;
+>   long suites run under nohup + `tail --pid`; the integration check is
+>   `pnpm -r --workspace-concurrency=1 test` plus the Python tests.
+> - **Residuals scheduled:** P-092 and P-014 go to L-INSPECTOR, P-189 and P-187
+>   to L-WIRE-PAINT, P-111 and P-081 to L-ROUTE, P-197 to L-MENU-CONTEXT, P-087
+>   to L-FILES. The rest are deferred with reasons (`deferredResiduals`).
+> - **L-INSPECTOR ports** `packages/schema`'s cascade and `packages/panel`'s
+>   field model and tiers instead of rebuilding them. **L-COMPARE** drops N1
+>   (already built), adds N8 and S5 (overlay with linked cameras), and waits for
+>   the lift. **Docs lanes** wait for the lanes whose surfaces they document; the
+>   exported site carries the React Flow host under `/embed/reactflow/`.
+> - **The rename** targets `apps/studio`, the peer-file rule is lifted for it
+>   after EXT-SWITCHER, and it also converts the remaining display strings.
+
 Read first: `CLAUDE.md`, `.claude/feedback.md`, `ARCHITECTURE.md`,
 `docs/DISPATCHER-WORKFLOW.md`, `docs/WORK-ORDER-CONTINUE-2026-09-21.md` §3
 ("How to work here — earned the hard way").
@@ -37,10 +97,10 @@ done when every gate has a measured evidence line in `LEDGER.md`, not before.
 | Gate | Done means | Measured by |
 |---|---|---|
 | **G1 Nothing wanted is stranded** | Every branch with unmerged commits is merged, ported, or archived as dead with a reason | `git for-each-ref` ahead-of-integration count = 0 for every non-archived branch |
-| **G2 Green, honestly** | No red test anywhere except acceptance for a lane still in flight; the flaky set fixed | full studio + storybook-basics suites, **5 consecutive runs**, identical green |
+| **G2 Green, honestly** | No red test anywhere except acceptance for a lane still in flight; the flaky set fixed | full studio + storybook-basics suites, **5 consecutive runs on the final tip**, identical green |
 | **G3 The studio replaces the archived app** | All 93 assigned open items done — a REAL user action reaches each, `file:line` cited | per-item line in `LEDGER.md`; lane acceptance green |
 | **G4 One shell, two hosts** | Chrome behind `HostPort` (P1); a React Flow host (P3) running the same shell | host contract suite green on fake, tldraw and React Flow hosts |
-| **G5 The registry ships** | Every `registry.json` item installs and type-checks in a throwaway project; every item has a docs page with a live demo | `docs/verify_registry_install.py` with an empty pin; `pnpm preflight` |
+| **G5 The registry ships** | Every `registry.json` item installs and type-checks in a throwaway project; every item has a docs page with a live demo | `docs/verify_registry_install.py` with an empty pin; the build-only preflight in `lanes.json` → `rules.g5Preflight` |
 | **G6 Stable / Preview for the studio** | Dock opens Stable; Preview one click away; the hand-rolled studio channel code deleted | the switcher's journey under scratch `SPS_*` env; the real dock's three rows |
 
 Out of the line, on purpose (§7 lists every item): the visual-language
@@ -62,10 +122,12 @@ extensions, and 14 of the 34 low-noticeability clusters.
   on the health run, and a *different* 1–4 on every re-run — flaky under load
   (DevPanel, FileNavigatorGeometry, FitToContentHosts drag, BlockPortHosts,
   DraftBar focus). Typecheck is clean across all packages.
-- **74 commits of finished work sit off main** on twelve branches (§3 W1),
+- **68 unique commits (74 summed) of finished work sit off main** on twelve branches (§3 W1),
   most of them things he asked for. Every merge candidate is conflict-free
-  against main on its own, and ten were also stacked in W1's order as objects
-  only (scratch tip `587b950`, since removed; `baseline.md` has the detail):
+  against main on its own, and ten were also stacked as objects only (scratch
+  tip `587b950`, since removed): nine of W1's plus the since-archived channels
+  branch, without the two one-file research branches — `baseline.md` has the
+  exact refs:
   **zero conflicts, typecheck clean, studio 10 red = exactly main's 10.** The
   storybook-basics failures on that tip moved between runs — the flaky set,
   not merge damage.
@@ -75,7 +137,8 @@ extensions, and 14 of the 34 low-noticeability clusters.
   §6 gives each a default.
 - **The trunk is ahead of the app.** A large share of "absent" items are parts
   already built in `apps/storybook-basics/src` that the studio never mounts:
-  `TraceBadge`, `buildBlockMenu` + `ComponentContextMenu`, `ScrubNumber`,
+  `TraceBadge`, `buildBlockMenu` + `ComponentContextMenu`, `ScrubNumber` (in
+  `packages/inspector`, to be ported into the trunk),
   `fitBoxToMembers`, `tidyTraces`, `reconcileDefinitions`, `blockMembers`,
   `BlockRegionBlackboxToggle`, `draftModel`/`branchChip`, the dividers, the
   magnet kit. A lane's first move is to mount the trunk part, never rebuild it.
@@ -243,12 +306,12 @@ A usage limit kills every agent on that model mid-run (09-19). So:
 |---|---|---|
 | **D1** | Scope | This plan — the six gates. (Smaller: W0–W2 + L-CHANNELS only. Larger: also the §7 list, after his design calls.) |
 | **D2** | Where it lands | `claude/finish-2026-09-29`; `main` untouched until he says merge |
-| **D3** | Rename `apps/systemsketch` → `apps/bbox-tldraw` | Yes, as barrier B-RENAME, skipped automatically if a live peer is in the app |
+| **D3** | Rename `apps/systemsketch` → `apps/studio` (the destination ARCHITECTURE.md already settled) | Yes, as barrier B-RENAME at the END of the run, when nothing is in flight |
 | **D4** | The 9 deliberately-red tests | Build what they specify (drafts, the narrow corner, the Export rows); update only the stale burger order |
 | **D5** | Studio Stable / Preview | Adopt `stable_preview_switcher`; both channels open the same board file; archive the channels branch |
 | **D6** | Deploy bbox-ui.com | No — `preflight` only; deploying is his call |
-| **D7** | simple-reactflow-whiteboard | Merge its library branch locally; never push |
-| **D8** | Cleanup | Tag `archive/<name>` then delete branches that are merged or declared dead; remove clean worktrees of merged branches; abort the stale integrator merge; dirty worktrees are listed, not touched |
+| **D7** | simple-reactflow-whiteboard | Use its `open-as-library` branch through a separate worktree pinned by commit; never merge into its main, never push |
+| **D8** | Cleanup | List candidates only (merged, ported, archived branches; clean worktrees of merged branches; the stale integrator merge) with evidence. Delete nothing, abort nothing — his call |
 | **D9** | Judge | Codex gpt-6-astra xhigh, read-only, per lane and once over the whole diff |
 | **D10** | Visual-language proposal (09-24) and loop/branch grammar clusters 5, 16 | Excluded until he marks the proposal |
 | **Q-P013** | Two-click cable drawing — where? | From the wire/arrow tool only; clicking a dot keeps opening the port lane; drag-from-dot unchanged |
@@ -259,9 +322,13 @@ A usage limit kills every agent on that model mid-run (09-19). So:
 | **Q-P166** | Auto-grow | An explicit "Fit to content" command; never automatic (P-212: only explicit commands resize) |
 | **Q-P178** | Turn into | Right-click "Turn into ▸ Block / Code / Port" on stock shapes; double-click on empty canvas stays stock |
 | **Q-P215** | Mouse 4/5 | Stay on selection history; viewport history on the title-bar arrows and Alt+←/→ |
-| **Q-P060 · P120 · P124 · P146** | Row/branch ports · block folding · per-port groups · block footer | Drop all four: regions carry arms; view hotkeys replace folding; edge-owned groups exist; the footer collides with doNotBuild |
+| **Q-P060 · P120 · P124** | Row/branch ports · block folding · per-port groups | Drop all three: regions carry arms; view hotkeys replace folding; edge-owned groups exist |
+| **Q-P146** | Block footer menu | Build it with Duplicate and Delete; step in / out rows come from L-NAV. (doNotBuild forbids those two in the selection *pill*, not the footer.) |
 | **Q-P069** | The seven semantic wire kinds | Out of this run — needs how each looks, and whether they replace data/async/delayed |
 | **Q-P104 · P179 · P232 · P236** | pyblocks write-back surface · drag-policy note · library contents · editor extension | Out of this run; P-236 defaults to a Clank plugin in its own repo |
+| **D11** | The switcher lane's config needs `stable_preview_switcher` branch `claude/monorepo-snapshot-bbox` merged and installed before `sps` can serve bbox studio | His call. The run merges the bbox-ui half (nothing reads the config at build or test time) and says so in the handoff |
+| **Q-PYBLOCKS** | The pyblocks halves of Open Python sit on two unmerged pyblocks branches | Leave pyblocks alone; the G1 evidence says Open Python needs them |
+| **Q-IMPORTER** | A `.systemsketch` importer (85 old boards open only in the archived app) | Not built this run — the vocabulary mapping needs him; G3 means "replaces the archived app for new work" |
 | **Q-dNB** | P-314 (min size on port view), P-394 (semantic zoom opt-in), P-363 (notes tab) ask for things doNotBuild forbids | Honour doNotBuild; skip |
 
 ---

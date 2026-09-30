@@ -1,59 +1,258 @@
 # LEDGER — finish-2026-09-29
 
-The resume record for `WORK-ORDER.md` §5. The dispatcher updates a row and
-**commits this file** after every state change. A resumed session reads it
-first and skips `merged` rows.
+The resume record for `WORK-ORDER.md` §5, generated from `lanes.json`. The dispatcher (merge/integration agents only) updates a row and **commits this file** after every state change. A resumed session reads it first and skips `merged` rows.
 
-status ∈ queued · acceptance · building · auditing · merged · failed · skipped
+status ∈ queued · acceptance · building · auditing · merged · failed · blocked · skipped
 
-## Baseline (W0)
+## EXPECTED_RED
 
-- integration branch: 
-- typecheck: 
-- studio suite: 
-- storybook-basics suite (×2, flaky set): 
-- live peers in a write set: 
+Starts as the W0 set (`baseline.md`). A merge may not add a red outside this list. Shrinks as G-STALE, G-FLAKE and L-FILES merge.
+
+- APP draft.smoke.test.tsx ×7 (until L-FILES)
+- APP corner.smoke.test.tsx narrow 720×900 (until G-STALE)
+- APP menus.smoke.test.tsx:80 burger order (until G-STALE)
+- APP menus.smoke.test.tsx:130 View/Preferences/Export (until L-FILES)
+- FLAKY_FILES allowance (re-run once alone; counts only if it fails again) until G-FLAKE: storybook-basics DraftBar, DevPanel, FileNavigatorGeometry, FitToContentHosts, BlockPortHosts, Grouping
 
 ## Lanes
 
-| lane | wave | model | status | branch | tip | audit | user action (file:line) | evidence |
-|---|---|---|---|---|---|---|---|---|
-| W1-LAND | W1 | opus | queued | | | | | |
-| G-FLAKE | W2 | sonnet | queued | | | | | |
-| G-STALE | W2 | sonnet | queued | | | | | |
-| B-RENAME | W2 | sonnet | queued | | | | | |
-| B-SCHEMA | W2 | opus | queued | | | | | |
-| B-SHELL-P1 | W3 | opus | queued | | | | | |
-| L-WIRE-GESTURE | W3 | sonnet | queued | | | | | |
-| L-WIRE-PAINT | W3 | sonnet | queued | | | | | |
-| L-ROUTE | W3 | sonnet | queued | | | | | |
-| L-BLOCK-VIEWS | W3 | sonnet | queued | | | | | |
-| L-PORTS-RAIL | W3 | sonnet | queued | | | | | |
-| L-PORTS-SHAPE | W3 | sonnet | queued | | | | | |
-| L-MEMBERS | W3 | opus | queued | | | | | |
-| L-CODE | W3 | sonnet | queued | | | | | |
-| L-DIAG | W3 | sonnet | queued | | | | | |
-| L-LINKING | W3 | opus | queued | | | | | |
-| L-GLYPH | W3 | sonnet | queued | | | | | |
-| L-COMPARE | W3 | sonnet | queued | | | | | |
-| L-GESTURES | W3 | sonnet | queued | | | | | |
-| L-MENU-CONTEXT | W4 | sonnet | queued | | | | | |
-| L-PILL | W4 | sonnet | queued | | | | | |
-| L-INSPECTOR | W4 | opus | queued | | | | | |
-| L-FILES | W4 | sonnet | queued | | | | | |
-| L-NAV | W4 | sonnet | queued | | | | | |
-| L-RF-HOST | W4 | opus | queued | | | | | |
-| L-CHANNELS | W4 | sonnet | queued | | | | | |
-| L-REG | W3 | opus | queued | | | | | |
-| L-DOCS-COMPONENTS | W3 | sonnet | queued | | | | | |
-| L-DOCS-EDITOR | W3 | sonnet | queued | | | | | |
-| L-DOCS-SCENE-HOSTS | W4 | sonnet | queued | | | | | |
-| W5-VERIFY | W5 | opus | queued | | | | | |
+| lane | wave | model | status | branch/sha | audit | evidence |
+|---|---|---|---|---|---|---|
+| W1-LAND | W1 | opus | queued | | | |
+| G-FLAKE | W2 | sonnet | queued | | | |
+| G-STALE | W2 | sonnet | queued | | | |
+| B-DEPS | W2 | opus | queued | | | |
+| B-SCHEMA | W2 | opus | queued | | | |
+| B-SHELL-P1 | W2 | opus | queued | | | |
+| L-WIRE-GESTURE | W3 | sonnet | queued | | | |
+| L-WIRE-PAINT | W3 | sonnet | queued | | | |
+| L-ROUTE | W3 | sonnet | queued | | | |
+| L-BLOCK-VIEWS | W3 | sonnet | queued | | | |
+| L-PORTS-RAIL | W3 | sonnet | queued | | | |
+| L-PORTS-SHAPE | W3 | sonnet | queued | | | |
+| L-MEMBERS | W3 | opus | queued | | | |
+| L-CODE | W3 | sonnet | queued | | | |
+| L-DIAG | W3 | sonnet | queued | | | |
+| L-LINKING | W3 | opus | queued | | | |
+| L-GLYPH | W3 | sonnet | queued | | | |
+| L-COMPARE | W3 | sonnet | queued | | | |
+| L-GESTURES | W3 | sonnet | queued | | | |
+| L-MENU-CONTEXT | W4 | sonnet | queued | | | |
+| L-PILL | W4 | sonnet | queued | | | |
+| L-INSPECTOR | W4 | opus | queued | | | |
+| L-FILES | W4 | sonnet | queued | | | |
+| L-NAV | W4 | sonnet | queued | | | |
+| L-RF-HOST | W4 | opus | queued | | | |
+| EXT-SWITCHER | W4 | (peer) | queued | | | |
+| L-REG | W3 | opus | queued | | | |
+| L-DOCS-COMPONENTS | W4 | sonnet | queued | | | |
+| L-DOCS-EDITOR | W4 | sonnet | queued | | | |
+| L-DOCS-SCENE-HOSTS | W4 | sonnet | queued | | | |
+| B-RENAME | W5 | sonnet | queued | | | |
+| W5-VERIFY | W5 | opus | queued | | | |
 
-## Items found done or obsolete at dispatch
+## Items and cluster ids (G3)
 
-| id | verdict | evidence |
-|---|---|---|
+| id | lane | status | user action / command (file:line) or reason |
+|---|---|---|---|
+| P-101 | W1-LAND | queued | |
+| P-098 | L-WIRE-GESTURE | queued | |
+| P-221 | L-WIRE-GESTURE | queued | |
+| P-013 | L-WIRE-GESTURE | queued | |
+| P-116 | L-WIRE-GESTURE | queued | |
+| P-058 | L-WIRE-GESTURE | queued | |
+| P-123 | L-WIRE-GESTURE | queued | |
+| P-268 (cluster 9: Port and wiring gestures) | L-WIRE-GESTURE | queued | |
+| P-299 (cluster 9: Port and wiring gestures) | L-WIRE-GESTURE | queued | |
+| P-340 (cluster 9: Port and wiring gestures) | L-WIRE-GESTURE | queued | |
+| P-361 (cluster 9: Port and wiring gestures) | L-WIRE-GESTURE | queued | |
+| P-392 (cluster 9: Port and wiring gestures) | L-WIRE-GESTURE | queued | |
+| P-247 (cluster 10: Arrow tool, routing kinds, edge topology) | L-WIRE-GESTURE | queued | |
+| P-316 (cluster 10: Arrow tool, routing kinds, edge topology) | L-WIRE-GESTURE | queued | |
+| P-360 (cluster 10: Arrow tool, routing kinds, edge topology) | L-WIRE-GESTURE | queued | |
+| P-434 (cluster 10: Arrow tool, routing kinds, edge topology) | L-WIRE-GESTURE | queued | |
+| P-444 (cluster 10: Arrow tool, routing kinds, edge topology) | L-WIRE-GESTURE | queued | |
+| P-456 (cluster 10: Arrow tool, routing kinds, edge topology) | L-WIRE-GESTURE | queued | |
+| P-097 | L-WIRE-PAINT | queued | |
+| P-096 | L-WIRE-PAINT | queued | |
+| P-156 | L-WIRE-PAINT | queued | |
+| P-171 | L-WIRE-PAINT | queued | |
+| P-137 | L-WIRE-PAINT | queued | |
+| P-121 | L-WIRE-PAINT | queued | |
+| P-257 (cluster 11: Cable anchoring, appearance, control points) | L-WIRE-PAINT | queued | |
+| P-328 (cluster 11: Cable anchoring, appearance, control points) | L-WIRE-PAINT | queued | |
+| P-364 (cluster 11: Cable anchoring, appearance, control points) | L-WIRE-PAINT | queued | |
+| P-416 (cluster 11: Cable anchoring, appearance, control points) | L-WIRE-PAINT | queued | |
+| P-054 | L-ROUTE | queued | |
+| P-167 | L-ROUTE | queued | |
+| P-103 | L-ROUTE | queued | |
+| P-015 | L-BLOCK-VIEWS | queued | |
+| P-212 | L-BLOCK-VIEWS | queued | |
+| P-141 | L-BLOCK-VIEWS | queued | |
+| P-166 | L-BLOCK-VIEWS | queued | |
+| P-155 | L-BLOCK-VIEWS | queued | |
+| P-190 | L-BLOCK-VIEWS | queued | |
+| P-019 | L-BLOCK-VIEWS | queued | |
+| P-059 | L-BLOCK-VIEWS | queued | |
+| P-086 | L-BLOCK-VIEWS | queued | |
+| P-183 | L-BLOCK-VIEWS | queued | |
+| P-169 | L-BLOCK-VIEWS | queued | |
+| P-185 | L-BLOCK-VIEWS | queued | |
+| P-146 | L-BLOCK-VIEWS | queued | |
+| P-177 | L-BLOCK-VIEWS | queued | |
+| P-242 (cluster 13: Multi-select batch edits) | L-BLOCK-VIEWS | queued | |
+| P-275 (cluster 13: Multi-select batch edits) | L-BLOCK-VIEWS | queued | |
+| P-315 (cluster 13: Multi-select batch edits) | L-BLOCK-VIEWS | queued | |
+| P-355 (cluster 13: Multi-select batch edits) | L-BLOCK-VIEWS | queued | |
+| P-398 (cluster 13: Multi-select batch edits) | L-BLOCK-VIEWS | queued | |
+| P-246 (cluster 14: Block sizing and defaults) | L-BLOCK-VIEWS | queued | |
+| P-255 (cluster 14: Block sizing and defaults) | L-BLOCK-VIEWS | queued | |
+| P-273 (cluster 14: Block sizing and defaults) | L-BLOCK-VIEWS | queued | |
+| P-400 (cluster 14: Block sizing and defaults) | L-BLOCK-VIEWS | queued | |
+| P-461 (cluster 14: Block sizing and defaults) | L-BLOCK-VIEWS | queued | |
+| P-011 | L-PORTS-RAIL | queued | |
+| P-119 | L-PORTS-RAIL | queued | |
+| P-107 | L-PORTS-RAIL | queued | |
+| P-118 | L-PORTS-RAIL | queued | |
+| P-134 | L-PORTS-RAIL | queued | |
+| P-078 | L-PORTS-RAIL | queued | |
+| P-219 | L-PORTS-RAIL | queued | |
+| P-269 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | |
+| P-270 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | |
+| P-271 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | |
+| P-345 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | |
+| P-356 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | |
+| P-358 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | |
+| P-386 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | |
+| P-395 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | |
+| P-433 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | |
+| P-458 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | |
+| P-099 | L-PORTS-SHAPE | queued | |
+| P-248 (cluster 4: Type-mismatch validation) | L-PORTS-SHAPE | queued | |
+| P-332 (cluster 4: Type-mismatch validation) | L-PORTS-SHAPE | queued | |
+| P-272 (cluster 6: Port defaults, literal display, grammar pick) | L-PORTS-SHAPE | queued | |
+| P-313 (cluster 6: Port defaults, literal display, grammar pick) | L-PORTS-SHAPE | queued | |
+| P-432 (cluster 6: Port defaults, literal display, grammar pick) | L-PORTS-SHAPE | queued | |
+| P-446 (cluster 6: Port defaults, literal display, grammar pick) | L-PORTS-SHAPE | queued | |
+| P-450 (cluster 6: Port defaults, literal display, grammar pick) | L-PORTS-SHAPE | queued | |
+| P-451 (cluster 6: Port defaults, literal display, grammar pick) | L-PORTS-SHAPE | queued | |
+| P-250 (cluster 7: Port paint states) | L-PORTS-SHAPE | queued | |
+| P-287 (cluster 7: Port paint states) | L-PORTS-SHAPE | queued | |
+| P-399 (cluster 7: Port paint states) | L-PORTS-SHAPE | queued | |
+| P-408 (cluster 7: Port paint states) | L-PORTS-SHAPE | queued | |
+| P-188 | L-MEMBERS | queued | |
+| P-161 | L-MEMBERS | queued | |
+| P-079 | L-MEMBERS | queued | |
+| P-201 | L-MEMBERS | queued | |
+| P-208 | L-MEMBERS | queued | |
+| P-110 | L-MEMBERS | queued | |
+| P-226 | L-MEMBERS | queued | |
+| P-064 | L-CODE | queued | |
+| P-065 | L-CODE | queued | |
+| P-068 | L-CODE | queued | |
+| P-075 | L-CODE | queued | |
+| P-128 | L-CODE | queued | |
+| P-091 | L-CODE | queued | |
+| P-127 | L-CODE | queued | |
+| P-264 (cluster 18: Code cell: origin state and display) | L-CODE | queued | |
+| P-278 (cluster 18: Code cell: origin state and display) | L-CODE | queued | |
+| P-279 (cluster 18: Code cell: origin state and display) | L-CODE | queued | |
+| P-321 (cluster 18: Code cell: origin state and display) | L-CODE | queued | |
+| P-431 (cluster 18: Code cell: origin state and display) | L-CODE | queued | |
+| P-442 (cluster 18: Code cell: origin state and display) | L-CODE | queued | |
+| P-142 | L-DIAG | queued | |
+| P-100 | L-DIAG | queued | |
+| P-112 | L-DIAG | queued | |
+| P-074 | L-LINKING | queued | |
+| P-109 | L-LINKING | queued | |
+| P-210 | L-LINKING | queued | |
+| P-211 | L-LINKING | queued | |
+| P-213 | L-GLYPH | queued | |
+| P-191 | L-COMPARE | queued | |
+| P-330 (cluster 24: Diff, lint, golden tooling) | L-COMPARE | queued | |
+| P-368 (cluster 24: Diff, lint, golden tooling) | L-COMPARE | queued | |
+| P-413 (cluster 24: Diff, lint, golden tooling) | L-COMPARE | queued | |
+| P-425 (cluster 24: Diff, lint, golden tooling) | L-COMPARE | queued | |
+| P-448 (cluster 24: Diff, lint, golden tooling) | L-COMPARE | queued | |
+| P-449 (cluster 24: Diff, lint, golden tooling) | L-COMPARE | queued | |
+| P-464 (cluster 24: Diff, lint, golden tooling) | L-COMPARE | queued | |
+| P-239 | L-GESTURES | queued | |
+| P-126 | L-GESTURES | queued | |
+| P-260 (cluster 12: Hit-region tuning and overlays) | L-GESTURES | queued | |
+| P-318 (cluster 12: Hit-region tuning and overlays) | L-GESTURES | queued | |
+| P-331 (cluster 12: Hit-region tuning and overlays) | L-GESTURES | queued | |
+| P-406 (cluster 12: Hit-region tuning and overlays) | L-GESTURES | queued | |
+| P-437 (cluster 12: Hit-region tuning and overlays) | L-GESTURES | queued | |
+| P-462 (cluster 12: Hit-region tuning and overlays) | L-GESTURES | queued | |
+| P-241 (cluster 34: Selection/edit chrome parity nits) | L-GESTURES | queued | |
+| P-244 (cluster 34: Selection/edit chrome parity nits) | L-GESTURES | queued | |
+| P-297 (cluster 34: Selection/edit chrome parity nits) | L-GESTURES | queued | |
+| P-327 (cluster 34: Selection/edit chrome parity nits) | L-GESTURES | queued | |
+| P-010 | L-MENU-CONTEXT | queued | |
+| P-133 | L-MENU-CONTEXT | queued | |
+| P-178 | L-MENU-CONTEXT | queued | |
+| P-154 | L-MENU-CONTEXT | queued | |
+| P-056 | L-MENU-CONTEXT | queued | |
+| P-130 | L-MENU-CONTEXT | queued | |
+| P-051 | L-MENU-CONTEXT | queued | |
+| P-052 | L-PILL | queued | |
+| P-102 | L-PILL | queued | |
+| P-076 | L-PILL | queued | |
+| P-319 (cluster 15: Text/size vocabulary) | L-PILL | queued | |
+| P-396 (cluster 15: Text/size vocabulary) | L-PILL | queued | |
+| P-404 (cluster 15: Text/size vocabulary) | L-PILL | queued | |
+| P-415 (cluster 15: Text/size vocabulary) | L-PILL | queued | |
+| P-447 (cluster 15: Text/size vocabulary) | L-PILL | queued | |
+| P-057 | L-INSPECTOR | queued | |
+| P-063 | L-INSPECTOR | queued | |
+| P-138 | L-INSPECTOR | queued | |
+| P-139 | L-INSPECTOR | queued | |
+| P-149 | L-INSPECTOR | queued | |
+| P-152 | L-INSPECTOR | queued | |
+| P-196 | L-INSPECTOR | queued | |
+| P-202 | L-INSPECTOR | queued | |
+| P-218 | L-INSPECTOR | queued | |
+| P-200 | L-INSPECTOR | queued | |
+| P-083 | L-INSPECTOR | queued | |
+| P-144 | L-INSPECTOR | queued | |
+| P-194 | L-INSPECTOR | queued | |
+| P-274 (cluster 33: Inspector presentation and field commit) | L-INSPECTOR | queued | |
+| P-439 (cluster 33: Inspector presentation and field commit) | L-INSPECTOR | queued | |
+| P-020 | L-FILES | queued | |
+| P-017 | L-FILES | queued | |
+| P-105 | L-FILES | queued | |
+| P-176 | L-FILES | queued | |
+| P-329 (cluster 21: Export) | L-FILES | queued | |
+| P-393 (cluster 21: Export) | L-FILES | queued | |
+| P-407 (cluster 21: Export) | L-FILES | queued | |
+| P-249 (cluster 22: File resilience and format housekeeping) | L-FILES | queued | |
+| P-277 (cluster 22: File resilience and format housekeeping) | L-FILES | queued | |
+| P-312 (cluster 22: File resilience and format housekeeping) | L-FILES | queued | |
+| P-346 (cluster 22: File resilience and format housekeeping) | L-FILES | queued | |
+| P-405 (cluster 22: File resilience and format housekeeping) | L-FILES | queued | |
+| P-435 (cluster 22: File resilience and format housekeeping) | L-FILES | queued | |
+| P-070 | L-NAV | queued | |
+| P-215 | L-NAV | queued | |
+| P-276 (cluster 20: Pages, frames panel, imports, history) | L-NAV | queued | |
+| P-307 (cluster 20: Pages, frames panel, imports, history) | L-NAV | queued | |
+| P-311 (cluster 20: Pages, frames panel, imports, history) | L-NAV | queued | |
+| P-323 (cluster 20: Pages, frames panel, imports, history) | L-NAV | queued | |
+| P-350 (cluster 20: Pages, frames panel, imports, history) | L-NAV | queued | |
+| P-240 (cluster 29: Toolbar/title chrome and notices) | L-NAV | queued | |
+| P-280 (cluster 29: Toolbar/title chrome and notices) | L-NAV | queued | |
+| P-284 (cluster 29: Toolbar/title chrome and notices) | L-NAV | queued | |
+| P-381 (cluster 29: Toolbar/title chrome and notices) | L-NAV | queued | |
+| P-384 (cluster 29: Toolbar/title chrome and notices) | L-NAV | queued | |
+| P-418 (cluster 29: Toolbar/title chrome and notices) | L-NAV | queued | |
+| P-262 (cluster 30: Release/version status) | L-NAV | queued | |
+| P-303 (cluster 30: Release/version status) | L-NAV | queued | |
+| P-463 (cluster 30: Release/version status) | L-NAV | queued | |
+| P-238 | EXT-SWITCHER | queued | |
+
+## Found done or obsolete at dispatch; follow-ups outside a write set
+
+| id | lane | verdict | evidence |
+|---|---|---|---|
 
 ## Finish-line gates (W5)
 
@@ -61,7 +260,7 @@ status ∈ queued · acceptance · building · auditing · merged · failed · s
 |---|---|
 | G1 nothing stranded | |
 | G2 green ×5 | |
-| G3 studio parity | |
+| G3 studio parity (items + cluster ids) | |
 | G4 one shell, two hosts | |
 | G5 registry ships | |
-| G6 stable / preview | |
+| G6 stable / preview (peer lane merged; serving waits on D11) | |
