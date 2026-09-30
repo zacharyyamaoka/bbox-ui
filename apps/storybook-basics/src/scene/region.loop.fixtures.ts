@@ -17,7 +17,7 @@
 // here are small while the frame still has a header-high band above them.
 
 import type { HostScene } from "../hosts/hostScene";
-import { carriedValueEdge, forLoopNode, whileLoopNode } from "./region.loop";
+import { carriedValueEdge, forLoopNode, whileLoopNode, LOOP_PORT_IDS } from "./region.loop";
 
 /** Elbow routing is what makes a cable obey the keep-outs (lane D): a
  *  default-routed curve is drawn without obstacles at all. These boards are
@@ -176,5 +176,109 @@ export const LOOP_WITH_BREAK: HostScene = {
   edges: [
     { id: "e-cond", source: "cond", sourceHandle: "ok", target: "loop", targetHandle: "Bool", data: ELBOW },
     { id: "e-sc", source: "step", sourceHandle: "next", target: "check", targetHandle: "next", data: ELBOW },
+  ],
+};
+
+/**
+ * `for batch in batches: for item in batch: process(item)` — a `for`
+ * nested inside a `for`. Proves nesting a loop works the same way
+ * `BRANCH_NESTED` (`region.branch.fixtures.ts`) proves it for branches: the
+ * inner region is an ORDINARY member of the outer's body (`parentId:
+ * "outer"`), never a second top-level node — `bodyChildrenOf` does not
+ * distinguish a region member from a block one, and this fixture is the
+ * loop preset's own proof of that rather than an assumption carried over
+ * from branch.
+ *
+ * The cable that matters: `outer`'s own `Iter` feeds `inner`'s own
+ * `Iterable`, corner card to corner card — the identical crossing any two
+ * plain blocks' ports would resolve through ("everything is a block" has
+ * no special case for "even when the block is a region").
+ */
+export const FOR_LOOP_NESTED: HostScene = {
+  nodes: [
+    { id: "batches", type: "block", position: { x: 0, y: 80 }, data: { name: "batches()", view: "port", w: 150, h: 80, ports: { right: ["values"] } } },
+    forLoopNode({ id: "outer", position: { x: 220, y: 20 }, w: 620, h: 420, name: "For Batch" }),
+    forLoopNode({ id: "inner", parentId: "outer", position: { x: 50, y: 30 }, w: 480, h: 280, name: "For Item" }),
+    {
+      id: "process",
+      type: "block",
+      parentId: "inner",
+      position: { x: 60, y: 30 },
+      data: { name: "process()", view: "port", w: 170, h: 80, ports: { left: ["item"] } },
+    },
+  ],
+  edges: [
+    { id: "e-batches", source: "batches", sourceHandle: "values", target: "outer", targetHandle: LOOP_PORT_IDS.iterable, data: ELBOW },
+    { id: "e-outer-inner", source: "outer", sourceHandle: LOOP_PORT_IDS.iter, target: "inner", targetHandle: LOOP_PORT_IDS.iterable, data: ELBOW },
+    { id: "e-process", source: "inner", sourceHandle: LOOP_PORT_IDS.iter, target: "process", targetHandle: "item", data: ELBOW },
+  ],
+};
+
+/**
+ * `for` with `continue`: skip this turn without leaving the loop — the
+ * exact grammar `LOOP_WITH_BREAK` gives `while`'s `break`, given here to
+ * `for` and to the sibling mark (scenario 6: `continue` was the one mark
+ * this file never drew). No edge leaves `skip_if_empty` for the same
+ * reason none leaves `check` in `LOOP_WITH_BREAK`: the exit-this-turn IS
+ * the mark, never a cable.
+ */
+export const FOR_LOOP_CONTINUE: HostScene = {
+  nodes: [
+    { id: "items", type: "block", position: { x: 0, y: 40 }, data: { name: "items()", view: "port", w: 150, h: 80, ports: { right: ["values"] } } },
+    forLoopNode({ id: "loop", position: { x: 220, y: 20 }, w: 480, h: 260 }),
+    {
+      id: "skip",
+      type: "block",
+      parentId: "loop",
+      position: { x: 60, y: 30 },
+      data: { name: "skip_if_empty()", view: "port", w: 220, h: 80, ports: { left: ["item"] }, marks: ["continue"] },
+    },
+  ],
+  edges: [
+    { id: "e-items", source: "items", sourceHandle: "values", target: "loop", targetHandle: LOOP_PORT_IDS.iterable, data: ELBOW },
+    { id: "e-iter", source: "loop", sourceHandle: LOOP_PORT_IDS.iter, target: "skip", targetHandle: "item", data: ELBOW },
+  ],
+};
+
+/**
+ * A `while` whose body MUTATES the value the condition reads — the case
+ * where the re-check actually matters (scenario 9). `mutate()` advances
+ * the state; `over_limit()` re-derives the boolean from that MUTATED value
+ * and is what feeds `Bool` back, one turn late. The mutated value also
+ * carries into `mutate`'s own input next turn (`carriedValueEdge`) — the
+ * same z⁻¹ device `FOR_LOOP_CARRIED` uses for its accumulator — which is
+ * what makes "the body changed the thing the condition reads" a cable you
+ * can see rather than a claim in this comment.
+ *
+ * WHY this is not just `WHILE_LOOP_RECHECK` again: that fixture's `check`
+ * reads a value `step` produced but never itself carries forward — nothing
+ * on that board shows the SAME value being both mutated and re-tested.
+ * Here `next` is that one value, twice: into `over_limit` for the test, and
+ * back into `mutate` for the next turn.
+ */
+export const WHILE_LOOP_MUTATES: HostScene = {
+  nodes: [
+    { id: "start", type: "block", position: { x: 0, y: 40 }, data: { name: "ready()", view: "port", w: 150, h: 80, ports: { right: ["ok"] } } },
+    whileLoopNode({ id: "loop", position: { x: 300, y: 30 }, w: 560, h: 300 }),
+    {
+      id: "mutate",
+      type: "block",
+      parentId: "loop",
+      position: { x: 50, y: 20 },
+      data: { name: "mutate()", view: "port", w: 170, h: 100, ports: { left: ["state"], right: ["next"] } },
+    },
+    {
+      id: "overLimit",
+      type: "block",
+      parentId: "loop",
+      position: { x: 310, y: 20 },
+      data: { name: "over_limit()", view: "port", w: 180, h: 100, ports: { left: ["next"], right: ["ok"] } },
+    },
+  ],
+  edges: [
+    { id: "e-start", source: "start", sourceHandle: "ok", target: "loop", targetHandle: LOOP_PORT_IDS.bool, data: ELBOW },
+    { id: "e-check", source: "mutate", sourceHandle: "next", target: "overLimit", targetHandle: "next", data: ELBOW },
+    { id: "e-recheck", source: "overLimit", sourceHandle: "ok", target: "loop", targetHandle: LOOP_PORT_IDS.bool, data: { variant: "delayed", ...ELBOW } },
+    carriedValueEdge({ id: "e-carry", nodeId: "mutate", from: "next", to: "state", seed: "0" }),
   ],
 };

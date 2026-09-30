@@ -1,36 +1,38 @@
 /**
- * Components/Blocks/BlockRegion/Branch — `if`/`elif`/`else` and `match`/`case`, drawn as the
- * generic Region (lane A) carrying branch DATA (docs/CONTROL-FLOW-PLAN.md
- * lane C). There is no branch component: every story below mounts a scene
- * literal from `scene/region.branch.fixtures.ts` into the ordinary hosts.
+ * Components/Blocks/BlockRegion/Branch — `if`/`elif`/`else`, drawn as the
+ * generic Region (lane A) carrying branch DATA under the SPLIT grammar
+ * (`region.branch.ts`'s header, "SPLIT, 2026-09-22";
+ * `reports/media/truthful-branching-2026-09-22.html`). `match`/`case`
+ * moved to `ControlFlowMatch.stories.tsx` — the two are different shapes
+ * now, not two titles on one factory.
  *
- * What these stories claim, in Zach's own two sentences:
+ * The one rule every story below either SHOWS or WITHHOLDS: a dot is a
+ * value the structure consumes, and its POSITION says who consumes it.
+ * `if`/`elif`/`else` has NO shared subject — each arm owns its OWN boolean,
+ * on that arm's own header, left wall. `else` tests nothing, so it carries
+ * no dot at all, and neither does the region's own corner card (Q1/V1: a
+ * branch yields nothing either, so the corner never grows a right wall).
  *
- *   • **Everything is a block.** The branch's interface is a REAL `BlockPort`
- *     in the frame's corner carrying the CONDITIONS — `OneInput` measures
- *     `fast` on that card through the identical `[data-block-id]` →
- *     `[data-port-id]` walk any other block's ports resolve through, and
- *     asserts the card has no right rail at all (Q1/V1: a branch yields
- *     nothing, so it has no output port to yield through).
- *   • **Never mix data and control lines.** Not one cable here is a control
- *     line. The control flow IS the containment: a call lives in an arm, an
- *     arm is a row, a nested branch is a row inside a row (`Nested`). The
- *     arms' results meet at `encode`'s ONE ordinary port — two sibling-arm
- *     cables landing on one dot ARE the join, and `OneInput` measures that
- *     there is exactly one dot there to land on.
+ * The other axis every board here varies on: SUPPLIED vs UNSUPPLIED
+ * (report §3.2). A wired arm leaves `test.default` unset — an empty dot
+ * with a real cable landing on it. An unwired arm sets `test.default` to
+ * the literal expression, rendered verbatim as `PortState "valueSet"` —
+ * Zach's "default variables in the title". The SAME dot renders
+ * differently depending on which is true, which is the whole truthful-
+ * rendering claim: a title can no longer silently say "this is live" when
+ * it is really just typed in, or vice versa.
  *
- * The assertions live in `controlFlow.acceptance.ts`, committed before this
- * file existed and off-limits to it; every one MEASURES
- * (`getBoundingClientRect`, `getComputedStyle`, sampled SVG paths) rather
- * than asserting DOM presence. `FoldedArm` is the sharpest: it unfolds a
- * MIDDLE arm and re-measures the LAST arm's member against its own arm body
- * — arm-relative positions are the entire reason an arm is a node, and a
- * story that only checked `data-open` would pass a build that silently
- * rewrote every position below the fold.
+ * The assertions live in `blockRegion.acceptance.ts`, committed before this
+ * file and off-limits to it; every one MEASURES
+ * (`getBoundingClientRect`, `getComputedStyle`, `data-state`) rather than
+ * asserting DOM presence. The local helpers below extend that same
+ * discipline to the two things the frozen file has no vocabulary for yet:
+ * an ARM's own test/capture dot (as opposed to the region's corner ports)
+ * and whether an arm carries no dot at all.
  */
 import { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, userEvent, waitFor } from "storybook/test";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 
 import { DomCanvas } from "../hosts/domCanvas";
 import type { HostScene } from "../hosts/hostScene";
@@ -38,14 +40,15 @@ import { ReactFlowHost } from "../hosts/reactFlowHost";
 import {
   BRANCH_ACTIVE,
   BRANCH_FOLDED,
-  BRANCH_MANY_INPUTS,
+  BRANCH_IF_ELSE_DEFAULT,
+  BRANCH_IF_ELSE_WIRED,
+  BRANCH_LADDER_DEFAULT,
+  BRANCH_LADDER_MIXED,
+  BRANCH_LADDER_WIRED,
   BRANCH_NESTED,
-  BRANCH_ONE_INPUT,
-  MATCH_CASE,
 } from "../scene/region.branch.fixtures";
 import {
   expectArmsStacked,
-  expectCornerPorts,
   expectMemberInside,
   expectRegionExpanded,
   expectWirePainted,
@@ -53,7 +56,7 @@ import {
 
 const meta = {
   title: "Components/Blocks/BlockRegion/Branch",
-  tags: ["object:region", "host:dom", "host:react-flow", "lane:control-flow"],
+  tags: ["object:region", "host:dom", "host:react-flow", "lane:truthful-branch-viz"],
 } satisfies Meta;
 
 export default meta;
@@ -73,75 +76,234 @@ function StatefulDomCanvas({ initial, width, height }: { initial: HostScene; wid
   return <DomCanvas scene={scene} onSceneChange={setScene} width={width} height={height} />;
 }
 
-const ONE_INPUT_WIRES = ["e-cond", "e-frame1", "e-frame2", "e-gain", "e-out1", "e-out2"];
+/* ------------------------------------------------------------------ */
+/* Local helpers — an ARM's own dot, never the region's corner ports    */
+/* (`expectCornerPorts` in the frozen file only ever reads the corner). */
+/* ------------------------------------------------------------------ */
 
-export const OneInput: Story = {
-  name: "One input (if fast: / else:)",
-  render: () => <StatefulDomCanvas initial={BRANCH_ONE_INPUT} width={1040} height={560} />,
+function armHeader(root: ParentNode, armId: string): HTMLElement {
+  return required<HTMLElement>(root, `[data-arm-id="${armId}"] [data-slot="region-arm-header"]`, `arm \`${armId}\`'s header`);
+}
+
+/** The arm's own dot, by wall — `edge="left"` for a test/guard, `"right"`
+ *  for a capture (region.branch.ts's "the split": IN vs OUT of the arm). */
+function armDot(root: ParentNode, armId: string, portId: string): HTMLElement {
+  return required<HTMLElement>(armHeader(root, armId), `[data-port-id="${portId}"]`, `arm \`${armId}\`'s dot \`${portId}\``);
+}
+
+/** `PortState` read straight off the paint (`port.tsx`'s own `data-state`),
+ *  never inferred from the fixture — a fade or a wired override that never
+ *  reached the DOM would still pass a check against the fixture's own
+ *  field. */
+function armDotState(root: ParentNode, armId: string, portId: string): string | null {
+  return armDot(root, armId, portId).querySelector('[data-slot="port-dot"]')?.getAttribute("data-state") ?? null;
+}
+
+/**
+ * The default expression as actually PAINTED — truthful rendering means
+ * this has to match the authored string character for character, never a
+ * normalised or trimmed copy of it. NOT read off the dot itself: the dot's
+ * own label slot is deliberately blank (`blockRegion.tsx`'s `ArmHeaderRail`,
+ * "A BARE DOT — no label", commit fee87b9 — drawing the expression there
+ * collided with the arm's own title, `mode == "fast"` over `if:` painting
+ * as `modif:e == "fast"`). The text lives one element over, in the Bar's
+ * own `[data-slot="region-arm-test"]` span, right after the title — absent
+ * entirely when the arm has no default (wired, or `else`).
+ */
+function armTestText(root: ParentNode, armId: string): string {
+  return armHeader(root, armId).querySelector('[data-slot="region-arm-test"]')?.textContent ?? "";
+}
+
+/** `else` tests nothing, so it owns no rail at all — not an empty one. */
+function expectArmHasNoDot(root: ParentNode, armId: string): void {
+  expect(armHeader(root, armId).querySelector('[data-slot="block-port-rail"]'), `arm \`${armId}\` should carry no dot at all`).toBeNull();
+}
+
+/** Q1/V1, restated for the split: an `if`/`elif`/`else` region shares no
+ *  subject between arms, so its corner card grows NO wall at all — not
+ *  even the one wall a `match` region's corner would. */
+function expectCornerHasNoRail(root: ParentNode, regionId: string): void {
+  const corner = required<HTMLElement>(root, `[data-slot="region-corner"] [data-block-id="${regionId}"]`, "the corner block");
+  expect(corner.querySelectorAll('[data-slot="block-port-rail"]'), "an if/elif/else corner shares no subject and yields nothing").toHaveLength(0);
+}
+
+/**
+ * The defect class that shipped twice on 2026-09-22 (commit 03b330a, the
+ * coordinator's own words): a DOT-position assertion cannot see a TEXT
+ * collision — `mode == "fast"` painted straight through `if:` for hours
+ * while every existing measured assertion (all of them dot-box checks)
+ * stayed green. Measured here instead of merely asserted-present: the
+ * title's own box and the expression's own box must not overlap on
+ * screen, in real pixels, not by trusting that two elements existing means
+ * two elements are legible.
+ */
+function expectNoTextOverlap(root: ParentNode, armId: string): void {
+  const header = armHeader(root, armId);
+  const title = required<HTMLElement>(header, '[data-slot="region-arm-title"]', `arm \`${armId}\`'s title`);
+  const test = header.querySelector<HTMLElement>('[data-slot="region-arm-test"]');
+  if (!test) return; // nothing to collide with — `else`, or a wired arm
+  const titleRect = title.getBoundingClientRect();
+  const testRect = test.getBoundingClientRect();
+  const overlaps = titleRect.left < testRect.right && testRect.left < titleRect.right && titleRect.top < testRect.bottom && testRect.top < titleRect.bottom;
+  // DOMRect's fields are prototype accessors, not own properties, so
+  // JSON.stringify(rect) is "{}" — spread it into a plain object first.
+  const describe = (r: DOMRect) => JSON.stringify({ left: r.left, right: r.right, top: r.top, bottom: r.bottom });
+  expect(overlaps, `arm \`${armId}\`'s title (${describe(titleRect)}) and its default (${describe(testRect)}) must not overlap`).toBe(false);
+}
+
+/* ------------------------------------------------------------------ */
+/* 1 · SUPPLIED — the test comes from a real `==` block                */
+/* ------------------------------------------------------------------ */
+
+export const WiredCondition: Story = {
+  name: "if / else — the test SUPPLIED by a real `==` block",
+  render: () => <StatefulDomCanvas initial={BRANCH_IF_ELSE_WIRED} width={1200} height={560} />,
   play: async ({ canvasElement }) => {
-    await expectRegionExpanded(canvasElement, "br");
-    // The interface, on the corner block: the condition and nothing else.
-    expectCornerPorts(canvasElement, "br", { left: ["fast"] });
-    const corner = required<HTMLElement>(canvasElement, '[data-slot="region-corner"]', "the corner block");
-    expect(
-      corner.querySelector('[data-slot="block-port-rail"][data-edge="right"]'),
-      "Q1/V1: a branch yields nothing, so its corner block has NO output wall",
-    ).toBeNull();
-    expect(
-      Array.from(corner.querySelectorAll('[data-slot="block-port-rail"]')).map((rail) => rail.getAttribute("data-edge")),
-      "one wall, the conditions'",
-    ).toEqual(["left"]);
+    const canvas = within(canvasElement);
+    await canvas.findByText("estimate()");
 
+    await expectRegionExpanded(canvasElement, "br");
+    expectCornerHasNoRail(canvasElement, "br");
     await expectArmsStacked(canvasElement, "br", ["if", "else"]);
     expectMemberInside(canvasElement, '[data-arm-id="if"] [data-slot="region-arm-body"]', "estimate");
     expectMemberInside(canvasElement, '[data-arm-id="else"] [data-slot="region-arm-body"]', "fallback");
 
-    for (const wireId of ONE_INPUT_WIRES) await expectWirePainted(canvasElement, wireId);
+    // The truthful form: nothing wired means NOTHING inline either — the
+    // dot is empty, not lying about owning a default it does not have.
+    expect(armTestText(canvasElement, "if")).toBe("");
+    expect(armDotState(canvasElement, "if", "if")).toBe("empty");
+    expectArmHasNoDot(canvasElement, "else");
 
-    // The join, measured: both arms' `Pose` cables end at ONE dot, because
-    // `encode`'s `pose` IS one dot. If a yield port had been minted on the
-    // region instead (the V2 this design rejected), these two wires would
-    // end somewhere else entirely and this assertion would still pass on
-    // presence alone — so it counts the dots rather than the wires.
-    expect(
-      canvasElement.querySelectorAll('[data-block-id="encode"] [data-port-id="pose"]'),
-      "the fan-in lands on exactly one port dot",
-    ).toHaveLength(1);
+    // The `==` block is real and its output actually resolves onto the
+    // arm's dot — not a title pretending to compute something.
+    for (const wireId of ["e-mode", "e-lit", "e-cond", "e-frame1", "e-frame2", "e-out1", "e-out2"]) {
+      await expectWirePainted(canvasElement, wireId);
+    }
   },
 };
 
-export const ManyInputs: Story = {
-  name: "Many inputs (three conditions, three arms)",
-  render: () => <StatefulDomCanvas initial={BRANCH_MANY_INPUTS} width={560} height={660} />,
+/* ------------------------------------------------------------------ */
+/* 2 · UNSUPPLIED — the inline default, "default variables in the title"*/
+/* ------------------------------------------------------------------ */
+
+export const InlineDefault: Story = {
+  name: 'if / else — UNSUPPLIED, the inline default (\'mode == "fast"\')',
+  render: () => <StatefulDomCanvas initial={BRANCH_IF_ELSE_DEFAULT} width={1040} height={520} />,
   play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText("estimate()");
+
     await expectRegionExpanded(canvasElement, "br");
-    // However many values the branch decides on, they are ports on the ONE
-    // corner block — the interface never moves onto the arms.
-    expectCornerPorts(canvasElement, "br", { left: ["input_1", "input_2", "input_3"] });
-    await expectArmsStacked(canvasElement, "br", ["arm-1", "arm-2", "arm-3"]);
-    expectMemberInside(canvasElement, '[data-arm-id="arm-2"] [data-slot="region-arm-body"]', "step-2");
+    expectCornerHasNoRail(canvasElement, "br");
+    await expectArmsStacked(canvasElement, "br", ["if", "else"]);
+
+    // Truthful rendering: the expression keeps its spaces and its quotes,
+    // verbatim, and the dot itself reports `valueSet` — "owns a default".
+    expect(armTestText(canvasElement, "if")).toBe('mode == "fast"');
+    expect(armDotState(canvasElement, "if", "if")).toBe("valueSet");
+    expectArmHasNoDot(canvasElement, "else");
+    expectNoTextOverlap(canvasElement, "if");
   },
 };
 
-export const MatchCase: Story = {
-  name: "match / case (same shape, different titles)",
-  render: () => <StatefulDomCanvas initial={MATCH_CASE} width={560} height={660} />,
+/* ------------------------------------------------------------------ */
+/* 3-5 · the five-arm ladder Zach named explicitly                     */
+/* ------------------------------------------------------------------ */
+
+const LADDER_ARM_IDS = ["if", "elif", "elif-2", "elif-3", "else"];
+
+export const FiveArmLadderDefault: Story = {
+  name: "if / elif / elif / elif / else — all inline defaults",
+  render: () => <StatefulDomCanvas initial={BRANCH_LADDER_DEFAULT} width={1300} height={780} />,
   play: async ({ canvasElement }) => {
-    await expectArmsStacked(canvasElement, "br", ["case-1", "case-2", "case-_"]);
-    expectCornerPorts(canvasElement, "br", { left: ["cmd"] });
-    // Truthful rendering: an arm header is the SOURCE header a reader
-    // recognises, so the quotes, the spaces and the trailing colon all
-    // survive to the screen character for character.
-    expect(
-      Array.from(canvasElement.querySelectorAll('[data-slot="region-arm-title"]')).map((title) => title.textContent),
-    ).toEqual(['case "go":', 'case "stop":', "case _:"]);
+    const canvas = within(canvasElement);
+    await canvas.findByText("estimate()");
+
+    await expectRegionExpanded(canvasElement, "br");
+    await expectArmsStacked(canvasElement, "br", LADDER_ARM_IDS);
+
+    const expected = ['mode == "fast"', 'mode == "safe"', "count > 10", "retries == 0"];
+    for (const [index, armId] of ["if", "elif", "elif-2", "elif-3"].entries()) {
+      expect(armTestText(canvasElement, armId), `arm \`${armId}\`'s default`).toBe(expected[index]);
+      expect(armDotState(canvasElement, armId, armId)).toBe("valueSet");
+      // The defect class that shipped twice on 2026-09-22: this is exactly
+      // the ladder where a title/expression collision would show, arm
+      // after arm, and a dot-position check alone cannot see it.
+      expectNoTextOverlap(canvasElement, armId);
+    }
+    expectArmHasNoDot(canvasElement, "else");
   },
 };
+
+export const FiveArmLadderWired: Story = {
+  name: "if / elif / elif / elif / else — every test wired",
+  render: () => <StatefulDomCanvas initial={BRANCH_LADDER_WIRED} width={1500} height={820} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText("estimate()");
+
+    await expectRegionExpanded(canvasElement, "br");
+    await expectArmsStacked(canvasElement, "br", LADDER_ARM_IDS);
+
+    for (const armId of ["if", "elif", "elif-2", "elif-3"]) {
+      expect(armTestText(canvasElement, armId), `arm \`${armId}\` shows no inline text once wired`).toBe("");
+    }
+    expectArmHasNoDot(canvasElement, "else");
+
+    for (const wireId of [
+      "e-mode-1",
+      "e-mode-2",
+      "e-count",
+      "e-retries",
+      "e-cond-if",
+      "e-cond-elif",
+      "e-cond-elif2",
+      "e-cond-elif3",
+    ]) {
+      await expectWirePainted(canvasElement, wireId);
+    }
+  },
+};
+
+export const FiveArmLadderMixed: Story = {
+  name: "if / elif / elif / elif / else — wired and inline, arm by arm",
+  render: () => <StatefulDomCanvas initial={BRANCH_LADDER_MIXED} width={1500} height={820} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText("estimate()");
+
+    await expectRegionExpanded(canvasElement, "br");
+    await expectArmsStacked(canvasElement, "br", LADDER_ARM_IDS);
+
+    // `if`/`elif`: wired, so no inline text.
+    expect(armTestText(canvasElement, "if")).toBe("");
+    expect(armTestText(canvasElement, "elif")).toBe("");
+    await expectWirePainted(canvasElement, "e-cond-if");
+    await expectWirePainted(canvasElement, "e-cond-elif");
+
+    // `elif-2`/`elif-3`: unwired, so the literal shows verbatim.
+    expect(armTestText(canvasElement, "elif-2")).toBe("count > 10");
+    expect(armDotState(canvasElement, "elif-2", "elif-2")).toBe("valueSet");
+    expect(armTestText(canvasElement, "elif-3")).toBe("retries == 0");
+    expect(armDotState(canvasElement, "elif-3", "elif-3")).toBe("valueSet");
+    expectNoTextOverlap(canvasElement, "elif-2");
+    expectNoTextOverlap(canvasElement, "elif-3");
+
+    expectArmHasNoDot(canvasElement, "else");
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* 6 · Folded arm — a sibling's members hold their arm-relative position */
+/* ------------------------------------------------------------------ */
 
 export const FoldedArm: Story = {
   name: "Folded arm (unfold, and nothing below moves in its own space)",
   render: () => <StatefulDomCanvas initial={BRANCH_FOLDED} width={1040} height={660} />,
   play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText("identity()");
+
     await expectArmsStacked(canvasElement, "br", ["if", "elif", "else"]);
     expect(required<HTMLElement>(canvasElement, '[data-arm-id="elif"]', "the folded arm").getAttribute("data-open")).toBe("false");
 
@@ -169,61 +331,110 @@ export const FoldedArm: Story = {
   },
 };
 
+/* ------------------------------------------------------------------ */
+/* 7 · Active arm — the rest fade to one token                          */
+/* ------------------------------------------------------------------ */
+
 export const ActiveArm: Story = {
   name: "Active arm (the rest fade to one token)",
   render: () => <StatefulDomCanvas initial={BRANCH_ACTIVE} width={1040} height={660} />,
   play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText("identity()");
+
     await expectArmsStacked(canvasElement, "br", ["if", "elif", "else"]);
     const active = required<HTMLElement>(canvasElement, '[data-arm-id="if"]', "the active arm");
     const faded = required<HTMLElement>(canvasElement, '[data-arm-id="else"]', "a non-active arm");
     expect(active.getAttribute("data-active")).toBe("true");
     expect(faded.getAttribute("data-active")).toBe("false");
     // Read back off the browser, not off our own constant: a fade that never
-    // reached the paint would still satisfy a DOM-presence check. This is
-    // the lens V1 traded the yield ports for (DP - Branch), so it has to be
-    // visible, not merely recorded.
+    // reached the paint would still satisfy a DOM-presence check.
     expect(getComputedStyle(faded).opacity).toBe("0.18");
     expect(getComputedStyle(active).opacity).toBe("1");
   },
 };
 
+/* ------------------------------------------------------------------ */
+/* 8 · Nested — a branch inside an arm                                  */
+/* ------------------------------------------------------------------ */
+
 export const Nested: Story = {
   name: "Nested (a branch inside an arm)",
   render: () => <StatefulDomCanvas initial={BRANCH_NESTED} width={760} height={680} />,
   play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText("refine()");
+
     await expectRegionExpanded(canvasElement, "inner");
     // The containment the scene declares is the containment the DOM shows:
     // the inner branch's `parentId` is the ARM, so it renders inside that
-    // arm's body — not in the outer region's free body, which is a scope the
-    // program does not have.
+    // arm's body — not in the outer region's free body, which is a scope
+    // the program does not have.
     required(
       canvasElement,
       '[data-arm-id="if"] [data-slot="region"][data-region-id="inner"]',
       "the inner branch inside the outer `if` arm",
     );
     await expectArmsStacked(canvasElement, "inner", ["inner-if", "inner-else"]);
-    expectCornerPorts(canvasElement, "inner", { left: ["gain"] });
+    expectCornerHasNoRail(canvasElement, "inner");
+    expect(armTestText(canvasElement, "inner-if")).toBe("gain > 1.0");
     expectMemberInside(canvasElement, '[data-arm-id="inner-if"] [data-slot="region-arm-body"]', "refine");
   },
 };
 
-export const OneInputReactFlow: Story = {
-  name: "One input, in a host (ReactFlow)",
+/* ------------------------------------------------------------------ */
+/* 9 · Through a real host — the projection regression guard            */
+/* ------------------------------------------------------------------ */
+
+export const WiredLadderInAHostDom: Story = {
+  name: "The five-arm ladder, wired, in a host (DOM canvas)",
+  render: () => <StatefulDomCanvas initial={BRANCH_LADDER_WIRED} width={1500} height={820} />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByText("estimate()");
+
+    // `hosts/nodeViews.tsx` projects `arm.data.arm.test` into `RegionArm.test`
+    // — this regression broke silently once (this file's own header
+    // comment). Every arm's dot has to exist AND a real cable has to
+    // resolve onto it, in a host, not just against a direct `<BlockRegion>`
+    // caller.
+    await expectArmsStacked(canvasElement, "br", LADDER_ARM_IDS);
+    for (const armId of ["if", "elif", "elif-2", "elif-3"]) {
+      armDot(canvasElement, armId, armId); // throws if the dot does not exist
+    }
+    await expectWirePainted(canvasElement, "e-cond-if");
+    await expectWirePainted(canvasElement, "e-cond-elif3");
+  },
+};
+
+export const WiredLadderInAHostReactFlow: Story = {
+  name: "The five-arm ladder, wired, in a host (React Flow)",
   render: () => {
     function Bench() {
-      const [scene, setScene] = useState(BRANCH_ONE_INPUT);
+      const [scene, setScene] = useState(BRANCH_LADDER_WIRED);
       return (
-        <ReactFlowHost scene={scene} onSceneChange={setScene} width={1040} height={560} defaultViewport={{ x: 0, y: 0, zoom: 1 }} />
+        <ReactFlowHost scene={scene} onSceneChange={setScene} width={1500} height={820} defaultViewport={{ x: 0, y: 0, zoom: 1 }} />
       );
     }
     return <Bench />;
   },
   play: async ({ canvasElement }) => {
-    // C3: one renderer, three hosts. The branch preset is DATA — React Flow
-    // needed zero branch-specific code, the same way it needed zero
-    // region-specific code in lane A.
-    await expectRegionExpanded(canvasElement, "br");
-    await expectArmsStacked(canvasElement, "br", ["if", "else"]);
-    expectCornerPorts(canvasElement, "br", { left: ["fast"] });
+    const canvas = within(canvasElement);
+    await canvas.findByText("estimate()");
+
+    // C3: one renderer, three hosts — the branch preset is DATA, so React
+    // Flow needed zero branch-specific code. Same regression guard as the
+    // DOM host above, against the OTHER host — dot presence only:
+    // `expectWirePainted` reads `[data-slot="wire-layer"] [data-wire-id]`,
+    // which is `DomCanvas`'s own cable renderer; `ReactFlowHost` paints its
+    // cables through `Trace`/`data-slot="trace"` instead (confirmed by
+    // inspection — no existing story anywhere in this repo calls
+    // `expectWirePainted` against a `ReactFlowHost`), so the frozen helper
+    // does not apply here. The acceptance criterion this story exists for
+    // is dot presence in a host, which `armDot` alone proves.
+    await expectArmsStacked(canvasElement, "br", LADDER_ARM_IDS);
+    for (const armId of ["if", "elif", "elif-2", "elif-3"]) {
+      armDot(canvasElement, armId, armId);
+    }
   },
 };

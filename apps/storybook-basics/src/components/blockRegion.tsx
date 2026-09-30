@@ -111,17 +111,18 @@ import { Bar } from "./bar";
 import { Block, REGION_FRAME_RADIUS } from "./block";
 import { BlockMembers, type BlockMember } from "./blockMembers";
 import { BlockPort, type BlockEdgeSpec } from "./blockPort";
-import { offsetEdgePaddingPx, RAIL_GAP_PX } from "./blockPort.layout";
+import { offsetEdgePaddingPx, RAIL_CROSS_PX, RAIL_GAP_PX, railAxisFor, railBoxFor, railPlanFor, type BlockBands } from "./blockPort.layout";
 import { Button } from "./button";
 import { FoldingChevron } from "./foldingChevron";
 import { ControlMark, isControlMarkKind, type ControlMarkKind } from "./controlMark";
 import { Badge } from "./badge";
 import { Glyph } from "./glyph";
 import type { Diagnostic } from "./highlighter";
+import { LabeledPort } from "./labeledPort";
 import { cn } from "../lib/utils";
 import { ISOLATED_ROOT_STYLE, paintTier } from "./paintOrder";
 import type { BlockSide } from "./port.layout";
-import type { PortEdgeItem } from "./portEdge";
+import { PortEdge, type PortEdgeItem, type PortEdgeProps } from "./portEdge";
 import {
   REGION_ARM_FADE_OPACITY,
   REGION_CARD_WIDTH_PX,
@@ -191,6 +192,13 @@ export interface RegionArm {
   /** Body height while open; remembered while folded (`regionLayout`). */
   bodyHeight?: number;
   members?: BlockMember[];
+  /** This arm's OWN operand: the boolean it is selected by. `else` has none.
+   *  Rendered as a port on the arm's header strip, left wall. */
+  test?: { id: string; default?: string };
+  /** Names this arm's PATTERN binds INTO its body (`case Point(x=0, y=y)`
+   *  binds `y`) — a value the header PRODUCES, so it sits on the header's
+   *  RIGHT edge, facing out of the tab. */
+  captures?: readonly string[];
 }
 
 /** Text the measuring copy may render: a string or a number, never a node. */
@@ -453,18 +461,154 @@ function useRegionVariant(node: HTMLElement | null): RegionVariantId {
   return variant;
 }
 
+/**
+ * An arm's own header strip as `BlockBands`, NOT measured: `regionLayout`
+ * already knows this geometry in closed form (`row.headerTop`/`row.bodyTop`),
+ * the same reason `blockRegion.layout.ts` exists at all. `blockLeft`/
+ * `headerTop` are 0, not `row.rowTop`, because this rail mounts INSIDE
+ * `region-arm-header` itself (its own `position: relative` box, below) — an
+ * absolutely positioned child's `left`/`top: 0` already land on that div's
+ * own padding edge, so the bands are local to the header strip, not to the
+ * frame. `bodyTop`/`bodyBottom` both equal the strip's own height: an arm
+ * header has no body band of its own to distinguish, and `railBoxFor`'s
+ * `band: "header"` case (blockPort.layout.ts) never reads `bodyBottom` for
+ * a column-axis edge.
+ */
+export function armHeaderBands(headerHeightPx: number, widthPx: number): BlockBands {
+  return {
+    blockLeft: 0,
+    blockTop: 0,
+    blockWidth: widthPx,
+    blockHeight: headerHeightPx,
+    headerTop: 0,
+    bodyTop: headerHeightPx,
+    bodyBottom: headerHeightPx,
+  };
+}
+
+/**
+ * One wall's `RailPlan` for an arm header rail — `railPlanFor`'s own
+ * "expanded, column axis" rule (`space-evenly`, which centres a LONE dot in
+ * the band — see that function's own WHY), with `band` overridden to
+ * `"header"` afterward: the same `RailBand` (`blockPort.layout.ts`) an
+ * ordinary Block's function port sits on.
+ */
+export function armHeaderRailPlan(edge: BlockSide, itemIds: string[]) {
+  return {
+    ...railPlanFor({ view: "expanded", portLayout: "inline", edge, itemIds, leadCount: 0, collapsePorts: false }),
+    band: "header" as const,
+  };
+}
+
+/**
+ * ONE wall's rendered rail on an arm's header strip: `railBoxFor` (this
+ * file's own header, "one geometry, two mount points") positioned exactly
+ * as `blockPort.tsx`'s `BlockPortRail` positions a Block's own wall rail —
+ * SAME function, not a second copy of its arithmetic.
+ *
+ * WHY this is its OWN small renderer and not a call to `BlockPortRail`
+ * itself (tried first, reverted): `blockPort.tsx`'s `renderItem` hardcodes
+ * `labelSlot={plan.band === "header" ? null : undefined}` — deliberately
+ * blank for an ordinary Block's function port, which never has room for a
+ * name on a title bar it shares with the block's own header content. An
+ * arm's header IS the port's only content, so that rule is exactly
+ * backwards here: bullet 5 of this lane's own acceptance requires the
+ * `valueSet` arm's default to show, verbatim, right where the dot sits —
+ * measured red against `BlockPortRail` (`DEBUG` capture, 2026-09-22: the
+ * rendered slot was `port-label-slot` — empty — not `DefaultPortLabel`'s
+ * `port-label`). `blockPort.tsx`'s own comment names the sanctioned
+ * reach-past for exactly this case: "a caller who genuinely needs labels IN
+ * the header band can still get them — supply a `portEdgeProps.renderItem`
+ * of their own" — except `BlockPortRail` places its OWN `renderItem` last in
+ * the `<PortEdge>` spread, so `portEdgeProps.renderItem` can never reach
+ * past it from outside. This function IS that reach-past, done the only way
+ * left: skip `BlockPortRail`, keep `railBoxFor`.
+ */
+function ArmHeaderRail({ edge, items, bands }: { edge: BlockSide; items: PortEdgeItem[]; bands: BlockBands }) {
+  const plan = armHeaderRailPlan(
+    edge,
+    items.map((item) => item.id),
+  );
+  const box = railBoxFor(edge, plan, bands);
+  const axis = railAxisFor(edge);
+  // A BARE DOT — no label. Corrected 2026-09-22 after looking at the
+  // captures: this rail used to draw `item.label`, and the arm's own title
+  // (`if:`) is drawn by `ArmRow`'s Bar starting at the SAME x, so the two
+  // strings painted straight through each other — `mode == "fast"` over
+  // `if:` rendered as `modif:e == "fast"` in all five region drawings, and
+  // the fold chevron was overdrawn too. No measured assertion caught it;
+  // they all check the DOT's box, never text collision.
+  //
+  // WHY a bare dot rather than insetting the title past the label: the
+  // reading order has to be `if: mode == "fast"`, and the rail sits at the
+  // frame's LEFT edge, so anything it draws necessarily comes first. The
+  // expression therefore belongs to the arm's header TEXT (ArmRow composes
+  // it after the title), and the dot goes back to being just a dot. That
+  // also puts this rail back in line with the rule `blockPort.tsx` already
+  // applies to every header-band rail — a header's own content is the
+  // label — instead of standing as the one exception to it.
+  const renderItem: PortEdgeProps["renderItem"] = (item, ctx) => (
+    <span data-slot="block-port-item" data-port-id={item.id} style={{ display: "inline-flex" }}>
+      {/* `disabled`: an arm's own operand/capture has no `onItemsChange` of
+          its own yet — read-only, the same default `BlockPortRail` applies
+          to an unwired rail (P-037's own WHY). */}
+      <LabeledPort edge={edge} state={item.state ?? "empty"} textLayout={ctx.textLayout} disabled labelSlot={null} />
+    </span>
+  );
+  return (
+    <div
+      data-slot="block-port-rail"
+      data-edge={edge}
+      data-rail-band={plan.band}
+      style={{
+        position: "absolute",
+        left: box.left,
+        top: box.top,
+        zIndex: paintTier("portDot"),
+        // `railBoxFor`'s own margin note (blockPort.tsx's identical style):
+        // half this box sits outside the header strip by construction, so a
+        // press there must fall through to whatever is underneath.
+        pointerEvents: "none",
+      }}
+    >
+      <PortEdge
+        id={`${edge}-rail`}
+        edge={edge}
+        items={items}
+        showContainer={false}
+        showCenterLine={false}
+        showCard={false}
+        size={axis === "column" ? { width: RAIL_CROSS_PX, height: box.height } : { width: box.width, height: RAIL_CROSS_PX }}
+        distribution={plan.distribution}
+        groups={plan.groups}
+        groupMode={plan.groupMode}
+        renderItem={renderItem}
+      />
+    </div>
+  );
+}
+
 function ArmRow({
   arm,
   row,
   index,
   chevron,
+  frameWidth,
 }: {
   arm: RegionArm;
   row: RegionLayout["arms"][number];
   index: number;
   chevron: "always" | "hover";
+  /** `layout.width` — the FRAME's own width. Never measured: `region-arm`'s
+   *  own `left:0; right:0` already hug the frame's padding edge, so the
+   *  header strip's real width is this minus the frame's two borders
+   *  (`FRAME_BORDER_PX` each side), computed once below. */
+  frameWidth: number;
 }) {
   const active = arm.active ?? true;
+  const headerHeightPx = row.bodyTop - row.headerTop;
+  // The header strip's own padding-edge width — see `frameWidth`'s own doc.
+  const headerWidthPx = frameWidth - 2 * FRAME_BORDER_PX;
   return (
     <div
       data-slot="region-arm"
@@ -516,6 +660,12 @@ function ArmRow({
       />
       <div
         data-slot="region-arm-header"
+        // The ARM's own id, never the region's (this file's header, "the id
+        // rule"): `wireLayer.tsx`'s `resolveDot` takes the FIRST
+        // `[data-block-id="<id>"]` in document order, so a wire targeting
+        // this arm's test/capture id has to find ITS dot inside ITS OWN
+        // `[data-block-id]`, not the region's corner card.
+        data-block-id={arm.id}
         style={{
           // Positioned so it paints after the decor box above (DOM order
           // among positioned boxes), never under it.
@@ -560,9 +710,68 @@ function ArmRow({
               >
                 {arm.title}
               </span>
+              {/* The arm's operand, inline, AFTER its keyword — so the row
+                  reads `if: mode == "fast"` in source order. This is Zach's
+                  "in the title … we can support default variables so you
+                  don't need to pass in everything with a pill": the dot on
+                  the left wall says a value is expected and what state it is
+                  in, this says what is in force while nothing is wired.
+                  Rendered VERBATIM — spaces and quotes intact
+                  (`feedback_truthful_property_rendering`); a cable landing
+                  on the dot flips it to `wired` and this text is what the
+                  cable overrides, never a second source of truth. */}
+              {arm.test?.default === undefined ? null : (
+                <span
+                  data-slot="region-arm-test"
+                  className="truncate"
+                  style={{
+                    fontFamily: "var(--bbox-region-arm-title-font)",
+                    fontSize: "var(--bbox-region-arm-title-size)",
+                    color: "var(--bbox-region-arm-title-color)",
+                    opacity: 0.85,
+                    // `pre` so the expression's OWN leading/trailing spaces
+                    // survive (truthful property rendering) — which is also
+                    // why the gap after the keyword is a margin and not a
+                    // space character: a space here would be indistinguishable
+                    // from one the author typed.
+                    whiteSpace: "pre",
+                    marginLeft: "0.4em",
+                  }}
+                >
+                  {arm.test.default}
+                </span>
+              )}
             </>
           }
         />
+        {/* This arm's OWN operand — `if`/`elif` only, `else` carries none
+            (region.branch.ts's split). `label` is the default expression
+            VERBATIM (truthful rendering: no trimming, no reformatting) —
+            "" when there is none, which is how a wired-but-defaultless
+            test renders no inline text at all. */}
+        {arm.test !== undefined && (
+          <ArmHeaderRail
+            edge="left"
+            items={[
+              {
+                id: arm.test.id,
+                label: arm.test.default ?? "",
+                state: arm.test.default !== undefined ? "valueSet" : "empty",
+              },
+            ]}
+            bands={armHeaderBands(headerHeightPx, headerWidthPx)}
+          />
+        )}
+        {/* The names this arm's PATTERN binds into its body — `match` only,
+            mutually exclusive with `test` (region.branch.ts's split). One
+            dot per capture, its own name as its label. */}
+        {arm.captures !== undefined && arm.captures.length > 0 && (
+          <ArmHeaderRail
+            edge="right"
+            items={arm.captures.map((name) => ({ id: name, label: name, state: "empty" }))}
+            bands={armHeaderBands(headerHeightPx, headerWidthPx)}
+          />
+        )}
       </div>
       {row.open && (
         // WHY the body LEAVES THE DOM when folded rather than collapsing to
@@ -1555,7 +1764,7 @@ export function BlockRegion({
           />
         </div>
         {layout.arms.map((row, index) => (
-          <ArmRow key={row.id} arm={(arms ?? [])[index]} row={row} index={index} chevron={spec.arms.chevron} />
+          <ArmRow key={row.id} arm={(arms ?? [])[index]} row={row} index={index} chevron={spec.arms.chevron} frameWidth={layout.width} />
         ))}
         {/* Last in DOM order, so it paints over any member or arm row that
             reaches the top-right corner without needing a z-index. */}
