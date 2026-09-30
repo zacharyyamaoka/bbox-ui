@@ -1013,6 +1013,34 @@ def default_lock_root(home: Path) -> Path:
     return home / ".local" / "state" / "systemsketch-next" / "locks" / "workspace"
 
 
+def roots_from_environment(
+    environment: "dict[str, str] | os._Environ[str]",
+    files_root: Path,
+    lock_root: Path | None,
+    home: Path,
+) -> tuple[Path, Path]:
+    """``(files_root, lock_root)`` for ``serve --files-root-from-env``.
+
+    The SAME precedence ``apps/systemsketch/devFileHost.ts``'s
+    ``resolveDevFileHostRoots`` applies to Preview: ``SYSTEMSKETCH_FILES_ROOT``,
+    when set and non-empty, wins for the files root, with
+    ``SYSTEMSKETCH_LOCK_ROOT`` (when set at all — JS ``??``) or the shared
+    default for locks; otherwise the explicit ``--files-root`` and
+    ``--lock-root``/the shared default, exactly as without the flag.
+
+    WHY (Codex audit, 2026-09-29): the dock's Stable now runs this CLI as a
+    process (``apps/systemsketch/stable-preview.json``) with ``--files-root
+    {home}``, so an isolated or agent run of Stable that set
+    ``SYSTEMSKETCH_FILES_ROOT`` — honoured by Preview and by the old launcher —
+    would have written into the real home instead.
+    """
+    override = environment.get("SYSTEMSKETCH_FILES_ROOT")
+    if override:
+        locks = environment.get("SYSTEMSKETCH_LOCK_ROOT")
+        return Path(override), Path(locks) if locks is not None else default_lock_root(home)
+    return files_root, lock_root or default_lock_root(home)
+
+
 # ------------------------------------------------------------------ the routes
 
 def _post_failure_status(cause: BaseException) -> HTTPStatus:
@@ -1470,9 +1498,20 @@ def main(argv: list[str] | None = None) -> int:
     # would change what those tests see 404 on. The vite dev plugin passes it.
     serve_parser.add_argument("--recordings", action="store_true")
     serve_parser.add_argument("--source-root", type=Path, default=None)
+    # WHY opt-in and never a default for --files-root: plain CLI use keeps the
+    # rule above (no root named → refuse). With this flag an environment
+    # override may only REPLACE the root that was named, the way Preview's
+    # devFileHost.ts honours it — see `roots_from_environment`.
+    serve_parser.add_argument("--files-root-from-env", action="store_true")
     arguments = parser.parse_args(argv)
 
-    lock_root = arguments.lock_root or default_lock_root(Path.home())
+    if arguments.files_root_from_env:
+        files_root, lock_root = roots_from_environment(
+            os.environ, arguments.files_root, arguments.lock_root, Path.home()
+        )
+    else:
+        files_root = arguments.files_root
+        lock_root = arguments.lock_root or default_lock_root(Path.home())
     if arguments.desktop == "gio":
         desktop: Desktop = GioDesktop()
     elif arguments.desktop.startswith("record:"):
@@ -1491,7 +1530,7 @@ def main(argv: list[str] | None = None) -> int:
         from systemsketch_recordings import RecordingApi
 
         recordings = RecordingApi(
-            arguments.files_root,
+            files_root,
             source_root=arguments.source_root or Path(__file__).resolve().parents[1],
             channel="dev",
             build="dev",
@@ -1499,7 +1538,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     server = make_server(
-        arguments.files_root,
+        files_root,
         lock_root,
         desktop,
         host=arguments.host,

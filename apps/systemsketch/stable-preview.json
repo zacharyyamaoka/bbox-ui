@@ -7,7 +7,7 @@
       {
         "name": "files",
         "port": 4342,
-        "command": ["python3", "{source}/../../scripts/systemsketch_files.py", "serve", "--files-root", "{home}", "--source-root", "{root}/../..", "--host", "127.0.0.1", "--port", "{port}", "--recordings"],
+        "command": ["python3", "{source}/../../scripts/systemsketch_files.py", "serve", "--files-root", "{home}", "--files-root-from-env", "--source-root", "{root}/../..", "--host", "127.0.0.1", "--port", "{port}", "--recordings"],
         "health": "/api/health"
       }
     ],
