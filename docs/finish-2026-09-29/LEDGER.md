@@ -13,6 +13,7 @@ Starts as the W0 set (`baseline.md`). A merge may not add a red outside this lis
 - APP menus.smoke.test.tsx:80 burger order (until G-STALE)
 - APP menus.smoke.test.tsx:130 View/Preferences/Export (until L-FILES)
 - FLAKY_FILES allowance (re-run once alone; counts only if it fails again) until G-FLAKE: storybook-basics DraftBar, DevPanel, FileNavigatorGeometry, FitToContentHosts, BlockPortHosts, Grouping
+- FLAKY_FILES additions (W1a, 2026-09-29; same allowance, same G-FLAKE owner): storybook-basics ContextMenu, Select, FramesPanel, QuickSwitcher, AppMenu. Evidence: 7 full storybook-basics runs on PRE `2535683` (a scratch worktree, load average 11–15 from peer sessions) failed a different 0–5 each time, including ContextMenu "Keyboard Opens Moves Activates" (2/7), Select "Default", FramesPanel "Inline Rename Failure", QuickSwitcher "Press S" — none touched by W1a. AppMenu "Rows Run And Toggles Are Checkboxes" failed 2/5 full runs on W1a's tip and 0/7 on PRE, passed 4/4 alone; its only changed import is `chromeBar.tsx`'s `title` forwarding on the file-title rows, not the burger path it fails on (`AppMenu.stories.tsx:121-135`: `openRoot` takes the first `[data-slot="dropdown-menu-content"]`, which can be the previous popup still animating closed with `pointer-events: none`). G-FLAKE: treat AppMenu as suspect, not proven innocent.
 
 ## W0 Baseline
 
@@ -32,7 +33,7 @@ Copied from `baseline.md` (planner, 2026-09-29, main `705847c`; integration bran
 
 | lane | wave | model | status | branch/sha | audit | evidence |
 |---|---|---|---|---|---|---|
-| W1-LAND | W1 | opus | queued | | | |
+| W1-LAND | W1 | opus | building | W1a merged: `1195b18` (7cdabba) · `ab22b4e` (rename-and-dead-actions) · `cab8be6` (dead-settings) · `9de050e` (file-navigator-fixes) · `8953d07` merge repair | not audited (merges of finished branches) | W1a: typecheck clean; `pnpm -r --no-bail --workspace-concurrency=1 test` → studio 10 failed / 714 passed = exactly EXPECTED_RED (was 672 passed; the four merges add 52 incl. settingsAreWired + chromeActionsAreWired, green); bbox-ui 672/672 after the repair; storybook-basics reds only in FLAKY_FILES (each passes alone); every other package green; `pytest scripts/tests` 210 passed. Repair: rename branch edited `chromeBar.tsx` without `registry:build` → `registrySnapshot` chrome-bar stale; regenerated `public/r/chrome-bar.json` (only file shadcn build changed). Remaining W1 items (truthful-branch-viz onward) not started. |
 | G-FLAKE | W2 | sonnet | queued | | | |
 | G-STALE | W2 | sonnet | queued | | | |
 | B-DEPS | W2 | opus | queued | | | |
@@ -69,7 +70,7 @@ Copied from `baseline.md` (planner, 2026-09-29, main `705847c`; integration bran
 
 | id | lane | status | user action / command (file:line) or reason |
 |---|---|---|---|
-| P-101 | W1-LAND | queued | |
+| P-101 | W1-LAND | done | Settings ▸ Mouse and scrolling ▸ "Copy/paste under cursor" switch `apps/storybook-basics/src/editor/settingsCategories.tsx:389` → `onGesturesChange` = `patchGestures` `apps/systemsketch/src/chrome/ShareMenu/appSettings.tsx:263` → `installPasteAtCursor` (mounted `apps/systemsketch/src/App.tsx:169`) writes `editor.user.updateUserPreferences({ isPasteAtCursorMode })` at `apps/systemsketch/src/chrome/ShareMenu/cameraGestureHost.tsx:248` → read by tldraw 5.3.2's own paste handler `node_modules/tldraw/src/lib/ui/hooks/useClipboardEvents.ts:959` (and :945 for Shift+paste). Duplicate half: `apps/systemsketch/src/chrome/ShareMenu/duplicateAtPointer.ts` via `OVERRIDES.actions`. Test: `apps/systemsketch/src/pasteUnderCursor.smoke.test.tsx` (5 tests, green; tracks both directions and a live change). Merged `cab8be6`. |
 | P-098 | L-WIRE-GESTURE | queued | |
 | P-221 | L-WIRE-GESTURE | queued | |
 | P-013 | L-WIRE-GESTURE | queued | |
@@ -267,6 +268,7 @@ Copied from `baseline.md` (planner, 2026-09-29, main `705847c`; integration bran
 
 | id | lane | verdict | evidence |
 |---|---|---|---|
+| P-186 residual (paste-at-cursor) | W1-LAND | done (via P-101) | `residuals.json` `alreadyCoveredBy: P-101`; same wiring as the P-101 row, merged `cab8be6`. The sibling residual P-186/P-245 (wheel bindings, `cameraGestureHost.tsx:190-203` "NOT APPLIED, and deliberately") is unchanged and stays deferred. |
 
 ## Finish-line gates (W5)
 
