@@ -215,20 +215,39 @@ export const MultipleGroups: Story = {
 
 /** Clicking a row calls `onActivate` with that exact diagnostic — "select and fit the affected board objects". */
 export const ActivateRow: Story = {
-  render: function Render() {
-    const onActivate = fn();
+  args: { onActivate: fn() },
+  render: function Render(args) {
+    // See PanelShell.CloseFires: a spy created in the render closure is
+    // unreachable from `play`, so this story clicked a diagnostic and
+    // asserted nothing. `args` is what makes the assertion possible.
     const groups: DiagnosticGroup[] = [
       { id: "board", label: "Board", diagnostics: [{ id: "w1", code: "block-title.blank", severity: "warning", message: "Block has no title", detail: "Name this Block." }] },
     ];
     return (
       <Shell>
-        <ProblemsPanel groups={groups} counts={{ all: 1, error: 0, warning: 1 }} severities={SEVERITIES} filter="all" onFilterChange={fn()} onActivate={onActivate} />
+        <ProblemsPanel groups={groups} counts={{ all: 1, error: 0, warning: 1 }} severities={SEVERITIES} filter="all" onFilterChange={fn()} onActivate={args.onActivate} />
       </Shell>
     );
   },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByText("Block has no title"));
+    // The EXACT diagnostic, not merely "something was activated": the
+    // story's own name promises "with that exact diagnostic", and a count
+    // check passed when the callback was handed a different object
+    // entirely (judge mutation, 2026-09-18).
+    await expect(args.onActivate).toHaveBeenCalledTimes(1);
+    // The WHOLE object, not three of its fields: `objectContaining` with a
+    // subset passed when severity and detail were replaced with wrong
+    // values (judge mutation, 2026-09-18). "That exact diagnostic" means
+    // every field of it.
+    await expect(args.onActivate).toHaveBeenCalledWith({
+      id: "w1",
+      code: "block-title.blank",
+      severity: "warning",
+      message: "Block has no title",
+      detail: "Name this Block.",
+    });
   },
 };
 

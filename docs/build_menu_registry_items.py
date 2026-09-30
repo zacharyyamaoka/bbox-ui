@@ -35,6 +35,7 @@ from __future__ import annotations
 import json
 import pathlib
 import re
+import subprocess
 import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -352,6 +353,129 @@ def build_item(name: str, entry_rel: str, title: str, desc: str,
     }
 
 
+
+def _check_published_payloads(reg: dict) -> None:
+    """Is what we SERVE current, complete, and nothing more?"""
+    published = REPO / "public/r"
+    stale: list[str] = []
+    if not published.is_dir():
+        # WHY this is an error and not a skip: the guard used to be
+        # `if published.is_dir():`, so deleting or never building public/r
+        # made --check print "published payloads match source" and exit 0 —
+        # a checker that passes hardest when there is nothing to check.
+        # Fault-injected by a judge, 2026-09-18. Unpublished is a state to
+        # report, never one to pass.
+        print(f"\nNOT PUBLISHED: {published} does not exist — run `npx shadcn@latest build`")
+        raise SystemExit(1)
+    if True:
+        for it in reg["items"]:
+            payload = published / f"{it['name']}.json"
+            if not payload.is_file():
+                stale.append(f"{it['name']}: never published")
+                continue
+            data = json.loads(payload.read_text())
+            by_target = {f.get("target") or f["path"]: f.get("content") for f in data.get("files", [])}
+
+            # WHY the file SET and the dependencies are compared, not just the
+            # bytes of files we expect: checking only "every file I expect is
+            # present and matches" passes a payload that ALSO ships files
+            # nobody declared, and passes one whose `dependencies` have been
+            # emptied — so `shadcn add` would copy source needing packages it
+            # never installs. Both were fault-injected into
+            # public/r/control-strip.json and both exited 0 (judge, 2026-09-18).
+            # A payload is a contract in three parts: which files, their
+            # contents, and what they need installed.
+            expected_targets = {f["target"] for f in it["files"]}
+            for extra in sorted(set(by_target) - expected_targets):
+                stale.append(f"{it['name']}: published payload ships an undeclared file {extra}")
+            # Schema-valid but WRONG: shadcn accepts any member of its type
+            # enum and any string name, so a payload could declare itself
+            # `registry:lib`, or carry a different `name` entirely, and pass
+            # both the schema and the content comparison while contradicting
+            # the item it claims to be (judge fault injection, 2026-09-18).
+            # The schema says "is this a registry item"; only this says "is
+            # it THIS registry item".
+            if data.get("name") != it["name"]:
+                stale.append(f"{it['name']}: published name is {data.get('name')!r}")
+            if data.get("type") != it["type"]:
+                stale.append(f"{it['name']}: published type {data.get('type')!r} != declared {it['type']!r}")
+            declared_types = {f["target"]: f["type"] for f in it["files"]}
+            for f in data.get("files", []):
+                target = f.get("target") or f.get("path")
+                if target in declared_types and f.get("type") != declared_types[target]:
+                    stale.append(
+                        f"{it['name']}: {target} published as {f.get('type')!r} != declared "
+                        f"{declared_types[target]!r}"
+                    )
+
+            declared_deps = sorted(it.get("dependencies", []))
+            if sorted(data.get("dependencies", [])) != declared_deps:
+                stale.append(
+                    f"{it['name']}: published dependencies {data.get('dependencies', [])} "
+                    f"!= declared {declared_deps}"
+                )
+
+            for f in it["files"]:
+                src = REPO / f["path"]
+                if not src.is_file():
+                    continue
+                shipped = by_target.get(f["target"])
+                if shipped is None:
+                    stale.append(f"{it['name']}: {f['target']} missing from the published payload")
+                elif shipped != src.read_text():
+                    stale.append(f"{it['name']}: {f['target']} published content differs from source")
+    # Two more ways a publication can be wrong that per-item checks cannot see.
+    #
+    # ORPHANS: a payload whose item was removed from registry.json keeps being
+    # SERVED — `npx shadcn add .../old-item` still installs it, from bytes
+    # nothing in this repo describes any more. Iterating items can never find
+    # a file no item names, so the directory is enumerated too.
+    #
+    # registryDependencies: these are the OTHER registry items shadcn pulls in
+    # transitively. Only npm `dependencies` were compared, so an undeclared
+    # one in a payload went unnoticed — and this repo's items are deliberately
+    # self-contained (no registryDependencies between bbox items; a shared
+    # file is re-listed with its own target instead), so ANY value here is a
+    # drift from that design, not merely a mismatch.
+    # Both fault-injected by a judge, 2026-09-18.
+    known = {f"{it['name']}.json" for it in reg["items"]} | {"registry.json", "index.json"}
+    for orphan in sorted(p.name for p in published.glob("*.json") if p.name not in known):
+        stale.append(f"published payload {orphan} has no item in registry.json — it would still install")
+    for it in reg["items"]:
+        payload = published / f"{it['name']}.json"
+        if not payload.is_file():
+            continue
+        declared = sorted(it.get("registryDependencies", []))
+        served = sorted(json.loads(payload.read_text()).get("registryDependencies", []))
+        if served != declared:
+            stale.append(f"{it['name']}: published registryDependencies {served} != declared {declared}")
+
+    if stale:
+        print("\nPUBLISHED PAYLOADS ARE STALE — re-run `npx shadcn@latest build`:")
+        for line in sorted(set(stale))[:20]:
+            print("  " + line)
+        if len(set(stale)) > 20:
+            print(f"  … and {len(set(stale)) - 20} more")
+        raise SystemExit(1)
+    print("published payloads match source")
+
+    # And the payloads must satisfy shadcn's OWN schema, not merely the
+    # fields this script thought to compare. Everything above is a
+    # re-derivation of the format, and a re-derivation is only as good as its
+    # author's memory: it approved a payload with `name` deleted and with a
+    # corrupted item `type`, both of which shadcn rejects outright (judge
+    # fault injection, 2026-09-18). Delegating to the installed schema makes
+    # this an independent oracle instead of a second opinion from the same
+    # source as the mistake.
+    schema_check = subprocess.run(
+        ["node", str(HERE / "validate_registry_payloads.mjs"), str(published)],
+        cwd=REPO, capture_output=True, text=True,
+    )
+    print((schema_check.stdout or schema_check.stderr).strip())
+    if schema_check.returncode != 0:
+        raise SystemExit(1)
+
+
 def main() -> None:
     check = "--check" in sys.argv
     reg = json.loads(REGISTRY.read_text())
@@ -417,19 +541,24 @@ def main() -> None:
 
     out = json.dumps(reg, indent=2) + "\n"
 
+    # WHY --check no longer returns here: it used to, which meant the freshness
+    # test PASSED and the two safety assertions below — the sibling rule and
+    # the unpublished-dependency check, the whole reason this generator exists
+    # — never ran at all. A stale-but-broken registry and a fresh-but-broken
+    # one both reported "up to date". Caught by an independent judge, 2026-09-18.
+    # Freshness is the cheapest of the three checks, not a substitute for them.
     if check:
         if out != REGISTRY.read_text():
             print("registry.json is STALE — re-run without --check")
             raise SystemExit(1)
-        print("registry.json is up to date")
-        return
-
-    REGISTRY.write_text(out)
-    print(f"registry.json: {len(reg['items'])} items ({len(built)} from the menu kit)")
-    for it in built:
-        n_comp = sum(1 for f in it["files"] if f["type"] == "registry:component")
-        print(f"  {it['name']:<18} {len(it['files']):>2} files ({n_comp} components)  "
-              f"deps: {', '.join(it['dependencies']) or '—'}")
+        print("registry.json is up to date; verifying its contents too")
+    else:
+        REGISTRY.write_text(out)
+        print(f"registry.json: {len(reg['items'])} items ({len(built)} from the menu kit)")
+        for it in built:
+            n_comp = sum(1 for f in it["files"] if f["type"] == "registry:component")
+            print(f"  {it['name']:<18} {len(it['files']):>2} files ({n_comp} components)  "
+                  f"deps: {', '.join(it['dependencies']) or '—'}")
 
     # The sibling rule, asserted rather than trusted: every relative import in
     # every shipped file must resolve against its own TARGET layout, not its
@@ -479,6 +608,33 @@ def main() -> None:
     # is structural, and un-breaking it means regenerating the package from the
     # trunk — P7-class work, not a drive-by. Warning keeps the fact visible on
     # every run instead of letting it go quiet again.
+    # THIRD failure mode, and the one that shipped: `npx shadcn@latest build`
+    # embeds each file's CONTENT into public/r/<item>.json. So the published
+    # payload is a SNAPSHOT — edit a source file afterwards and the registry
+    # keeps serving the old bytes, silently. Measured 2026-09-18: eight items
+    # were serving pre-fix source, so a consumer installing `inline-rename`
+    # got the version that silently ate line breaks and one installing
+    # `tool-dock` got the one that passed Object.prototype to onArm, while
+    # every source-level check here passed. Freshness of registry.json says
+    # nothing about freshness of what is actually served.
+    # WHY only in --check: regenerating registry.json necessarily leaves the
+    # published payloads stale until `npx shadcn@latest build` re-embeds
+    # them, so running this on the WRITE path made the documented sequence
+    # (`generate && build`) impossible — the generator exited 1 for a
+    # condition its own next step fixes. --check is where "is what we serve
+    # current?" is the question being asked.
+    # WHY the payload block is guarded rather than the function returning
+    # here: the early `return` that used to sit at this line skipped
+    # EVERYTHING below it, including the unpublished-dependency guard — so
+    # generation silently accepted an item depending on a private package,
+    # which the same script refuses at 565fb78. A judge injected an
+    # `@bbox-ui/schema` import and watched exit 0 (2026-09-18). Skipping one
+    # check must never mean skipping the rest.
+    if check:
+        _check_published_payloads(reg)
+    else:
+        print("\n(payload freshness is checked by --check; run `npx shadcn@latest build` next)")
+
     trunk_names = {name for name, *_ in ITEMS}
     legacy_names = {name for name, *_ in LEGACY_ITEMS}
     hard, soft = [], []

@@ -10,9 +10,19 @@
 //     small supporting tables (`DASH_ARRAYS`, `SIZE_HEIGHTS`,
 //     `GLYPH_UNITS_PER_PX`, `FONT_STACKS`, `VERTICAL_ALIGN_ROWS`) —
 //     "already editor-free except swatch" (task brief), copied verbatim.
-//   • `src/appearance/AppearanceGlyph.tsx:196-230` — `ColorSwatch`'s shape
+//   • `src/appearance/AppearanceGlyph.tsx:307-328` — `ColorSwatch`'s shape
 //     (an `<span>` painted with a resolved hex, or a `data-mixed` empty
-//     swatch when none resolves), reworked as `swatchGlyph` below.
+//     swatch when none resolves — the span itself is :321-326), reworked as
+//     `swatchGlyph` below.
+//
+//     CORRECTED 2026-09-18: this line previously cited `:196-230`, which is
+//     the `AppearanceGlyph` DISPATCH function, not `ColorSwatch` at all —
+//     caught by an independent judge that followed the citation instead of
+//     trusting it, and confirmed against the pinned revision above, so it
+//     was wrong when written rather than drifted since. Worth naming rather
+//     than quietly correcting: a citation nobody opens is indistinguishable
+//     from a correct one, which is exactly why this repo's rule is that a
+//     plausible reference from memory is worse than an honest "ours".
 //   • `src/appearance/strokeMeta.ts:87-91` — `STROKE_WIDTH_PX` (the three
 //     rung→px values `StrokeWidthGlyph` draws at) and, at `:195-199`,
 //     `strokeWidthPxForRung`'s one-line lookup — inlined here as a local

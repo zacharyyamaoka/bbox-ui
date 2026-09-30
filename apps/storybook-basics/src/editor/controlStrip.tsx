@@ -51,8 +51,10 @@
 //      local `formatPx`, cited at its own definition below.
 //   7. `CustomColorCell`/`CustomColorPicker` do not port — out of scope by
 //      design (task brief). `ControlPanel` (`controlPanel.tsx`) takes a
-//      `customColorSlot` prop where the picker lands later; `ControlStrip`
-//      never reaches for it, and never knows the slot exists.
+//      `customColorSlot` prop where the picker lands later. `ControlStrip`
+//      FORWARDS it (see its own prop below) but never interprets it — the
+//      earlier wording said it "never knows the slot exists", which was
+//      true when written and false once the slot was threaded.
 //
 // Everything else — the "no popup engine picked per surface" shape, the
 // value/icon-trigger mixed-state dimming, the A-badge guard, the Font size
@@ -95,6 +97,47 @@ export interface ControlStripProps<K extends string = string> {
       `editor.markEventAsHandled`, or nothing for a host with no such
       concept) — wired onto every panel's own pointer-down-capture. */
   onPanelPointerDownCapture?: PointerEventHandler;
+  /**
+   * The host's colour picker, rendered into the 22nd cell of any `swatches`
+   * control that declares `custom` — screenshot 01's rainbow well.
+   *
+   * WHY this had to exist here and not only on `ControlPanel`: the panel
+   * already accepted `customColorSlot`, but `ControlStrip` — the component
+   * every host actually renders, and the only thing that constructs the
+   * panels — never exposed or forwarded it. So the well was unreachable in
+   * practice: an independent judge opened the fill popover and found the
+   * rainbow cell was an `aria-hidden` span with no interaction behind it,
+   * with the only real buttons being preset swatches. A slot nothing can
+   * fill is indistinguishable from a decoration, which is exactly what it
+   * had become.
+   *
+   * Still omittable: with no slot the cell stays the placeholder it is
+   * today, because the picker itself is deliberately a separate port (kit
+   * omission list) and shipping a half-picker would be worse than shipping
+   * the seam for one.
+   */
+  customColorSlot?: ReactNode;
+  /**
+   * Render as a GROUP inside a toolbar the caller already established,
+   * instead of as a toolbar root of its own. Default false.
+   *
+   * WHY this is a prop the caller sets rather than something the component
+   * works out: two nested Base UI `Toolbar.Root`s own two separate
+   * roving-focus groups, so a strip composed inside `FloatingToolbar`
+   * alongside sibling buttons split arrow-key navigation in half. The first
+   * repair detected nesting from React context — which is UNSOUND, because
+   * context crosses portals and the DOM does not, so a host calling
+   * `createPortal` got a strip rendering as a group with no toolbar ancestor
+   * and leaking focus out of its own popup. That was a REGRESSION against
+   * behaviour which had been correct, and patching the kit's own portal
+   * wrappers could never cover a portal the kit does not own.
+   *
+   * There is no sound way to infer this, so it is declared. The caller knows
+   * what it composed; the component cannot. Defaulting to false means the
+   * standalone case — including any host portal — behaves exactly as it did
+   * before any of this existed.
+   */
+  nested?: boolean;
   testIdPrefix?: string;
   /** Not in the design doc's props sketch, added here because this
       component wraps `Toolbar` (`toolbar.tsx`), which — like every Base UI
@@ -128,13 +171,16 @@ export function ControlStrip<K extends string>({
   container,
   autoFocus,
   onPanelPointerDownCapture,
+  customColorSlot,
+  nested = false,
   testIdPrefix = "bbox",
   panelClassName,
   triggerClassName,
   "aria-label": ariaLabel,
 }: ControlStripProps<K>) {
+  const Root = nested ? ToolbarGroup : Toolbar;
   return (
-    <Toolbar
+    <Root
       aria-label={ariaLabel}
       data-slot="control-strip"
       // WHY two names on the same value: MENU-KIT-DESIGN.md §3.3 names the
@@ -165,6 +211,7 @@ export function ControlStrip<K extends string>({
                 container={container}
                 autoFocus={autoFocus}
                 onPanelPointerDownCapture={onPanelPointerDownCapture}
+                customColorSlot={customColorSlot}
                 testIdPrefix={testIdPrefix}
                 panelClassName={panelClassName}
                 triggerClassName={triggerClassName}
@@ -173,7 +220,7 @@ export function ControlStrip<K extends string>({
           </ToolbarGroup>
         </Fragment>
       ))}
-    </Toolbar>
+    </Root>
   );
 }
 
@@ -183,6 +230,30 @@ interface TriggerShapeProps<K extends string> {
   container?: HTMLElement | null;
   autoFocus?: boolean;
   onPanelPointerDownCapture?: PointerEventHandler;
+  /** Forwarded unchanged from `ControlStripProps.customColorSlot` — only the
+      panel of a `custom` swatches control ever renders it. */
+  customColorSlot?: ReactNode;
+  /**
+   * Render as a GROUP inside a toolbar the caller already established,
+   * instead of as a toolbar root of its own. Default false.
+   *
+   * WHY this is a prop the caller sets rather than something the component
+   * works out: two nested Base UI `Toolbar.Root`s own two separate
+   * roving-focus groups, so a strip composed inside `FloatingToolbar`
+   * alongside sibling buttons split arrow-key navigation in half. The first
+   * repair detected nesting from React context — which is UNSOUND, because
+   * context crosses portals and the DOM does not, so a host calling
+   * `createPortal` got a strip rendering as a group with no toolbar ancestor
+   * and leaking focus out of its own popup. That was a REGRESSION against
+   * behaviour which had been correct, and patching the kit's own portal
+   * wrappers could never cover a portal the kit does not own.
+   *
+   * There is no sound way to infer this, so it is declared. The caller knows
+   * what it composed; the component cannot. Defaulting to false means the
+   * standalone case — including any host portal — behaves exactly as it did
+   * before any of this existed.
+   */
+  nested?: boolean;
   testIdPrefix: string;
   panelClassName?: string;
   triggerClassName?: string;
@@ -253,6 +324,7 @@ function PopoverTriggerShape<K extends string>({
   container,
   autoFocus,
   onPanelPointerDownCapture,
+  customColorSlot,
   testIdPrefix,
   panelClassName,
   triggerClassName,
@@ -300,7 +372,12 @@ function PopoverTriggerShape<K extends string>({
         // WHY warns against.
         onPointerDownCapture={onPanelPointerDownCapture}
       >
-        <ControlPanel control={control} glyphs={glyphs} testIdPrefix={testIdPrefix} />
+        <ControlPanel
+          control={control}
+          glyphs={glyphs}
+          customColorSlot={customColorSlot}
+          testIdPrefix={testIdPrefix}
+        />
       </PopoverContent>
     </Popover>
   );

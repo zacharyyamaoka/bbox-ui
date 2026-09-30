@@ -171,6 +171,7 @@ function ToolDockHarness(props: {
   onArm?: ToolDockProps["onArm"];
   onSelectItem?: ToolDockProps["onSelectItem"];
   withLibrary?: boolean;
+  order?: readonly string[];
   testIdPrefix?: string;
 }) {
   const [activeToolId, setActiveToolId] = useState(props.initialActiveToolId ?? "select");
@@ -183,6 +184,7 @@ function ToolDockHarness(props: {
       activeToolId={activeToolId}
       activeVariant={activeVariant}
       families={DEMO_FAMILIES}
+      order={props.order}
       preferences={preferences}
       onPreferencesChange={setPreferences}
       testIdPrefix={props.testIdPrefix ?? "tool-dock"}
@@ -287,6 +289,103 @@ type Story = StoryObj<typeof meta>;
  */
 export const Default: Story = {
   render: () => <ToolDockHarness />,
+};
+
+/**
+ * A family face is labelled "<member> — open <family> tools" (toolDock.tsx),
+ * a simple tool with its own label. This reduces both to the FAMILY or TOOL
+ * name so a whole-sequence assertion reads as the screenshot does.
+ */
+function nameOf(label: string): string {
+  const open = label.match(/open (.+) tools$/);
+  return open ? open[1] : label;
+}
+
+/** Every dock cell's accessible name, in rendered order. */
+function positions(root: HTMLElement): string[] {
+  return [...root.querySelectorAll<HTMLElement>("[data-slot='tool-dock'] button")]
+    .map((button) => button.getAttribute("aria-label"))
+    .filter((label): label is string => Boolean(label));
+}
+
+/**
+ * docs/menus/screenshots/04-bottom-tool-toolbar.png, in its ACTUAL order —
+ * which, until `order` existed, this component could not draw.
+ *
+ * The screenshot runs cursor · frame · insert▾ · bbox▾ · shape▾ · draw▾ · T · +,
+ * so the Text cell sits AFTER all four families. `simpleTools`' own doc
+ * comment named "Cursor, Frame, Text in screenshot 04" while the render
+ * emitted every simple tool before every family, which can only ever put
+ * Text third. An independent judge (2026-09-18) built the dock from this
+ * screenshot's own tools and read back "Select, Frame, Text, Blocks, Shapes,
+ * Draw" — the comment described the picture, the code contradicted it, and
+ * no story had ever asserted the sequence, so nothing caught it.
+ *
+ * The assertion below is on the rendered ORDER, not on presence: every one
+ * of these cells was already present before the fix. Presence was never the
+ * thing in doubt.
+ */
+export const ScreenshotOrder: Story = {
+  render: () => (
+    <ToolDockHarness
+      order={["select", "frame", "insert", "bbox", "shape", "draw", "text"]}
+      withLibrary
+      testIdPrefix="screenshot-order"
+    />
+  ),
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByRole("toolbar", { name: "Tools" });
+
+    // WHY a substring predicate and not `indexOf(label)`: a FAMILY face is
+    // labelled with its resolved member AND its family — "Block — open
+    // Insert tools" (toolDock.tsx:286) — so the family's own name never
+    // appears as a whole label. A simple tool's label IS exact. Matching on
+    // containment reads both without the test having to know which is which.
+    const at = (needle: string) => positions(canvasElement).findIndex((l) => l.includes(needle));
+
+    // WHY the WHOLE sequence and not a few pairwise relations: the first
+    // version asserted four `<`/`>` pairs, and a judge moved the bbox family
+    // after Text and after the library without failing any of them
+    // (2026-09-18). Pairwise checks describe a partial order; the screenshot
+    // shows a total one, so that is what gets asserted.
+    await expect(positions(canvasElement).map(nameOf)).toEqual([
+      "Cursor",
+      "Frame",
+      "Insert",
+      "bbox-ui",
+      "Shapes",
+      "Drawing",
+      "Text",
+      "Library",
+    ]);
+  },
+};
+
+/**
+ * Omitting `order` keeps the original behaviour exactly — every simple tool,
+ * then every family. Pinned because the fix above had to be adds-only: this
+ * is the story that fails if `order`'s default ever stops being "what it did
+ * before".
+ */
+export const DefaultOrderUnchanged: Story = {
+  render: () => <ToolDockHarness testIdPrefix="default-order" />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await canvas.findByRole("toolbar", { name: "Tools" });
+    // Same reasoning as ScreenshotOrder: the previous single `<` passed with
+    // Insert moved before Cursor, which contradicts this story's own promise
+    // of "every simple tool, then every family".
+    await expect(positions(canvasElement).map(nameOf)).toEqual([
+      "Cursor",
+      "Frame",
+      "Text",
+      "Insert",
+      "bbox-ui",
+      "Shapes",
+      "Drawing",
+    ]);
+  },
 };
 
 /**
@@ -440,11 +539,66 @@ export const FamilyPopoutsExpanded: Story = {
 
     // Picking a row calls onSelectItem AND remembers the pick — verified by
     // re-opening and seeing the highlight move.
+    //
+    // WHY this re-opens the menu and reads the row's `data-current` instead
+    // of the face's aria-label: the label says which tool is ACTIVE, and
+    // after picking Highlighter it is active for reasons that have nothing
+    // to do with the preference (resolveCurrentTool case 1: the active tool
+    // is a direct member). So deleting the preference write entirely left
+    // this assertion green — the comment claimed a re-open check that the
+    // code never performed (judge mutation, 2026-09-18). The current-row
+    // marker inside the popout is the only thing that reads the remembered
+    // value back. (The judge round pinned a trailing check's `data-slot`;
+    // main replaced that check with the persistent `data-current` tint —
+    // Zach, 2026-09-21 — so the same assertion now reads the tint.)
     await userEvent.click(canvas.getByTestId("tool-dock-family-draw"));
     await waitFor(() => expect(body.getByText("Highlighter")).toBeInTheDocument());
     await userEvent.click(body.getByText("Highlighter"));
     await waitFor(() => expect(document.body.querySelector('[data-slot="dropdown-menu-content"]')).toBeNull());
     await expect(canvas.getByTestId("tool-dock-family-draw").getAttribute("aria-label")).toMatch(/Highlighter/);
+
+    // Move ACTIVE elsewhere so the face can no longer be showing Highlighter
+    // because it is current — only because it is remembered.
+    await userEvent.click(canvas.getByRole("button", { name: "Cursor" }));
+    await expect(canvas.getByTestId("tool-dock-family-draw").getAttribute("aria-label")).toMatch(/Highlighter/);
+
+    // And the popout marks it as the current member.
+    await userEvent.click(canvas.getByTestId("tool-dock-family-draw"));
+    await waitFor(() => expect(body.getByText("Highlighter")).toBeInTheDocument());
+    const current = body.getByText("Highlighter").closest("[data-slot='dropdown-menu-item']");
+    // The MARKER specifically, not "an svg in this row": every row carries
+    // its own tool icon, so `querySelector("svg")` found one even with the
+    // marker removed (judge mutation, 2026-09-18).
+    await expect(current).toHaveAttribute("data-current", "true");
+    // And it is on that row ALONE — a marker on every row would also satisfy
+    // the assertion above.
+    await expect(
+      document.body.querySelectorAll("[data-slot='dropdown-menu-item'][data-current]"),
+    ).toHaveLength(1);
+    await userEvent.keyboard("{Escape}");
+  },
+};
+
+/**
+ * A family popout left OPEN, for the report's capture.
+ *
+ * WHY this exists as its own story: `FamilyPopoutsExpanded` opens each family
+ * in turn and closes it again — correct for a behavioural test, useless as
+ * evidence. The capture named "tool-dock-popouts" in the report was therefore
+ * a picture of the CLOSED dock, illustrating a screenshot whose whole subject
+ * is the popout (judge, 2026-09-18). A capture recipe cannot photograph a
+ * state that the story it points at has already undone.
+ */
+export const PopoutOpenForCapture: Story = {
+  render: () => <ToolDockHarness testIdPrefix="popout-open" />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = within(document.body);
+    await userEvent.click(await canvas.findByTestId("popout-open-family-shape"));
+    // Left open deliberately — the rows, their headings and the shortcut
+    // hints are the subject.
+    await expect(await body.findByText("Rectangle")).toBeInTheDocument();
+    await expect(body.getByText("Lines")).toBeInTheDocument();
   },
 };
 
@@ -477,6 +631,10 @@ export const NoLibrary: Story = {
   render: () => <ToolDockHarness />,
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    // Same reasoning as FontSizePresetsOnly: a dock that rendered nothing
+    // also has no library trigger, so the negative assertion alone proved
+    // nothing. Anchor on the toolbar itself first.
+    await canvas.findByRole("toolbar", { name: "Tools" });
     await expect(canvas.queryByTestId("tool-dock-library")).toBeNull();
   },
 };

@@ -18,8 +18,12 @@ function ContextMenu({ ...props }: ContextMenuPrimitive.Root.Props) {
   return <ContextMenuPrimitive.Root data-slot="context-menu" {...props} />;
 }
 
-function ContextMenuPortal({ ...props }: ContextMenuPrimitive.Portal.Props) {
-  return <ContextMenuPrimitive.Portal data-slot="context-menu-portal" {...props} />;
+function ContextMenuPortal({ children, ...props }: ContextMenuPrimitive.Portal.Props) {
+  return (
+    <ContextMenuPrimitive.Portal data-slot="context-menu-portal" {...props}>
+      {children}
+    </ContextMenuPrimitive.Portal>
+  );
 }
 
 function ContextMenuTrigger({ className, ...props }: ContextMenuPrimitive.Trigger.Props) {

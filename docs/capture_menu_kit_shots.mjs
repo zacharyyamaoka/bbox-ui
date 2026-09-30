@@ -34,11 +34,20 @@ const SHOTS = [
   { name: "control-strip-fill", id: "editor-menus-bars-controlstrip--fill-popover", w: 900, h: 640, surface: "01" },
   { name: "control-strip-triggers", id: "editor-menus-bars-controlstrip--trigger-gallery", w: 1100, h: 560, surface: "01" },
   { name: "control-strip-fontsize", id: "editor-menus-bars-controlstrip--font-size-list", w: 820, h: 620, surface: "03" },
+  // Surface 02 had no capture at all until now — the story existed and the
+  // report still illustrated that screenshot with nothing.
+  { name: "block-title-bar", id: "editor-menus-bars-controlstrip--block-title-bar", w: 900, h: 260, surface: "02" },
+  { name: "screenshot-one-pill", id: "editor-menus-bars-floatingtoolbar--screenshot-one-pill", w: 900, h: 300, surface: "01" },
   { name: "control-strip-mixed", id: "editor-menus-bars-controlstrip--mixed-and-automatic-states", w: 1000, h: 480, surface: "01" },
   { name: "control-lab", id: "editor-menus-bars-controllab--lab", w: 1320, h: 1000, surface: "01" },
   { name: "floating-toolbar", id: "editor-menus-bars-floatingtoolbar--gallery", w: 1240, h: 900, surface: "01" },
-  { name: "tool-dock", id: "editor-menus-bars-tooldock--default", w: 900, h: 340, surface: "04" },
-  { name: "tool-dock-popouts", id: "editor-menus-bars-tooldock--family-popouts-expanded", w: 1100, h: 700, surface: "04" },
+  // WHY ScreenshotOrder and not Default: `Default` renders every simple tool
+  // before every family, which is NOT the order screenshot 04 draws. The
+  // report was illustrating surface 04 with a picture that contradicted it.
+  { name: "tool-dock", id: "editor-menus-bars-tooldock--screenshot-order", w: 900, h: 340, surface: "04" },
+  // The popout LEFT OPEN — `family-popouts-expanded` closes each menu after
+  // checking it, so pointing the camera there photographed a closed dock.
+  { name: "tool-dock-popouts", id: "editor-menus-bars-tooldock--popout-open-for-capture", w: 1100, h: 700, surface: "04" },
   { name: "chrome-bar", id: "editor-menus-bars-chromebar--main-branch-at-root", w: 1100, h: 340, surface: "05" },
   { name: "chrome-bar-tones", id: "editor-menus-bars-chromebar--status-tones", w: 1100, h: 560, surface: "05" },
   { name: "chrome-bar-drafts", id: "editor-menus-bars-chromebar--branch-chip-main-vs-draft-mode", w: 1100, h: 500, surface: "05" },
@@ -140,6 +149,25 @@ for (const shot of SHOTS) {
   await page.close();
 }
 
+await browser.close();
+
+// WHY a non-zero exit on ANY miss, and why the manifest is written last:
+// the loop above catches per-shot failures so one bad story cannot abort the
+// run — which is right — but the script then exited 0 regardless. Point it
+// at a dead port and it reported "0/26 captured", wrote an empty manifest,
+// left every stale PNG in place, and succeeded. The old images stay on disk
+// and keep being served as evidence of current behaviour, which is exactly
+// how the dock shot came to show Text third for two rounds after that was
+// fixed. A capture job that cannot fail is a capture job that silently
+// preserves whatever was there before (judge fault injection, 2026-09-18).
+if (manifest.length !== SHOTS.length) {
+  const missing = SHOTS.filter((shot) => !manifest.some((entry) => entry.name === shot.name));
+  console.error(
+    `\nFAILED: ${manifest.length}/${SHOTS.length} captured. Missing: ${missing.map((s) => s.name).join(", ")}\n` +
+      "Existing PNGs were left untouched and are now of UNKNOWN freshness — do not publish a report from them.",
+  );
+  process.exit(1);
+}
+
 await writeFile(path.join(OUT, "manifest.json"), JSON.stringify(manifest, null, 2));
 console.log(`\n${manifest.length}/${SHOTS.length} captured -> ${OUT}`);
-await browser.close();

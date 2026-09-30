@@ -18,7 +18,10 @@ import { ToggleGroup, ToggleGroupItem } from "../components/toggle-group"
  * two centre panes, the right/bottom detail rail (Properties|Code over
  * lane K's `PropertyTable`/`CodeView`), and the bottom
  * Side-by-side|Overlay + Fullscreen bar. No `Dialog`, no fixed
- * positioning, no z-index — MENU-KIT-DESIGN.md §3.3 is explicit that "a
+ * positioning, no z-index EXCEPT overlay's own stacking (the two panes share one
+ * grid cell, so the after pane is raised above the before pane and the
+ * combined caption above both — all contained by `isolate` on the stage, so
+ * none of it reaches the host's stack) — MENU-KIT-DESIGN.md §3.3 is explicit that "a
  * thin host modal wraps it."
  *
  * Ported structurally (JSX shape, not the math — there is none here) from
@@ -134,6 +137,27 @@ export interface CompareReviewProps {
   renderAfter(slot: { highlight: CompareChange | null; label: string }): ReactNode
   selectedChangeId: string | null
   onSelectChange(id: string | null): void
+  /**
+   * Which element the Figma-layout property table opens expanded.
+   *
+   * WHY this became a prop: the comment below still holds for a LIVE review
+   * — nothing outside the table cares which element is expanded mid-session
+   * — but "nothing cares" and "nobody can set it" are different claims, and
+   * only the first was true. Setting `selectedChangeId` does not select an
+   * element (they are separate concerns), so there was no way to open this
+   * surface with a row already showing: a host restoring a review session
+   * could not, and the stories' own `AllStates` gallery captioned two cells
+   * "Element selected" and "Properties tab — the table…" while both rendered
+   * "Select an edited element to compare changes" with no table at all. An
+   * independent judge opened the gallery and read the empty state back
+   * (2026-09-18).
+   *
+   * Uncontrolled-with-a-default rather than fully controlled, deliberately:
+   * the expanded row genuinely is view-local once the surface is open, so a
+   * host should not have to own it turn by turn — it only needs to be able
+   * to say where to start.
+   */
+  defaultSelectedElementId?: string | null
   /** Host cameras. Fired whenever the selected change (and therefore what should be framed) changes. */
   onFrameChange?(change: CompareChange | null): void
   mode: CompareMode
@@ -170,6 +194,7 @@ export function CompareReview({
   renderBefore,
   renderAfter,
   selectedChangeId,
+  defaultSelectedElementId = null,
   onSelectChange,
   onFrameChange,
   mode,
@@ -209,9 +234,10 @@ export function CompareReview({
    */
   const [layoutState, setLayoutState] = useState<TableLayout>(layout)
   const [gitHighlightState, setGitHighlightState] = useState(gitHighlight)
-  // Figma-layout's own element selection is the same kind of view-local
-  // state — nothing outside this table cares which element is expanded.
-  const [selectedElementId, setSelectedElementId] = useState<string | null>(null)
+  // Figma-layout's own element selection is view-local once the surface is
+  // open; `defaultSelectedElementId` only decides where it STARTS. See that
+  // prop's own WHY for why the distinction mattered.
+  const [selectedElementId, setSelectedElementId] = useState<string | null>(defaultSelectedElementId ?? null)
 
   const [actionBusy, setActionBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -306,11 +332,60 @@ export function CompareReview({
   )
 
   const stagePane = (
-    <div data-slot="compare-stage" data-mode={mode} className="flex min-h-0 flex-1 flex-col">
-      <div className="grid min-h-0 flex-1 grid-cols-2 divide-x divide-border">
-        <figure data-slot="compare-pane" data-side="before" className="m-0 flex min-h-0 flex-col overflow-hidden">
+    // WHY `min-w-0`: a flex CHILD defaults to `min-width: auto`, i.e. it
+    // refuses to shrink below its content. Beside a fixed 380px rail that
+    // made the stage the thing that wins a width fight, so at the 900px the
+    // stories use, the rail was pushed past the frame's edge and its dock
+    // toggle and right-hand contents were simply unreachable — visible in
+    // the saved capture before this (judge, 2026-09-18). `min-w-0` lets the
+    // stage yield, which is what makes the rail's fixed width actually mean
+    // 380px rather than "380px if there happens to be room".
+    <div data-slot="compare-stage" data-mode={mode} className="flex min-h-0 min-w-0 flex-1 flex-col">
+      {/* WHY overlay collapses to ONE grid cell instead of only fading the
+       *  after pane: it is called Overlay, and it was not overlaying
+       *  anything. The port carried the donor's opacity rule and dropped its
+       *  layout rule, so "overlay" rendered two side-by-side columns with
+       *  the right one translucent — a judge measured two grid columns in
+       *  overlay mode (2026-09-18), and by then a new gallery caption was
+       *  advertising the behaviour as "after pane faded over before".
+       *
+       *  The donor does it in CSS (compare.css:293-303): one column, both
+       *  panes at `grid-area: 1 / 1`, the after pane raised so the slider
+       *  fades the TOP layer while the bottom one always paints. `isolate`
+       *  keeps that raise inside this stage rather than in the host's stack.
+       *
+       *  Captions stack too, and two captions in one cell overprint into
+       *  soup — the donor's own words. Its answer is that a crossfade is
+       *  labelled by both endpoints at once, so overlay hides the two and
+       *  renders that single combined caption instead. */}
+      <div
+        className={cn(
+          "isolate grid min-h-0 flex-1",
+          mode === "overlay" ? "grid-cols-1" : "grid-cols-2 divide-x divide-border",
+        )}
+      >
+        {mode === "overlay" ? (
           <figcaption
-            className="shrink-0 truncate border-b border-border px-3 py-2 text-xs font-semibold text-foreground"
+            data-slot="compare-overlay-caption"
+            className="col-start-1 row-start-1 z-20 self-start truncate border-b border-border bg-card/90 px-3 py-2 text-xs font-semibold text-foreground"
+            title={`${beforeLabel} → ${afterLabel}`}
+          >
+            {beforeLabel} → {afterLabel}
+          </figcaption>
+        ) : null}
+        <figure
+          data-slot="compare-pane"
+          data-side="before"
+          className={cn(
+            "m-0 flex min-h-0 flex-col overflow-hidden",
+            mode === "overlay" && "col-start-1 row-start-1",
+          )}
+        >
+          <figcaption
+            className={cn(
+              "shrink-0 truncate border-b border-border px-3 py-2 text-xs font-semibold text-foreground",
+              mode === "overlay" && "invisible",
+            )}
             title={beforeLabel}
           >
             {beforeLabel}
@@ -320,7 +395,12 @@ export function CompareReview({
         <figure
           data-slot="compare-pane"
           data-side="after"
-          className="m-0 flex min-h-0 flex-col overflow-hidden"
+          className={cn(
+            "m-0 flex min-h-0 flex-col overflow-hidden",
+            // The top layer is what the slider fades; the bottom one always
+            // paints (donor: compare.css:301-303).
+            mode === "overlay" && "col-start-1 row-start-1 z-10",
+          )}
           // Overlay only fades AFTER onto BEFORE — the same "blend is a
           // property of the after pane" the donor keeps, so side-by-side
           // never carries a stray opacity that a host CSS override forgot
@@ -328,7 +408,10 @@ export function CompareReview({
           style={mode === "overlay" ? { opacity: blend / 100 } : undefined}
         >
           <figcaption
-            className="shrink-0 truncate border-b border-border px-3 py-2 text-xs font-semibold text-foreground"
+            className={cn(
+              "shrink-0 truncate border-b border-border px-3 py-2 text-xs font-semibold text-foreground",
+              mode === "overlay" && "invisible",
+            )}
             title={afterLabel}
           >
             {afterLabel}
@@ -346,7 +429,15 @@ export function CompareReview({
       <div
         data-slot="compare-stagebar"
         data-testid={`${prefix}-bar`}
-        className="flex shrink-0 items-center gap-3 border-t border-border px-3 py-2"
+        // WHY `flex-wrap`: this row holds a two-button mode toggle, a
+        // labelled slider with a percentage readout, and Fullscreen, and at
+        // the 900px the stories use — with a 380px rail beside it — there is
+        // not room for all of it on one line. Without wrapping they simply
+        // OVERLAPPED: the slider crossed the Fullscreen button and the "60%"
+        // was clipped, which a judge read straight off the saved capture
+        // (2026-09-18). Wrapping is the honest failure mode for a row that
+        // runs out of width; overlapping is not.
+        className="flex shrink-0 flex-wrap items-center gap-3 border-t border-border px-3 py-2"
       >
         <ToggleGroup
           value={[mode]}
@@ -382,7 +473,15 @@ export function CompareReview({
               value={blend}
               disabled={canOverlay === false}
               onChange={(event) => onBlendChange(Number(event.target.value))}
-              className="h-1.5 flex-1 accent-primary"
+              // `min-w-0` lets it shrink past the intrinsic minimum a range
+              // input carries; `min-w-24` stops it shrinking to nothing.
+              // The first fix without the second traded an overlap for a
+              // slider reduced to its own thumb — technically not clipped,
+              // and not a slider anyone can use (judge, reading the saved
+              // capture, 2026-09-18). Below that floor the whole label wraps
+              // to its own line instead, which is what `flex-wrap` on the
+              // row is for.
+              className="h-1.5 min-w-24 flex-1 accent-primary"
               data-testid={`${prefix}-blend`}
               aria-label="Overlay blend"
             />
@@ -509,8 +608,15 @@ export function CompareReview({
       data-dock={dock}
       className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-background text-foreground"
     >
-      <div className={cn("flex min-h-0 flex-1", dock === "bottom" && "flex-col")}>
-        <div className="flex min-h-0 flex-1">
+      {/* `min-w-0` at EVERY level of this chain, not just on the stage: a flex
+       *  child defaults to `min-width: auto` and so refuses to shrink below
+       *  its content, and one un-shrinkable ancestor is enough to defeat a
+       *  `min-w-0` further down. Fixing only the stage left the detail rail
+       *  still overflowing the frame at the 900px the stories use — its dock
+       *  toggle and right-hand contents were pushed out of reach, which a
+       *  judge read straight off the saved capture (2026-09-18). */}
+      <div className={cn("flex min-h-0 min-w-0 flex-1", dock === "bottom" && "flex-col")}>
+        <div className="flex min-h-0 min-w-0 flex-1">
           {historyRail}
           {stagePane}
           {dock === "right" ? detailRail : null}

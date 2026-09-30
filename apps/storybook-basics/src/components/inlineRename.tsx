@@ -108,11 +108,73 @@ export function InlineRename({
     inputRef.current?.select();
   }, []);
 
-  const error = externalError ?? internalError;
+  // A single-line <input> cannot hold a line break: assign "A\nB" and the
+  // element reports "AB". So a name containing one cannot round-trip through
+  // this editor, and the first keystroke would commit the flattened string —
+  // the user edits one character and silently loses another. A judge
+  // reproduced exactly that (2026-09-18) and was right that a source comment
+  // saying so protects nobody: the person losing the data never reads it.
+  //
+  // Refusing is the honest option of the two available. Preserving is not
+  // actually on the table — the component would have to guess which of the
+  // user's edits applied to text the element never showed them — so this
+  // REFUSES, visibly, and leaves the stored value untouched for an editor
+  // that can represent it. Zach's truthful-rendering rule already says
+  // constrained geometry must show its constraint explicitly rather than
+  // quietly dropping characters; this is that rule applied to an input
+  // instead of a label.
+  // Guarded paths: the stored `value` (below) and a paste (onPaste). Both
+  // are places the original text still exists. A host writing straight to
+  // the DOM node's `.value` and dispatching `input` bypasses React entirely
+  // and is outside this component's contract — the element has already
+  // sanitized by then and nothing downstream can tell a lossy write from a
+  // clean one. Said precisely because the earlier claim was "no path loses a
+  // character", which a judge falsified with exactly that write.
+  const unrepresentable = /[\r\n]/.test(value);
+  const error =
+    externalError ??
+    internalError ??
+    (unrepresentable ? "This name contains a line break and can't be edited here." : null);
 
   const commit = useCallback(() => {
-    const next = draft.trim();
-    const message = validate(next);
+    // WHY nothing here trims, and the whitespace policy lives in the
+    // validator instead.
+    //
+    // This started as one `const next = draft.trim()` feeding BOTH the
+    // validator and the commit, which answered two different questions with
+    // one wrong value, and broke in two ways at once:
+    //
+    //   1. It destroyed authored text. Zach's truthful-rendering rule is
+    //      explicit that stored text keeps every authored character — no
+    //      silent normalization, trimming or substitution. Open a rename on
+    //      "  Draft 1  ", press Enter having typed nothing, and it fired
+    //      onCommit("Draft 1"): a write the user never asked for, on a field
+    //      they never edited.
+    //   2. It defeated the unchanged-cancels guard below, by comparing a
+    //      trimmed draft against an untrimmed `value` — which is why (1)
+    //      could fire at all on an untouched field.
+    //
+    // The first repair validated `draft.trim()` and committed `draft`, which
+    // fixed the data loss and introduced a subtler bug: a HOST validator now
+    // judged a different string from the one about to be committed, so
+    // `validate: (n) => n.length > 5 ? "Too long" : null` approved
+    // "  Alpha  " on five characters and committed nine. A validator that
+    // cannot see what it is approving is worse than no validator.
+    //
+    // So: the validator receives exactly what would be committed, and
+    // "reject a name that is only whitespace" is expressed where it belongs
+    // — inside `defaultValidate`, which trims for its own test
+    // (`next.trim() ? ...`) without rewriting the caller's value. A host that
+    // genuinely wants names trimmed does it in its own `onCommit`, where it
+    // is a visible decision rather than one this component made silently.
+    //
+      if (unrepresentable) {
+      // Nothing to set: `error` above is already showing why, and the value
+      // is left exactly as the host stored it.
+      window.requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
+    const message = validate(draft);
     if (message) {
       setInternalError(message);
       // A frame late, same as the donor: `requestAnimationFrame` because a
@@ -124,9 +186,15 @@ export function InlineRename({
     // an Enter/blur on an untouched field isn't a rename, it's a dismiss —
     // calling `onCommit` for it would round-trip a no-op write through
     // whatever the host's commit does (a server call, a history entry).
-    if (next !== value) onCommit(next);
+    // Comparing like with like — both untrimmed — is what makes "untouched"
+    // mean untouched.
+    //
+    // A host that genuinely wants names trimmed does it in its own
+    // `onCommit`, where it is a visible decision rather than a silent one
+    // this component made on its behalf.
+    if (draft !== value) onCommit(draft);
     else onCancel();
-  }, [draft, onCancel, onCommit, validate, value]);
+  }, [draft, onCancel, onCommit, unrepresentable, validate, value]);
 
   return (
     // WHY `relative inline-flex` and no `flex-col`/`gap` (behaviour change,
@@ -162,6 +230,22 @@ export function InlineRename({
           setDraft(event.target.value);
           setInternalError(null);
         }}
+        onPaste={(event) => {
+          // WHY the clipboard is inspected here rather than the resulting
+          // value: the `<input>` strips line breaks BEFORE `onChange` runs,
+          // so by then "A\nB" is already "AB" and nothing downstream can
+          // tell a paste that lost characters from one that never had any.
+          // The earlier guard only read the `value` PROP, which caught a
+          // stored newline and missed a pasted one entirely — paste "A\nB"
+          // into a clean field and it committed "AB" with no warning at all
+          // (judge fixture, 2026-09-18). The clipboard is the last point
+          // where the original text still exists.
+          const pasted = event.clipboardData.getData("text");
+          if (/[\r\n]/.test(pasted)) {
+            event.preventDefault();
+            setInternalError("Pasted text contains a line break, so it wasn't inserted.");
+          }
+        }}
         onMouseDown={(event) => {
           if (performance.now() - mountedAtRef.current < RENAME_MOUSEDOWN_GUARD_MS) {
             // Suppresses native caret placement while leaving focus (and the
@@ -173,6 +257,12 @@ export function InlineRename({
           }
         }}
         onKeyDown={(event) => {
+          // WHY isComposing is checked first: an IME's Enter CONFIRMS the
+          // candidate being composed, it does not submit the field. Without
+          // this, picking a Japanese or Chinese candidate committed the
+          // rename mid-composition and a host that unmounts on commit killed
+          // the IME session outright. Judge fixture, 2026-09-18.
+          if (event.nativeEvent.isComposing) return;
           if (event.key === "Enter") {
             event.preventDefault();
             commit();

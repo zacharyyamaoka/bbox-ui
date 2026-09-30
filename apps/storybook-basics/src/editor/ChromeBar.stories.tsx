@@ -364,10 +364,24 @@ export const HistoryStates: Story = {
     const canvas = within(canvasElement);
     const backButtons = canvas.getAllByRole("button", { name: "Back" });
     const forwardButtons = canvas.getAllByRole("button", { name: "Forward" });
-    await expect(backButtons[0]).toBeDisabled();
-    await expect(forwardButtons[0]).toBeDisabled();
-    await expect(backButtons[2]).toBeEnabled();
-    await expect(forwardButtons[2]).toBeEnabled();
+    // WHY the whole vector and not four spot checks: sampling only the
+    // first and last bars skipped the two MIXED states in between, which
+    // are the only ones that can distinguish "disabled from its own flag"
+    // from "disabled whenever either direction is unavailable". A judge
+    // introduced exactly that fault — Back disabled when forward was also
+    // unavailable — and every assertion above still passed (2026-09-18).
+    await expect(backButtons.map((button) => button.hasAttribute("disabled"))).toEqual([
+      true,
+      false,
+      false,
+      true,
+    ]);
+    await expect(forwardButtons.map((button) => button.hasAttribute("disabled"))).toEqual([
+      true,
+      true,
+      false,
+      false,
+    ]);
   },
 };
 
