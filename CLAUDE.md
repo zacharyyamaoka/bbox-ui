@@ -475,13 +475,18 @@ more — `scripts/launch_systemsketch.py` and `assets/bbox-ui.desktop` were dele
 on 2026-09-29 for it. If a channel seems to need app code, that is a gap in the
 runtime: fix it there, never here.
 
-| Want | Run (from the main checkout or any worktree of it) |
+`sps` finds the app by walking up from the working directory to
+`stable-preview.json`, which lives in `apps/systemsketch/` — so from the repo or
+worktree root it answers "stable-preview.json: none found". Run it from
+`apps/systemsketch`, or pass `--root` as below.
+
+| Want | Run |
 |---|---|
-| where things stand | `sps status` |
-| Stable (:4341) / Preview (:4340) | `sps open` / `sps open --preview` |
-| make Preview the new Stable | `sps promote` — Zach's call, never an agent's |
-| undo the last promote | `sps rollback` — Zach's call |
-| your own lane (agents) | `sps dev` — prints a lane URL; `sps dev --stop` when done |
+| where things stand | `sps --root /home/bam/bbox-ui/apps/systemsketch status` |
+| Stable (:4341) / Preview (:4340) | `sps --root /home/bam/bbox-ui/apps/systemsketch open` / `… open --preview` |
+| make Preview the new Stable | `sps --root /home/bam/bbox-ui/apps/systemsketch promote` — Zach's call, never an agent's |
+| undo the last promote | `sps --root /home/bam/bbox-ui/apps/systemsketch rollback` — Zach's call |
+| your own lane (agents) | `sps --root <your worktree>/apps/systemsketch dev` — prints a lane URL; `… dev --stop` when done |
 
 JSON has no comments, so the WHY of each choice in `stable-preview.json` is here:
 
@@ -499,11 +504,16 @@ JSON has no comments, so the WHY of each choice in `stable-preview.json` is here
   mounted `/api/workspace/*` and `/api/recordings/*` in-process; now Stable runs the
   same `scripts/systemsketch_files.py serve` the Vite plugin (`devFileHost.ts`)
   starts, over the real home as files root, and proxies both prefixes to it
-  same-origin. Both routes set `rewriteOrigin` (the package's contract §6): the file
+  same-origin. `--files-root-from-env` makes it resolve its roots exactly as
+  `devFileHost.ts` does for Preview: `SYSTEMSKETCH_FILES_ROOT` (with
+  `SYSTEMSKETCH_LOCK_ROOT`, or the shared lock root) wins when set, so an isolated or
+  agent run of Stable never writes into the real home; the runtime hands a Stable
+  process the environment of whoever started it (its contract §9.20). Both routes set `rewriteOrigin` (the package's contract §6): the file
   host refuses any write whose `Origin` is not its own `Host`, and behind the proxy the
   `Host` is the backend's, so without it every save from Stable came back 403. The
   rewrite touches only the Stable page's own `Origin` — a foreign page is still refused,
-  the same rule `devFileHost.ts`'s `crossOriginRefusal` applies in Preview. No `--lock-root`: the script's default IS `resolveSharedLockRoot`
+  the same rule `devFileHost.ts`'s `crossOriginRefusal` applies in Preview. No
+  `--lock-root`: the script's default IS `resolveSharedLockRoot`
   (pinned by `src/devFileHost.test.ts`). `--source-root {root}/../..` keeps the
   recorder reading the main checkout's sources, as the old Stable did. Preview needs
   no process — `devFileHostPlugin` spawns its own.
@@ -519,6 +529,35 @@ JSON has no comments, so the WHY of each choice in `stable-preview.json` is here
 - **`chip.avoid` = `[data-slot="status-strip"]`** — the bottom-right cluster (grid ·
   frames · problems · dev · help · zoom). The chip floats above it, never on it.
 
+**Migration differences** — what the old launcher (`scripts/launch_systemsketch.py`)
+did that is gone now, so nobody hunts for it:
+
+- **`/api/health` on Stable.** The Stable server answers none, so the ☰ site rows
+  cannot say "differs from this board" there; the chip carries Stable's commit and
+  relation instead. Preview and lanes still answer it (`statusEndpoint.ts`).
+- **Auto-start of :4321 and :5421.** Nothing starts the archived SystemSketch or
+  Storybook any more. "Switch to old SystemSketch" works while
+  `systemsketch.desktop` has :4321 up; "Open Storybook" is probed dead and disabled
+  while :5421 is down.
+- **The shared Chrome profile with the archived app.** sps windows use their own
+  profile (`~/.local/state/stable-preview-switcher/bbox-ui/browser`), so the old
+  origin opens without its own storage after the switch row.
+- **The recording header.** Recordings made on Stable say channel `dev`, build `dev`
+  (the file host's CLI), where the old in-process mount said `stable` and the commit.
+- **The dock's site actions.** "Open bbox-ui.com (deployed)" and "Open the site's
+  local Preview (HMR)" are gone; the right-click menu is the three sps actions. The
+  ☰ "Open bbox-ui.com" row remains.
+- **Automatic dock-icon refresh.** Run `python3 scripts/dock_icon.py` by hand after
+  an artwork change.
+- **The private-Xvfb `--headless` capture/hold workflow.** Use `sps dev` + headless
+  Chrome (below).
+- **Clean-tree-only promotion.** `sps promote` snapshots uncommitted edits too and
+  records them as `dirty`.
+- **`<file>` argument routing.** No live caller (the entry had no MimeType); a board
+  still opens by URL, `?board=/abs/path.bbox`.
+- **Chrome singleton recovery and visible-window confirmation on a dock press.**
+  Owed to the shared runtime (Codex audit P1 #5, 2026-09-29), handled there.
+
 ## Open the app HEADLESS — never on Zach's display
 
 Zach, 2026-09-23, mid-session, while agents were driving the whiteboard on his
@@ -529,13 +568,14 @@ So: **every agent-driven launch of the whiteboard is headless.** From your
 worktree:
 
 ```bash
-SPS_NO_WINDOW=1 sps dev
+SPS_NO_WINDOW=1 sps --root <your worktree>/apps/systemsketch dev
 ```
 
 It starts your own lane (the app's own Vite, this worktree's files) on a port of
 its own and prints the URL; the chip there reads `Dev · <branch> · …`. Drive that
 URL with headless Chrome or Playwright on a **throwaway profile** — never Zach's
-profile, never a visible window. `sps dev --stop` when you are done. Never run
+profile, never a visible window. `sps --root <your worktree>/apps/systemsketch dev
+--stop` when you are done. Never run
 `sps open` yourself: it opens a visible app window in the `bbox-ui` profile, and
 never bind :4340/:4341/:4342 — those are Zach's.
 
