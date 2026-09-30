@@ -67,9 +67,23 @@ class RootsFromEnvironmentTests(unittest.TestCase):
     def test_an_empty_files_root_is_unset(self) -> None:
         self.assertEqual(self.resolve({"SYSTEMSKETCH_FILES_ROOT": "", "SYSTEMSKETCH_LOCK_ROOT": "/x"}), (self.home, self.shared))
 
-    def test_a_lock_root_alone_changes_nothing(self) -> None:
-        # devFileHost.ts reads SYSTEMSKETCH_LOCK_ROOT only beside SYSTEMSKETCH_FILES_ROOT.
-        self.assertEqual(self.resolve({"SYSTEMSKETCH_LOCK_ROOT": "locks"}), (self.home, self.shared))
+    def test_an_absolute_lock_root_alone_changes_nothing(self) -> None:
+        # The lock root takes effect only beside SYSTEMSKETCH_FILES_ROOT (devFileHost.ts does the same).
+        self.assertEqual(self.resolve({"SYSTEMSKETCH_LOCK_ROOT": "/scratch/locks"}), (self.home, self.shared))
+
+    def test_a_relative_lock_root_alone_is_refused_too(self) -> None:
+        # Codex round 4: both variables are validated BEFORE the precedence decides which one counts —
+        # a relative lock root was silently ignored when the files root was unset or empty.
+        for environment in ({"SYSTEMSKETCH_LOCK_ROOT": "./locks"}, {"SYSTEMSKETCH_FILES_ROOT": "", "SYSTEMSKETCH_LOCK_ROOT": "locks"}):
+            with self.assertRaises(RootOverrideError) as caught:
+                self.resolve(environment)
+            self.assertIn("SYSTEMSKETCH_LOCK_ROOT=", str(caught.exception))
+
+    def test_an_absolute_value_reaches_the_host_unchanged(self) -> None:
+        # Codex round 4: `..` after a symlink must be applied by the kernel, never collapsed lexically.
+        environment = {"SYSTEMSKETCH_FILES_ROOT": "/a/link/../boards", "SYSTEMSKETCH_LOCK_ROOT": "/a/link/../locks"}
+        files_root, lock_root = self.resolve(environment)
+        self.assertEqual((str(files_root), str(lock_root)), ("/a/link/../boards", "/a/link/../locks"))
 
     def test_a_relative_override_is_refused_naming_it(self) -> None:
         # Round 3: no base is shared by Stable (release snapshot), Preview (main checkout) and an

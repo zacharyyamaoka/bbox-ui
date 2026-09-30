@@ -1055,9 +1055,15 @@ def roots_from_environment(
     lock files for one board, no mutual exclusion. No base is shared by all of
     them; only an absolute path names one place.
     """
+    # WHY both validated before the precedence picks one (Codex round 4): a relative lock root beside
+    # an unset files root was silently ignored. WHY `Path(value)` and nothing more: the value arrives
+    # here exactly as devFileHost.ts passes it to `--lock-root`/`--files-root` for Preview (it only
+    # validates), so one resolver — this host, and the kernel applying `..` after a symlink — serves
+    # both channels. A lexical collapse on either side split them into two folders.
     override = _absolute_override(environment, "SYSTEMSKETCH_FILES_ROOT")
+    locks = _absolute_override(environment, "SYSTEMSKETCH_LOCK_ROOT")
     if override is not None:
-        return override, _absolute_override(environment, "SYSTEMSKETCH_LOCK_ROOT") or default_lock_root(home)
+        return override, locks or default_lock_root(home)
     return files_root, lock_root or default_lock_root(home)
 
 

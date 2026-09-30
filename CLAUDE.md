@@ -513,7 +513,11 @@ JSON has no comments, so the WHY of each choice in `stable-preview.json` is here
   naming the variable; `devFileHost.ts` answers every file request 503 with it): Stable
   runs from its release snapshot, Preview from the main checkout and an `sps dev` lane
   from its worktree, so no relative base names one folder for all three, and two lock
-  folders mean no mutual exclusion on a board. Both routes set `rewriteOrigin` (the package's contract §6): the file
+  folders mean no mutual exclusion on a board. Both variables are validated even when
+  the precedence ignores one. `devFileHost.ts` only validates and hands the absolute
+  strings to the Python host unchanged: the host (and the kernel, applying `..` after a
+  symlink) is the one resolver for both channels — Node's lexical `path.resolve` once put
+  `…/node_modules/<link>/../locks` in a different folder than Stable did. Both routes set `rewriteOrigin` (the package's contract §6): the file
   host refuses any write whose `Origin` is not its own `Host`, and behind the proxy the
   `Host` is the backend's, so without it every save from Stable came back 403. The
   rewrite touches only the Stable page's own `Origin` — a foreign page is still refused,

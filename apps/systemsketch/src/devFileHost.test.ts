@@ -22,8 +22,8 @@
 // and `document_locks` names a lock file under its root — so two roots are two
 // lock files, and a dev save and a Stable save of one board excluded nothing.
 // Everything else in this file is untouched; the rest is NEW CASES ONLY.
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { execFileSync, spawn } from "node:child_process";
+import { lstatSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -138,9 +138,33 @@ describe("resolveDevFileHostRoots", () => {
     }
   });
 
-  it("keeps absolute overrides as they are, exactly as Stable does", () => {
+  it("refuses a relative lock root even when the files root is unset or empty (Codex round 4)", () => {
+    const cases: Record<string, string>[] = [
+      { HOME: homedir(), SYSTEMSKETCH_LOCK_ROOT: "./locks" },
+      { HOME: homedir(), SYSTEMSKETCH_FILES_ROOT: "", SYSTEMSKETCH_LOCK_ROOT: "locks" },
+    ];
+    for (const environment of cases) {
+      expect(() => resolveDevFileHostRoots(environment as NodeJS.ProcessEnv)).toThrow(RootOverrideError);
+      const stable = stableRoots(environment);
+      expect("refused" in stable && stable.refused).toContain("SYSTEMSKETCH_LOCK_ROOT=");
+    }
+  });
+
+  it("passes an absolute override to the Python host UNCHANGED — no lexical `..`, no trimming (Codex round 4)", () => {
+    const environment = { HOME: homedir(), SYSTEMSKETCH_FILES_ROOT: "/a/link/../boards/", SYSTEMSKETCH_LOCK_ROOT: "/a/link/../locks" };
+    expect(resolveDevFileHostRoots(environment as NodeJS.ProcessEnv)).toEqual({ filesRoot: "/a/link/../boards/", lockRoot: "/a/link/../locks" });
+  });
+
+  it("keeps absolute overrides as they are — the host sees the same Path Stable builds", () => {
+    // Round 4: this side hands the strings to the Python host unchanged (`--files-root`/`--lock-root`
+    // → argparse `Path`); Stable builds `Path(value)` from its environment. Same input, same Path.
     const environment = { HOME: homedir(), SYSTEMSKETCH_FILES_ROOT: "/tmp/elsewhere/", SYSTEMSKETCH_LOCK_ROOT: "/tmp/locks" };
-    expect(resolveDevFileHostRoots(environment as NodeJS.ProcessEnv)).toEqual(stableRoots(environment));
+    const roots = resolveDevFileHostRoots(environment as NodeJS.ProcessEnv);
+    expect(roots).toEqual({ filesRoot: "/tmp/elsewhere/", lockRoot: "/tmp/locks" });
+    const asHostSeesThem = JSON.parse(
+      execFileSync("python3", ["-c", "import json, sys; from pathlib import Path; print(json.dumps([str(Path(v)) for v in sys.argv[1:]]))", roots!.filesRoot, roots!.lockRoot], { encoding: "utf8" }),
+    ) as [string, string];
+    expect({ filesRoot: asHostSeesThem[0], lockRoot: asHostSeesThem[1] }).toEqual(stableRoots(environment));
   });
 });
 
@@ -280,6 +304,80 @@ describe("resolveSharedLockRoot — dev and Stable must name the SAME lock folde
     });
     expect(saved.status).toBe(200);
     expect(readdirSync(roots.lockRoot).filter((name) => name.endsWith(".lock"))).toHaveLength(1);
+  });
+});
+
+describe("one resolver: an absolute root through a symlink and `..` means ONE folder on both channels (Codex round 4)", () => {
+  /** The host exactly as Stable runs it: `--files-root <home> --files-root-from-env`, overrides in its environment. */
+  function startStableHost(environment: Record<string, string>): Promise<{ url: string; stop: () => void }> {
+    return new Promise((resolve, reject) => {
+      const child = spawn(
+        "python3",
+        [path.join(scriptsDir, "systemsketch_files.py"), "serve", "--files-root", environment.HOME, "--files-root-from-env", "--host", "127.0.0.1", "--port", "0"],
+        { env: { ...process.env, ...environment }, stdio: ["ignore", "pipe", "pipe"] },
+      );
+      let stdout = "";
+      let stderr = "";
+      child.stderr.on("data", (chunk: Buffer) => (stderr += chunk.toString()));
+      child.stdout.on("data", (chunk: Buffer) => {
+        stdout += chunk.toString();
+        const line = stdout.split("\n").find((candidate) => candidate.startsWith("SYSTEMSKETCH_FILES_LISTENING"));
+        if (line) resolve({ url: line.split(" ")[1].trim(), stop: () => child.kill("SIGTERM") });
+      });
+      child.on("exit", (code) => reject(new Error(`Stable-like host exited ${code}: ${stderr}`)));
+    });
+  }
+
+  /** Every file named `name` under `root`, walked with lstat so no symlink is followed twice. */
+  function find(root: string, test: (name: string) => boolean, found: string[] = []): string[] {
+    for (const name of readdirSync(root)) {
+      const full = path.join(root, name);
+      const stat = lstatSync(full);
+      if (stat.isDirectory()) find(full, test, found);
+      else if (stat.isFile() && test(name)) found.push(full);
+    }
+    return found;
+  }
+
+  it("saves from Preview's host and Stable's host land in one board folder and lock in one lock folder", async () => {
+    const base = realpathSync(mkdtempSync(path.join(tmpdir(), "ss-dotdot-")));
+    mkdirSync(path.join(base, "real", "sub"), { recursive: true });
+    symlinkSync(path.join(base, "real", "sub"), path.join(base, "link"));
+    // Both spellings' folders exist, so neither channel can fail merely for a missing folder.
+    for (const directory of ["real/boards/SystemSketch", "boards/SystemSketch", "home"]) mkdirSync(path.join(base, directory), { recursive: true });
+    const environment = {
+      HOME: path.join(base, "home"),
+      SYSTEMSKETCH_FILES_ROOT: `${base}/link/../boards`,
+      SYSTEMSKETCH_LOCK_ROOT: `${base}/link/../locks`,
+    };
+    const roots = resolveDevFileHostRoots(environment as NodeJS.ProcessEnv);
+    expect(roots).not.toBeNull();
+    const preview = await startFileHost(roots as { filesRoot: string; lockRoot: string });
+    const stable = await startStableHost(environment);
+    try {
+      for (const [name, url] of [["Preview", preview.url], ["Stable", stable.url]] as const) {
+        const health = (await (await fetch(`${url}/api/health`)).json()) as { filesRoot: string };
+        const saved = await fetch(`${url}/api/workspace/file`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            path: `${health.filesRoot}/SystemSketch/${name}.tldr`,
+            source: JSON.stringify({ tldrawFileFormatVersion: 1, schema: {}, records: [] }),
+            baseDigest: null,
+          }),
+        });
+        expect(saved.status, name).toBe(200);
+      }
+      const boardFolders = new Set(find(base, (name) => name.endsWith(".tldr")).map((file) => path.dirname(file)));
+      const lockFolders = new Set(find(base, (name) => name.endsWith(".lock")).map((file) => path.dirname(file)));
+      // the kernel's answer: link → real/sub, then `..` → real
+      expect([...boardFolders]).toEqual([path.join(base, "real", "boards", "SystemSketch")]);
+      expect([...lockFolders]).toEqual([path.join(base, "real", "locks")]);
+    } finally {
+      await preview.stop();
+      stable.stop();
+      rmSync(base, { recursive: true, force: true });
+    }
   });
 });
 

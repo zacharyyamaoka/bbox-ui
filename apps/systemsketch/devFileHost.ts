@@ -97,8 +97,12 @@ function absoluteOverride(name: "SYSTEMSKETCH_FILES_ROOT" | "SYSTEMSKETCH_LOCK_R
   if (!path.isAbsolute(value)) {
     throw new RootOverrideError(`${name}=${JSON.stringify(value)} is relative; it must be an absolute path (or empty for unset)`);
   }
-  // Normalised only (a trailing `/` dropped), never resolved against anything — as Python's Path does.
-  return path.resolve(value);
+  // WHY returned UNCHANGED (Codex round 4): this side only validates. Node's
+  // `path.resolve` collapses `..` lexically while the Python host lets the
+  // kernel apply it after a symlink, so `…/node_modules/<link>/../locks` meant
+  // two folders — one per channel. The Python host is the one resolver, on
+  // both channels.
+  return value;
 }
 
 /**
@@ -119,7 +123,11 @@ export function resolveDevFileHostRoots(
 ): DevFileHostRoots | null {
   const home = environment.HOME ?? "";
   const sharedLockRoot = resolveSharedLockRoot(home, directoryExists);
+  // WHY both are validated before the precedence picks one (Codex round 4): a
+  // relative lock root beside an unset files root was silently ignored — the
+  // refuse-loudly rule has to hold for every value set, used or not.
   const filesOverride = absoluteOverride("SYSTEMSKETCH_FILES_ROOT", environment.SYSTEMSKETCH_FILES_ROOT);
+  const lockOverride = absoluteOverride("SYSTEMSKETCH_LOCK_ROOT", environment.SYSTEMSKETCH_LOCK_ROOT);
   if (filesOverride !== null) {
     // WHY an empty value means unset and a relative one is REFUSED (Codex
     // audit, 2026-09-29, rounds 2-3): Stable runs the same host as a process
@@ -131,7 +139,7 @@ export function resolveDevFileHostRoots(
     // `systemsketch_files.py serve --files-root-from-env` applies the same rule.
     return {
       filesRoot: filesOverride,
-      lockRoot: absoluteOverride("SYSTEMSKETCH_LOCK_ROOT", environment.SYSTEMSKETCH_LOCK_ROOT) ?? sharedLockRoot,
+      lockRoot: lockOverride ?? sharedLockRoot,
     };
   }
   // WHY: a suite that spawned this with the default root would be writing
