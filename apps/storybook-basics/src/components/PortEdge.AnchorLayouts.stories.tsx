@@ -160,3 +160,73 @@ export const Ellipse: Story = {
     await expect(Math.abs(n0RectAfter.top - n3RectBefore.top)).toBeLessThan(4);
   },
 };
+
+/**
+ * The `anchored` distribution (`AnchoredConfig`, ported 2026-09-30 from
+ * `claude/notebook-lab-work-order-472c22` 27b4314): the host supplies one
+ * leading-edge offset per slot id and the edge honours it — resolved
+ * through the SAME registry as every other mode (the `"anchored"`
+ * `PortLayoutFn`), not a second positioning path. Offsets deliberately
+ * NON-monotonic in item order (b above c), because a notebook port's
+ * position is the row that binds its name, not its index.
+ */
+const ANCHORED_ITEMS: PortEdgeItem[] = [
+  { id: "a", label: "a", state: "wired" },
+  { id: "b", label: "b", state: "empty" },
+  { id: "c", label: "c", state: "empty" },
+];
+const ANCHORED_OFFSETS: Record<string, number> = { a: 0, b: 96, c: 40 };
+
+function AnchoredDemo() {
+  const [items, setItems] = useState<PortEdgeItem[]>(ANCHORED_ITEMS);
+  return (
+    <div data-testid="anchored-order" data-order={items.map((i) => i.id).join(",")}>
+      <PortEdge
+        edge="left"
+        items={items}
+        onItemsChange={setItems}
+        mode="auto"
+        distribution={{ mode: "anchored", offsets: ANCHORED_OFFSETS }}
+        size={{ width: 44, height: 200 }}
+        showContainer
+      />
+    </div>
+  );
+}
+
+export const Anchored: Story = {
+  render: () => <AnchoredDemo />,
+  play: async ({ canvasElement }) => {
+    const track = canvasElement.querySelector('[data-slot="port-edge"]');
+    if (!(track instanceof HTMLElement)) throw new Error('expected a [data-slot="port-edge"]');
+    const cards = Array.from(track.querySelectorAll<HTMLElement>('[data-slot="port-edge-card"]'));
+    await expect(cards).toHaveLength(3);
+    const byLabel = new Map(cards.map((card) => [labelOf(card), card]));
+
+    // Every card sits at ITS offset, measured: the leading edge (top, on a
+    // left rail) of each card relative to `a`'s equals the offset
+    // difference the host supplied — b 96 px below a, c 40 px below a,
+    // so c sits BETWEEN a and b although it comes last in item order.
+    const topOf = (label: string) => {
+      const card = byLabel.get(label);
+      if (!card) throw new Error(`expected a card labelled ${label}`);
+      return card.getBoundingClientRect().top;
+    };
+    await expect(Math.abs(topOf("b") - topOf("a") - 96)).toBeLessThan(0.5);
+    await expect(Math.abs(topOf("c") - topOf("a") - 40)).toBeLessThan(0.5);
+
+    // No gesture on an anchored card: no dnd-kit `role="button"`/tab stop,
+    // no grab cursor, and a drag of `a` onto `b` writes nothing — the
+    // order the host holds is unchanged.
+    for (const card of cards) {
+      await expect(card.hasAttribute("data-anchored")).toBe(true);
+      await expect(card.getAttribute("role")).toBeNull();
+      await expect(card.style.cursor).toBe("");
+    }
+    const aTopBefore = topOf("a");
+    await dragCard(byLabel.get("a")!, byLabel.get("b")!);
+    const order = canvasElement.querySelector('[data-testid="anchored-order"]')?.getAttribute("data-order");
+    await expect(order).toBe("a,b,c");
+    await expect(Math.abs(topOf("a") - aTopBefore)).toBeLessThan(0.5);
+  },
+};

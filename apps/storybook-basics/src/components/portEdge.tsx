@@ -237,8 +237,27 @@ export interface PortEdgeProps {
    * no `reorderChord` is armed. The HINT text needs no such seam — it is
    * already drawn as a sibling of whatever this renders
    * (`PortEdgeSlotBox`'s own `reorderHint` span), not by the fill.
+   *
+   * `ctx.editable` / `ctx.onLabelWrite` (ported from
+   * claude/notebook-lab-work-order-472c22 `23ab20e`, 2026-09-19): the SAME
+   * forwarding trap for this edge's own `editing` prop. `editable` is
+   * whether THIS port's label is armed for single-line editing right now —
+   * `editing` on, `editMode` "single", exactly the inverse of the default
+   * fill's `disabled`. `onLabelWrite` commits a new label through this
+   * edge's own `onItemsChange` (`handlePortLabelWrite`), so a custom fill
+   * cannot end up with a second, divergent copy of what a label write
+   * means. A fill that draws its own `LabeledPort` and ignores both leaves
+   * `editing` silently inert for its caller.
    */
-  renderItem?(item: PortEdgeItem, ctx: { textLayout: PortTextLayout; onReorderKey?(event: KeyboardEvent): boolean }): ReactNode;
+  renderItem?(
+    item: PortEdgeItem,
+    ctx: {
+      textLayout: PortTextLayout;
+      onReorderKey?(event: KeyboardEvent): boolean;
+      editable: boolean;
+      onLabelWrite(value: string): void;
+    },
+  ): ReactNode;
   /**
    * D-A7 (docs/BLOCK-PORT-EDGES-PLAN.md §4b·S1): what a COLLAPSED real
    * family draws, when the host needs something other than this component's
@@ -711,9 +730,16 @@ function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderIt
   // member box below does the opening instead, before the click can reach
   // anything else. `"single"` mode (the default) is unchanged: `disabled`
   // is simply the inverse of "armed".
-  const singleLineEditable = editingEnabled && editMode === "single";
+  const singleLineEditable = Boolean(editingEnabled) && editMode === "single";
   const port =
-    item == null ? null : renderItem ? renderItem(item, { textLayout, onReorderKey: onReorderKey ? (event) => onReorderKey(item.id, event) : undefined }) : showPorts ? (
+    item == null ? null : renderItem ? (
+      renderItem(item, {
+        textLayout,
+        onReorderKey: onReorderKey ? (event) => onReorderKey(item.id, event) : undefined,
+        editable: singleLineEditable,
+        onLabelWrite: (value: string) => onLabelWrite?.(item.id, value),
+      })
+    ) : showPorts ? (
       <LabeledPort
         edge={edge}
         state={item.state ?? "empty"}
@@ -1135,11 +1161,25 @@ function SlotBody(props: SlotRenderProps) {
  * on drop is dnd-kit's only write; where a card SITS is the layout
  * function's answer, never a transform dnd-kit derived. Do not bring
  * `useSortable` back for its settle animation — that re-opens B1.
+ *
+ * `fixed` — an `anchored` distribution's card (`AnchoredConfig`, ported
+ * from claude/notebook-lab-work-order-472c22 `27b4314`, where it was a
+ * second component, `AnchoredSlotCard`). Same position, same body, but no
+ * gesture: the drag and drop registrations are `disabled` (dnd-kit then
+ * hands back no `listeners`, and `nearestAnchor` never sees this card as
+ * a target), no `attributes` (no `role="button"`/tab stop on a dot a
+ * cable may later drag from), no grab cursor and no `touchAction`
+ * override, so the dot keeps whatever pointer behaviour its own content
+ * declares. WHY one card with a flag, not the donor's second component:
+ * the positioning formula is the one thing both must share byte-for-byte
+ * — a host reasons about one mode from the other only if the same number
+ * lands on the same pixel — and the hooks stay unconditional, so an edge
+ * that switches distribution at runtime keeps each card's hook order.
  */
-function AnchorSlotCard(props: SlotRenderProps & { left: number; top: number }) {
-  const { left, top, ...slotProps } = props;
-  const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({ id: props.slot.slotId });
-  const { setNodeRef: setDropRef } = useDroppable({ id: props.slot.slotId });
+function AnchorSlotCard(props: SlotRenderProps & { left: number; top: number; fixed?: boolean }) {
+  const { left, top, fixed = false, ...slotProps } = props;
+  const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({ id: props.slot.slotId, disabled: fixed });
+  const { setNodeRef: setDropRef } = useDroppable({ id: props.slot.slotId, disabled: fixed });
   const setRefs = useCallback(
     (el: HTMLDivElement | null) => {
       setDragRef(el);
@@ -1157,8 +1197,7 @@ function AnchorSlotCard(props: SlotRenderProps & { left: number; top: number }) 
     // same rule `FreeSlotCard` already follows, below.
     zIndex: isDragging ? paintTier("dragActive") : paintTier("memberContent"),
     opacity: isDragging ? 0.35 : 1,
-    cursor: "grab",
-    touchAction: "none",
+    ...(fixed ? {} : { cursor: "grab", touchAction: "none" }),
     // Re-arms what `blockPort.tsx`'s rail wrapper (`block-port-rail`) turns
     // off at the box level — this card is the one thing in a slot's box
     // that IS real content (a port, draggable), so it alone opts back into
@@ -1166,7 +1205,15 @@ function AnchorSlotCard(props: SlotRenderProps & { left: number; top: number }) 
     pointerEvents: "auto",
   };
   return (
-    <div ref={setRefs} data-slot="port-edge-card" data-dragging={isDragging || undefined} style={style} {...attributes} {...listeners}>
+    <div
+      ref={setRefs}
+      data-slot="port-edge-card"
+      data-anchored={fixed ? "" : undefined}
+      data-dragging={isDragging || undefined}
+      style={style}
+      {...(fixed ? {} : attributes)}
+      {...listeners}
+    >
       <SlotBody {...slotProps} />
     </div>
   );
@@ -1828,9 +1875,22 @@ function PortEdgeBody({
   // `AlignConfig` already use — the 3 SpacingScheme distributions and
   // `aligned` are registry entries wrapping `mainAxisPositions`, not a
   // second, parallel implementation (see that file's own doc).
-  const layoutName = anchorLayout?.name ?? (distribution.mode === "distribute" ? distribution.scheme : "aligned");
+  //
+  // `anchored` (`AnchoredConfig`, ported from notebook-lab `27b4314`) is
+  // one more registry entry, keyed by its own mode name and handed the
+  // edge's own config — NOT a branch that lays it out as `aligned`. Before
+  // this port the fallback below mapped every non-`distribute` mode to
+  // `"aligned"`, so an anchored edge would have silently packed from the
+  // start (W1h's handoff note named exactly that trap).
+  const layoutName = anchorLayout?.name ?? (distribution.mode === "distribute" ? distribution.scheme : distribution.mode);
   const layoutFn = portLayout(layoutName);
-  const layoutArgs = anchorLayout ? anchorLayout.args : distribution.mode === "aligned" ? distribution : undefined;
+  const layoutArgs = anchorLayout ? anchorLayout.args : distribution.mode === "distribute" ? undefined : distribution;
+  /** An `anchored` edge's cards sit where the HOST's numbers put them, so
+   *  they carry no drag (`AnchorSlotCard`'s `fixed`) — see `AnchoredConfig`
+   *  for why a host that derives positions from its own data wants the
+   *  geometry without the gesture. An `anchorLayout` override still wins
+   *  the geometry (it did before this mode existed) and stays draggable. */
+  const fixedCards = !anchorLayout && distribution.mode === "anchored";
 
   // W1: "the drag preview is the real thing" (the work order's own
   // words) — while a drag is live over this rail, anchors are computed
@@ -1919,10 +1979,17 @@ function PortEdgeBody({
     let spans: number[];
     if (hasRealGroup) {
       spans = visualSlots.map((s) => slotMainSpan(s.members.length, slotMainPx, gapPx));
-      leading = packVariableSlotSpans(spans, distribution, gapPx, contentMainPx);
       visualSlots.forEach((s, i) => mainSpanBySlotId.set(s.slotId, spans[i]));
     } else {
       spans = visualSlots.map(() => slotMainPx);
+    }
+    if (hasRealGroup && distribution.mode !== "anchored") {
+      leading = packVariableSlotSpans(spans, distribution, gapPx, contentMainPx);
+    } else {
+      // A real group on an `anchored` edge still comes through the
+      // registry: the `"anchored"` entry never reads `rail.cardMain` (the
+      // host's offset IS the slot's leading edge, whatever its span), so
+      // the uniform-`cardMain` limit above does not apply to it.
       const rail: PortLayoutRail = { mainSize: contentMainPx, cardMain: slotMainPx, axis, gap: gapPx };
       // A `PortLayoutFn` only ever needs identity + count/order — a real
       // `PortEdgeItem` for every rendered SLOT (not raw `items`; a
@@ -2131,6 +2198,7 @@ function PortEdgeBody({
                 key={slot.slotId}
                 left={left}
                 top={top}
+                fixed={fixedCards}
                 slot={slot}
                 axis={axis}
                 edge={edge}

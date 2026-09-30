@@ -662,7 +662,10 @@ export interface RailBandMetrics {
  */
 function gapCountFor(slotCount: number, distribution?: Distribution): number {
   if (slotCount <= 0) return 0;
-  if (distribution == null || distribution.mode === "aligned") return slotCount - 1;
+  // `anchored` (`AnchoredConfig`) spends no end gaps either — its slots sit
+  // at the host's own offsets — so it floors the band exactly as `aligned`
+  // does; any wider spread the host's offsets need is the host's to size.
+  if (distribution == null || distribution.mode !== "distribute") return slotCount - 1;
   switch (distribution.scheme) {
     case "space-between":
       return slotCount - 1;

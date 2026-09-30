@@ -152,14 +152,17 @@ function paintedDotOf(resolved: HTMLElement): Element {
  * The coordinate space every measured point and box is expressed in: the
  * client-px origin to subtract, then the scale to divide back out.
  *
- * WHY a scale at all, when the layer itself only ever uses 1: the React
- * Flow host routes its edges through this same file (`resolveWires`, below)
- * and its nodes sit under the viewport's `scale(zoom)` transform, so a
- * client-px box there is `zoom` times the flow-space box its edge is drawn
- * in. Dividing the zoom out HERE is what lets both hosts share one
- * derivation instead of the React Flow host re-deriving routes it does not
- * own. At `scale: 1` every division is the identity, so the layer's own
- * numbers are exactly the numbers it produced before this existed.
+ * WHY a scale at all: the React Flow host routes its edges through this
+ * same file (`resolveWires`, below) and its nodes sit under the viewport's
+ * `scale(zoom)` transform, so a client-px box there is `zoom` times the
+ * flow-space box its edge is drawn in. Dividing the zoom out HERE is what
+ * lets both hosts share one derivation instead of the React Flow host
+ * re-deriving routes it does not own. The layer's OWN space reads its scale
+ * off the DOM too (`containerSpace` / `scaleOf`, below), so a host that puts
+ * a camera on the container gets correct cables without telling the layer.
+ * At `scale: 1` every division is the identity, so an untransformed
+ * container's numbers are exactly the numbers it produced before this
+ * existed.
  */
 export interface WireSpace {
   left: number;
@@ -167,10 +170,39 @@ export interface WireSpace {
   scale: number;
 }
 
-/** The layer's own space: the container's padding-box origin, unscaled. */
+/**
+ * The container's own rendered scale, read off the DOM rather than taken as a
+ * prop — a host that zooms its canvas should not also have to tell this layer
+ * about it, and `WireLayer` already measures everything else it uses.
+ * Ported from claude/notebook-lab-work-order-472c22 `27b4314` ("A camera for
+ * the board"), where the notebook lab's camera put a `transform: scale(z)` on
+ * the board and every cable came back `z` times too long: `getBoundingClientRect`
+ * answers in screen px while the `<svg>` inside the container draws in its
+ * pre-transform user units.
+ *
+ * `offsetWidth` is the layout width, untouched by any ancestor transform;
+ * `getBoundingClientRect().width` is that same box after every transform. The
+ * ratio is therefore the accumulated scale — the same rect-to-offsetWidth
+ * reading `reactFlowHost.tsx`'s `flowSpaceOf` uses for its viewport.
+ * `offsetWidth` is an integer, so the ratio carries up to half a pixel of
+ * rounding — snapped to exactly 1 when it is within half a percent, so the
+ * untransformed case (every caller before this existed) keeps measuring
+ * exactly as it did.
+ *
+ * NOTE for hosts: a camera change moves no border box, so `ResizeObserver`
+ * does not fire on it. Put the camera in `layoutKey`.
+ */
+function scaleOf(container: HTMLElement, containerRect: DOMRect): number {
+  if (!container.offsetWidth) return 1;
+  const raw = containerRect.width / container.offsetWidth;
+  return Math.abs(raw - 1) < 0.005 ? 1 : raw;
+}
+
+/** The layer's own space: the container's padding-box origin, with whatever
+ *  camera scale sits on it divided back out (`scaleOf`). */
 function containerSpace(container: HTMLElement): WireSpace {
   const rect = container.getBoundingClientRect();
-  return { left: rect.left, top: rect.top, scale: 1 };
+  return { left: rect.left, top: rect.top, scale: scaleOf(container, rect) };
 }
 
 function centreOf(dot: HTMLElement, space: WireSpace): { x: number; y: number } {

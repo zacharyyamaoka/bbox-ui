@@ -153,12 +153,52 @@ export interface AlignConfig {
   edgePadding: number;
 }
 
+/**
+ * The caller places each port itself, at a main-axis offset it supplies per
+ * port id. No spacing rule at all — the edge stops deciding where its dots go
+ * and simply honours a number. Ported from claude/notebook-lab-work-order-472c22
+ * `27b4314` (2026-09-19, "A camera for the board, and every port on the row
+ * that owns it").
+ *
+ * WHY this exists as a third mode rather than another spacing scheme: the two
+ * above answer "how do N ports share this rail's length", and there are hosts
+ * for which that question is the wrong one. A notebook block is one of them —
+ * a port's job there is to say WHICH ROW of code binds the name, so its
+ * position is information the host already has and the rail must not
+ * recompute. Under `distribute`, growing a block by Δ moves port `i` by
+ * `i·Δ/(n−1)`: every port but the first, for a reason that has nothing to do
+ * with the code. That makes position noise.
+ *
+ * `offsets` is keyed by SLOT id (a port's own id when it is ungrouped, the
+ * group's id when it is not) and measured in px from the rail's CONTENT box
+ * along its main axis, to the slot box's LEADING edge — the same origin and
+ * the same units `mainAxisPositions` returns, so a host can compute one from
+ * the other. A slot with no entry sits at 0.
+ *
+ * Its geometry is the registered `"anchored"` `PortLayoutFn` below — one
+ * entry in the same registry every other mode resolves through, not a
+ * parallel positioning path. Distinct from `mode: "custom"`, which also
+ * positions absolutely: that one is a DRAG affordance (every card becomes a
+ * `useDraggable`), and a host whose port positions are derived from its own
+ * data wants the geometry without handing the human a way to shove a dot
+ * off its row — and without dnd-kit listeners sitting on a dot a cable may
+ * later need to drag from (`portEdge.tsx`'s `AnchorSlotCard` renders it
+ * `fixed`). Distinct from `PortEdgeProps.anchorLayout` too: that names a
+ * whole registered 2-D arrangement and keeps every card draggable; this is
+ * a per-port NUMBER the host's own data already holds.
+ */
+export interface AnchoredConfig {
+  mode: "anchored";
+  offsets: Record<string, number>;
+}
+
 /** How a PortEdge lays its cards out along its main axis. `distribute` is
  *  the three space-* schemes (spreads across the whole container).
  *  `aligned` packs cards from one end with an explicit gap instead — the
  *  mode a real port edge needs, since "space-between" reflows every port's
- *  position the instant a sibling edge's count changes. */
-export type Distribution = DistributeConfig | AlignConfig;
+ *  position the instant a sibling edge's count changes. `anchored` hands
+ *  placement back to the caller entirely. */
+export type Distribution = DistributeConfig | AlignConfig | AnchoredConfig;
 
 export const DEFAULT_ALIGN_GAP = 18;
 
@@ -279,6 +319,11 @@ export function clamp(value: number, min: number, max: number): number {
  * anchor side.
  */
 export function distributionStyle(axis: "row" | "column", distribution: Distribution): CSSProperties {
+  // `anchored` places every slot absolutely, so the track has no flow left to
+  // justify. Returning `{}` rather than throwing keeps this total over the
+  // union — a caller that reads the style before checking the mode gets the
+  // no-op, which is the truthful answer.
+  if (distribution.mode === "anchored") return {};
   if (distribution.mode === "distribute") {
     return { justifyContent: distribution.scheme };
   }
@@ -456,6 +501,21 @@ registerPortLayout("aligned", (items, rail, args) => {
   });
 });
 
+/**
+ * The `anchored` config (`AnchoredConfig`) as a layout: every slot sits at
+ * the leading-edge offset the host supplied for its id, 0 when it supplied
+ * none. `args` is the edge's own `AnchoredConfig`. Registered here — not
+ * branched on inside `portEdge.tsx` — so there is ONE geometry path for
+ * every mode (W1's registry) and the tentative-order preview, the grouped
+ * path and the resting render all read the same answer. `rail.cardMain` is
+ * never consulted, which is why a real (wider) group can come through here
+ * too: the offset IS the slot's leading edge, whatever its span.
+ */
+registerPortLayout("anchored", (items, rail, args) => {
+  const offsets = (args as AnchoredConfig | undefined)?.offsets ?? {};
+  return items.map((item) => axisAnchor(rail, offsets[item.id] ?? 0));
+});
+
 /* ------------------------------------------------------------------ */
 /* Grouping — demos/dndkit-lab/src/grouping.ts, generalized off the     */
 /* caller's own id list instead of a fixed CARD_IDS constant.           */
@@ -583,6 +643,12 @@ export function splitByMaxVisible(slots: Slot[], maxVisible: number | undefined)
  * between an ungrouped port and a group's near edge, and inside the group.
  */
 export function interSlotGapPx(distribution: Distribution, containerMainPx: number, slotCount: number, slotMainPx: number): number {
+  // An anchored edge has no pitch: consecutive slots are wherever the caller
+  // put them, and the distance between two of them is not a property of the
+  // edge. 0 is the honest answer — and it is the number a GROUPED anchored
+  // slot lays its own members out at, which is right, because one slot is one
+  // anchor point.
+  if (distribution.mode === "anchored") return 0;
   if (distribution.mode === "aligned") return distribution.gap;
   if (slotCount <= 1) return 0;
   const free = Math.max(containerMainPx - slotCount * slotMainPx, 0);
@@ -702,12 +768,12 @@ export function groupingSetFromText(text: string, knownIds: string[]): { set: Gr
 /**
  * Maps `PortEdge`'s existing `mode`/`freeOffsets` pair onto the one
  * distinction ELK's layout actually needs — is this rail's ORDER pinned,
- * or is each member's absolute POSITION pinned. `mode: "custom"` is the
- * only time this component fixes a real x/y (`freeOffsets`); every
- * `"auto"` scheme (whichever `Distribution` is in play) only ever fixes
- * the sequence a registered `PortLayoutFn` then lays out, never a
- * literal position — so the mapping doesn't need to look at
- * `distribution` at all, only at `mode`.
+ * or is each member's absolute POSITION pinned. `mode: "custom"` fixes a
+ * real x/y (`freeOffsets`), and so does an `anchored` distribution (the
+ * host's own `offsets`, `AnchoredConfig`); every other `"auto"` scheme
+ * only ever fixes the sequence a registered `PortLayoutFn` then lays out,
+ * never a literal position — so the mapping looks at `distribution` only
+ * to tell `anchored` apart.
  *
  * WHY no `FREE` / `FIXED_SIDE` / `FIXED_RATIO` (do not add them):
  * bbox-ui has no representation for "ELK may put this anywhere", "pinned
@@ -717,8 +783,11 @@ export function groupingSetFromText(text: string, knownIds: string[]): { set: Gr
  * be a lying adapter; a coarser, TRUE rung is worth more than a precise,
  * false one.
  */
-export function portConstraintOf(props: { mode?: "auto" | "custom" }): "FIXED_ORDER" | "FIXED_POS" {
-  return props.mode === "custom" ? "FIXED_POS" : "FIXED_ORDER";
+export function portConstraintOf(props: { mode?: "auto" | "custom"; distribution?: Distribution }): "FIXED_ORDER" | "FIXED_POS" {
+  // An `anchored` distribution (`AnchoredConfig`) pins each port's position
+  // as literally as Custom's `freeOffsets` do — the host supplied the
+  // number — so it reports the same rung.
+  return props.mode === "custom" || props.distribution?.mode === "anchored" ? "FIXED_POS" : "FIXED_ORDER";
 }
 
 /* ------------------------------------------------------------------ */
@@ -761,7 +830,7 @@ export function slotMainSpan(memberCount: number, cardMain: number, gap: number)
  * exercises real groups at all, always has ungrouped siblings beside
  * it) — flagged rather than silently assumed correct.
  */
-export function packVariableSlotSpans(spans: number[], distribution: Distribution, gap: number, mainSize: number): number[] {
+export function packVariableSlotSpans(spans: number[], distribution: Exclude<Distribution, AnchoredConfig>, gap: number, mainSize: number): number[] {
   const n = spans.length;
   const positions = new Array<number>(n);
   if (distribution.mode === "aligned" && distribution.anchor === "end") {

@@ -267,8 +267,11 @@ export function resolveCustomOffsets(
  * portSpacing.layout.test.ts pins. `aligned` packs from its anchor with the
  * explicit gap, after `edgePadding` — exactly what `distributionStyle`
  * emits (the padding on the anchor side moves the content start).
+ * `anchored` already IS a leading-edge offset per slot id (`AnchoredConfig`),
+ * so its snapshot is those numbers, unchanged.
  */
 export function autoSlotOffsets(order: string[], sizes: Record<string, number>, span: number, distribution: Distribution): Record<string, number> {
+  if (distribution.mode === "anchored") return Object.fromEntries(order.map((id) => [id, distribution.offsets[id] ?? 0]));
   const n = order.length;
   const size = order.map((id) => sizes[id] ?? 0);
   const total = size.reduce((sum, s) => sum + s, 0);

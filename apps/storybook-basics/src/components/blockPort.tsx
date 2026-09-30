@@ -1140,7 +1140,15 @@ export function BlockPortRail({
         <Port state={item.state ?? "empty"} diameter={diameter} variant={variant} diagnostics={item.diagnostics} availability={item.availability} producers={item.producers} selected={item.selected} />
       </span>
     ) : (
-      <span data-slot="block-port-item" data-port-id={item.id} style={{ display: "inline-flex" }}>
+      // `data-editable` (ported from claude/notebook-lab-work-order-472c22
+      // `23ab20e`): marks the port whose label a click will edit, so a host
+      // can tell "click edits the name" from "press starts a cable" without
+      // re-deriving the gate. It mirrors the SAME boolean as `disabled`
+      // below — the P-037 gate, "the host said where the text should go" —
+      // and deliberately not the donor's `ctx.editable` (this edge's
+      // `editing` arming): on a Block the two can disagree, and a DOM flag
+      // that disagreed with the label it describes would be a lie.
+      <span data-slot="block-port-item" data-port-id={item.id} data-editable={spec.onItemsChange ? true : undefined} style={{ display: "inline-flex" }}>
         <LabeledPort
           edge={edge}
           state={item.state ?? "empty"}
