@@ -132,7 +132,7 @@ def kind_of(lane: dict) -> str:
         return "green"
     if lid in CHROME:
         return "chrome"
-    if lid in HOSTS:
+    if lid in HOSTS or lid == "EXT-SWITCHER":
         return "host"
     if lid.startswith("L-REG") or lid.startswith("L-DOCS"):
         return "library"
@@ -145,7 +145,7 @@ def kind_of(lane: dict) -> str:
 NODES = {"W0": {"id": "W0", "title": "Preflight", "dependsOn": [], "owner": "dispatcher"}}
 NODES.update({lane["id"]: lane for lane in lanes})
 # "*" = every lane nothing else waits on: W5 verifies the whole run, not one wave.
-SINKS = [lane["id"] for lane in lanes if lane["dependsOn"] != ["*"]
+SINKS = [lane["id"] for lane in lanes if lane["wave"] != "W5"
          and not any(lane["id"] in other["dependsOn"] for other in lanes)]
 
 
@@ -401,8 +401,8 @@ asked for, are sitting on {FACTS['branches']} branches off main</b>, and they me
 longest dependency chain, and wall-clock time runs left to right. Two barriers sit alone: <b>B-RENAME</b> and
 <b>B-SCHEMA</b> (23 open items write <code>BlockShapeUtil.tsx</code>, so every new prop lands in one migration
 against a legacy fixture). <b>B-SHELL-P1</b> is a barrier only on <code>chrome/</code>, which is why the canvas
-lanes run beside it. A dashed edge skips columns. A short grey tick means the lane feeds W5-VERIFY directly;
-every lane is verified there. Hover a box for its title.</p>
+lanes run beside it. A dashed edge skips columns. A short grey tick means the lane feeds the end of the run directly: the
+rename barrier, then W5-VERIFY, where every lane is verified. Hover a box for its title.</p>
 <div class="dag">{DAG}</div>
 <div>{LEGEND}</div>
 

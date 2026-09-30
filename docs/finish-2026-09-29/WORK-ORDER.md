@@ -10,6 +10,19 @@ here, in `lanes.json` (the lane table — authoritative where this prose and it
 disagree), `backlog-verified.json` (the 110 items re-verified on 2026-09-29),
 and `untriaged-clusters.md` (the 229 never-triaged items, clustered).
 
+> **Amended 2026-09-29, before dispatch** (Zach approved the plan; a peer session
+> was already working in the app):
+> - **W1 also merges `7cdabba`** from `claude/subagent-bbox-studio-rename-bb4cdd`
+>   (display strings → "bbox studio"). That commit only, never the branch tip.
+> - **L-CHANNELS is replaced by EXT-SWITCHER**, the peer's own
+>   `stable_preview_switcher` lane. The dispatcher merges it when the peer sends
+>   its sha. Cluster 30 (release status in the help menu) moves to L-NAV.
+> - **B-RENAME moves to the end** (W5, before verify). The peer's lane is rewriting
+>   the launch scripts and `chrome/{sites,legacyApp,siteStatus}.ts` now, and a
+>   mid-run rename would shift every in-flight lane's paths. B-SCHEMA now follows
+>   G-FLAKE and G-STALE directly. Where the text below says otherwise, `lanes.json`
+>   wins.
+
 Read first: `CLAUDE.md`, `.claude/feedback.md`, `ARCHITECTURE.md`,
 `docs/DISPATCHER-WORKFLOW.md`, `docs/WORK-ORDER-CONTINUE-2026-09-21.md` §3
 ("How to work here — earned the hard way").
