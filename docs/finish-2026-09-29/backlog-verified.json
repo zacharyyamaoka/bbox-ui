@@ -1,0 +1,1654 @@
+{
+ "what": "The 110 items docs/parity-backlog-triage-2026-09-21.md called ABSENT, re-verified against main 705847c on 2026-09-29 by three read-only Sonnet 5.5 scouts. Verdicts: STILL-ABSENT (no real user action reaches it), PARTIAL, NOW-DONE (a user action reaches it; file:line), OBSOLETE (a later decision replaced it). writeSet/size/blockedOn/needsZach are the scouts' estimates, to be re-checked by each lane's acceptance author.",
+ "base": "705847c",
+ "date": "2026-09-29",
+ "items": [
+  {
+   "id": "P-010",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/App.tsx:76 (ContextMenu: SourceContextMenu); kit menus apps/storybook-basics/src/editor/contextMenuModel.ts:119 and contextMenuChrome.tsx:143 have no app importer",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/source/sourceContextMenu.tsx",
+    "apps/systemsketch/src/App.tsx",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionActions.ts",
+    "apps/storybook-basics/src/editor/contextMenuModel.ts"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Kit builders and renderer are done in Storybook only. App still mounts stock menu plus the source group."
+  },
+  {
+   "id": "P-011",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockFace.tsx:74 (labelOf paints name half only), :590 feeds no `type`; trunk portEdge.tsx:124 `PortEdgeItem.type` now exists and draws the secondary run",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/storybook-basics/src/components/portEdge.tsx",
+    "apps/storybook-basics/src/components/blockPort.layout.ts"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "BlockFace's 'owed upstream' WHY is stale. Feeding `type` is one line, but two-rail overlap on 160px blocks needs a rule."
+  },
+  {
+   "id": "P-013",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/wire/wireGesture.ts:480-481 (sub-threshold press now opens the port lane, not a cable); tldraw arrow.pointing cancels on pointerup",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/wire/wireGesture.ts",
+    "apps/systemsketch/src/chrome/Toolbar/dock.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": true,
+   "note": "Ask: does two-click apply to stock arrow tool, cables from a dot, or both? Dot-click now opens the P-056 lane."
+  },
+  {
+   "id": "P-015",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:150-174 (single w/h); selectionActions.ts:152 setBlockView writes props.view only",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionActions.ts",
+    "apps/systemsketch/src/shapes/shared/measure.ts",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Needs a prop migration; documentModel.test pins ss-block defaults exactly. Measure write-back must target the active view's size."
+  },
+  {
+   "id": "P-017",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/files/session.tsx:226-265 autosave has no draft branch; no draft code anywhere in apps/systemsketch/src (non-test)",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/files/session.tsx",
+    "apps/systemsketch/src/chrome/TitleBar/chromeBar.tsx"
+   ],
+   "size": "S",
+   "blockedOn": "P-020",
+   "needsZach": false,
+   "note": "There is nothing to suspend until a draft can be held."
+  },
+  {
+   "id": "P-018",
+   "verdict": "OBSOLETE",
+   "evidence": "docs/GLYPH-PLAN.md:83 (D3: uploads are a data URL in `content`, no tldraw asset record); icon half shipped at BlockShapeUtil.tsx:87,:161",
+   "left": "",
+   "writeSet": [],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "assetId only matters if assets are ever registered. The glyph picker's Upload tab already stores inline data URLs."
+  },
+  {
+   "id": "P-019",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/storybook-basics/src/components/blockPort.layout.ts:250 (simple collapses to one dot per wall); no hover-reveal in apps/systemsketch/src/shapes; CanonicalBlocks.stories.tsx:977 asserts Simple has no BlockPort",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/app.css"
+   ],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "The Sep 22 gallery already draws Simple portless; the app still paints collapsed dots. Hide at rest, reveal on hover."
+  },
+  {
+   "id": "P-020",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/chrome/TitleBar/chromeBar.tsx:149-157 (no draftChip passed); slot at editor/chromeBar.tsx:184; branchChip/draftModel have no app importer; draft.smoke.test.tsx is committed acceptance",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/chrome/TitleBar/chromeBar.tsx",
+    "apps/systemsketch/src/chrome/Drafts/draftSession.tsx",
+    "apps/systemsketch/src/files/session.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Engine, chip and stories exist in the trunk. Missing is the host that binds a draft to the real board and storage."
+  },
+  {
+   "id": "P-051",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/chrome/DevMenu/devtools.tsx:66 (useToolSwitcherItems is the only feed; group 'Tools'); no shortcut or disabled on items",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/chrome/DevMenu/devtools.tsx",
+    "apps/systemsketch/src/chrome/FileMenu/stockMenus.ts",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionActions.ts"
+   ],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Find half is P-024. QuickSwitcherItem already supports shortcut and disabled(); only board-command items are missing."
+  },
+  {
+   "id": "P-052",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/chrome/ContextualPopupMenu/floatingToolbar.tsx:195 (`visible` gate reads no editing state); BlockFace.tsx:277 editing goes through tldraw's editing shape",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/floatingToolbar.tsx"
+   ],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Minimum is hiding the pill while getEditingShapeId() is set. Titles are plain text, so a formatter has nothing to format."
+  },
+  {
+   "id": "P-053",
+   "verdict": "NOW-DONE",
+   "evidence": "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:469 (getHandles publishes terminal:start/end), :591 onHandleDragStart, :632 onHandleDragEnd; terminalRebind.ts judges with the fresh-cable validator; wireTerminal.smoke.test.tsx",
+   "left": "",
+   "writeSet": [],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Landed 2026-09-21, before a18c906. The triage row was stale. Whole re-point is one undo step."
+  },
+  {
+   "id": "P-054",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/wire/wireGeometry.ts:243 (traceGeometry called with no obstacles); trunk Trace takes obstacles/fromBox/toBox (trace.tsx:715) and components/wiring.ts has keepOutsFor",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/wire/wireGeometry.ts",
+    "apps/systemsketch/src/shapes/wire/WireFace.tsx",
+    "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Router and keep-out logic exist. App must collect block rects, with paint and hit geometry agreeing; watch per-frame cost."
+  },
+  {
+   "id": "P-055",
+   "verdict": "NOW-DONE",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockFace.tsx:698 (laneOpen fed from portLaneRequest); wireGesture.ts:481 (click on a dot opens the lane); trunk portEdge.tsx:1358 PortLaneOverlay with LCS id-keeping reconcile; portLane.smoke.test.tsx",
+   "left": "",
+   "writeSet": [],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Triage said unreachable; wrong now. No lines-vs-single setting: label double-click is single-line, dot click is lane. Row edges refused."
+  },
+  {
+   "id": "P-056",
+   "verdict": "PARTIAL",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockFace.tsx:634-689 (add/remove/retype through the lane, cables deleted with a removed port), railLabel.ts:55 portsFromRailItems mints ids, wireGesture.ts:481; portLane.smoke.test.tsx",
+   "left": "no trigger to add first port to a portless wall; row walls refused",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/shapes/block/portLaneHost.ts",
+    "apps/storybook-basics/src/components/blockPort.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": true,
+   "note": "Lane opens only from an existing dot; blocks are born portless. Needs Zach's first-port gesture (he rejected hover-to-add)."
+  },
+  {
+   "id": "P-057",
+   "verdict": "PARTIAL",
+   "evidence": "apps/systemsketch/src/chrome/panels.tsx:124 InspectorSurface, :164 InspectorPanel (glyph, description, eye only), :215 SurfaceSwitch; opens on click via inspectorFollowsSelection.ts",
+   "left": "schema-driven fields, section sub-headings, member-row retargeting",
+   "writeSet": [
+    "apps/systemsketch/src/chrome/panels.tsx",
+    "apps/storybook-basics/src/editor/inspectorPanel.tsx",
+    "apps/systemsketch/src/chrome/inspectorFollowsSelection.ts",
+    "apps/systemsketch/src/chrome/inspectorSchema.ts"
+   ],
+   "size": "L",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Dock and click-to-open are real. InspectorPanel props are hand-listed; no field schema or generic section container exists."
+  },
+  {
+   "id": "P-058",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/chrome/ShareMenu/validationLevelHost.ts:182 (allowCrossScope is only a level switch); no app import of scene/boundary.ts; definitionBoundary.smoke.test.tsx header records the boundary-port-to-member refusal",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/wire/wireGesture.ts",
+    "apps/systemsketch/src/shapes/wire/terminalRebind.ts",
+    "apps/systemsketch/src/chrome/ShareMenu/validationLevelHost.ts",
+    "apps/storybook-basics/src/scene/edgeValidation.ts"
+   ],
+   "size": "L",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Judge still answers no-shared-scope for an expanded block's own port to an inner member. No inner/outer face concept."
+  },
+  {
+   "id": "P-059",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:152 (view enum has 3 values); trunk preset components/block.value.tsx unmounted; wire/edgeDropCatalog.ts:59 names it",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/shapes/registry.ts",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionClusters.tsx"
+   ],
+   "size": "L",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Capsule preset is built in the trunk. App needs a `value` view, P tool, 1-4 hotkeys, pill row, measurement and migration."
+  },
+  {
+   "id": "P-060",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/shared/props.ts:30 (PortSpecV is {id, declaration}); BlockShapeUtil.tsx:168 ports keyed by side only",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/shared/props.ts",
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/storybook-basics/src/components/blockPort.layout.ts"
+   ],
+   "size": "L",
+   "blockedOn": "",
+   "needsZach": true,
+   "note": "Regions now carry if/else bands as arms (BranchTool). Ask whether per-port row/branch on a plain Block is still wanted."
+  },
+  {
+   "id": "P-063",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/chrome/panels.tsx:164 InspectorPanel has no members section; inspectorPanel.tsx:34-66 props have no section slot; blockMembers.tsx has no app importer",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/chrome/panels.tsx",
+    "apps/storybook-basics/src/editor/inspectorPanel.tsx",
+    "apps/systemsketch/src/chrome/inspectorFollowsSelection.ts",
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "P-057",
+   "needsZach": false,
+   "note": "Members are free tldraw children in the app, so add/reorder means z-order or a new stack model. Fits P-057 sections."
+  },
+  {
+   "id": "P-064",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/storybook-basics/src/components/codeEditor.tsx:18-30 (grammar/completion dropped); no completion source anywhere; @codemirror/autocomplete is a dep (package.json:20) nothing imports",
+   "left": "",
+   "writeSet": [
+    "apps/storybook-basics/src/components/codeEditor.tsx",
+    "apps/storybook-basics/src/components/codeCompletion.ts",
+    "apps/systemsketch/src/shapes/port/PortFace.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Slot rules are recorded: ':' offers Types, '=' offers variables, bare name offers nothing (doNotBuild)."
+  },
+  {
+   "id": "P-065",
+   "verdict": "PARTIAL",
+   "evidence": "apps/systemsketch/src/shapes/code/CodeFace.tsx:143-157 (CodeEditor with language and lineNumbers on a standalone ss-code); BlockShapeUtil.tsx:283-289 lets an expanded block adopt it as a child",
+   "left": "autocomplete absent; line numbers fixed on; not a stack member",
+   "writeSet": [
+    "apps/storybook-basics/src/components/codeEditor.tsx",
+    "apps/systemsketch/src/shapes/code/CodeFace.tsx",
+    "apps/systemsketch/src/shapes/code/CodeShapeUtil.tsx"
+   ],
+   "size": "S",
+   "blockedOn": "P-064",
+   "needsZach": false,
+   "note": "Highlighting, line numbers and IDE keys exist on the canvas code cell. What is missing is completion."
+  },
+  {
+   "id": "P-068",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/code/CodeShapeUtil.tsx:49-55 (props w/h/code/language/origin); CodeFace.tsx has no expand control",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/code/CodeFace.tsx",
+    "apps/storybook-basics/src/components/codeEditor.tsx",
+    "apps/storybook-basics/src/components/dialog.tsx"
+   ],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "CodeEditor already has overflow='wrap'. Add a corner button opening a stock Dialog over the same document; Esc closes."
+  },
+  {
+   "id": "P-069",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:284 (variant is literalEnum data/async/delayed); free-text `layer` is not a kind",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx",
+    "apps/storybook-basics/src/components/trace.layout.ts",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionClusters.tsx",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionActions.ts"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": true,
+   "note": "Ask: how each of the 7 kinds looks, and whether they replace data/async/delayed or sit beside them."
+  },
+  {
+   "id": "P-070",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/chrome/TitleBar/chromeBar.tsx:149 (history all false), :157 crumbs={[]}; trunk breadcrumb is mounted by ChromeBar but fed nothing",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/chrome/TitleBar/chromeBar.tsx",
+    "apps/systemsketch/src/document/depthModel.ts",
+    "apps/systemsketch/src/chrome/frames.ts",
+    "apps/systemsketch/src/App.tsx"
+   ],
+   "size": "L",
+   "blockedOn": "",
+   "needsZach": true,
+   "note": "No depth model exists. Ask what 'enter a block' does on one canvas: zoom-and-focus, hide siblings, or scope."
+  },
+  {
+   "id": "P-074",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:150-175 (no definitionId); trunk scene/linking.ts has no app importer",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/document/sceneFromStore.ts",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/document/applySceneDiff.ts"
+   ],
+   "size": "L",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Linking rules are ported in the trunk. App needs a definition identity on blocks, propagation of edits, and multi-occurrence expansion."
+  },
+  {
+   "id": "P-075",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/storybook-basics/src/components/codeEditor.tsx:18-30 (rendered/source mode dropped); CodeFace.tsx has the raw editor only; caretGeometry is used only for titles and port labels (BlockFace.tsx:18)",
+   "left": "",
+   "writeSet": [
+    "apps/storybook-basics/src/components/codeEditor.tsx",
+    "apps/systemsketch/src/shapes/code/CodeFace.tsx",
+    "apps/storybook-basics/src/components/caretGeometry.ts",
+    "apps/systemsketch/src/shapes/code/CodeShapeUtil.tsx"
+   ],
+   "size": "L",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Click-to-caret mapping exists for single-line text. Code cell has no rendered state to click through."
+  },
+  {
+   "id": "P-076",
+   "verdict": "PARTIAL",
+   "evidence": "apps/systemsketch/src/chrome/ContextualPopupMenu/arrangeActions.ts:245-274 (STYLE_ROWS: six tldraw enums plus the app's Diff row)",
+   "left": "21-colour palette, shape switcher, vertical align, line shape, start/end point",
+   "writeSet": [
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/arrangeActions.ts",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionClusters.tsx",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/floatingToolbar.tsx",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/figjamTokens.ts"
+   ],
+   "size": "L",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "No figjamTokens.ts exists. Trunk controlRegistry/controlPanel are generic and unmounted. Start/end point overlaps P-096."
+  },
+  {
+   "id": "P-078",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/storybook-basics/src/components/portEdge.tsx:507 PortEdgeDndProvider exists but blockPort.tsx mounts none (one DndContext per rail); BlockFace.tsx:610-690 onItemsChange is per-side",
+   "left": "",
+   "writeSet": [
+    "apps/storybook-basics/src/components/blockPort.tsx",
+    "apps/storybook-basics/src/components/portEdge.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/shapes/block/railLabel.ts"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Shared provider is built for stories. BlockPort must wrap its rails in it, and the app must apply a cross-wall move as one edit."
+  },
+  {
+   "id": "P-079",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockFace.tsx:~756 (Block gets header/descriptionSlot, no members); BlockShapeUtil.tsx:9 members are free tldraw children; blockMembers.tsx and memberDrag.ts have no app importer",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/storybook-basics/src/hosts/memberDrag.ts",
+    "apps/storybook-basics/src/components/blockMembers.tsx"
+   ],
+   "size": "L",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Needs a stack members layout in the document model (pyblocks contract already has membersLayout). A code cell can already sit in an expanded block as a free child."
+  },
+  {
+   "id": "P-083",
+   "verdict": "STILL-ABSENT",
+   "evidence": "no react-arborist in apps/storybook-basics or apps/systemsketch; only apps/docs/package.json:40, with the docs-site donor apps/docs/src/components/create/navigator/Arborist.tsx",
+   "left": "",
+   "writeSet": [
+    "apps/storybook-basics/src/editor/instanceNavigator.tsx",
+    "apps/systemsketch/src/chrome/panels.tsx",
+    "apps/storybook-basics/package.json",
+    "apps/systemsketch/src/chrome/frames.ts"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Zach picked react-arborist. Default placement is a fourth right-rail surface beside Frames, Problems, Inspector."
+  },
+  {
+   "id": "P-086",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionActions.ts:152 (setBlockView writes props.view only); App.tsx:218 getShapeVisibility only hides focus-isolated ids; children stay painted and hit-testable",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/chrome/FocusLens/focusVisibility.ts",
+    "apps/systemsketch/src/App.tsx",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionActions.ts",
+    "apps/storybook-basics/src/scene/collapse.ts"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Use the getShapeVisibility seam for descendants and internal cables of non-expanded blocks. Crossing-cable policy is in scene/boundary.ts."
+  },
+  {
+   "id": "P-090",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:284 (no stream/action/service kinds); no second canvas mode in App.tsx",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx",
+    "apps/systemsketch/src/App.tsx",
+    "apps/systemsketch/src/chrome/Toolbar/dock.tsx",
+    "apps/systemsketch/src/shapes/wire/wireGesture.ts"
+   ],
+   "size": "L",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Spec exists as AsyncRegion.stories communication gallery. Extends the wire schema; sequence with P-069."
+  },
+  {
+   "id": "P-091",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/storybook-basics/src/components/codeEditor.tsx:18-30 (completion dropped); no variable registry or safe-namespace code in apps/systemsketch or apps/storybook-basics",
+   "left": "",
+   "writeSet": [
+    "apps/storybook-basics/src/components/codeEditor.tsx",
+    "apps/storybook-basics/src/scene/expressionNamespace.ts",
+    "apps/systemsketch/src/shapes/port/PortFace.tsx",
+    "apps/systemsketch/src/chrome/panels.tsx"
+   ],
+   "size": "L",
+   "blockedOn": "P-064",
+   "needsZach": false,
+   "note": "Positional squiggle ranges exist in CodeEditor. The expression layer needs P-064's completion source plus a registry panel."
+  },
+  {
+   "id": "P-096",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/wire/WireFace.tsx:124-150 (no marker props); trunk trace.layout.ts:91 markers are 'arrow'|'none' at the end only",
+   "left": "",
+   "writeSet": [
+    "apps/storybook-basics/src/components/trace.tsx",
+    "apps/storybook-basics/src/components/trace.layout.ts",
+    "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/wire/WireFace.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Sep 22 (4b49cd4) made data traces arrow-less by default. Trunk has no start marker; overlaps P-076 start/end point."
+  },
+  {
+   "id": "P-097",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/wire/WireFace.tsx:124 (<Trace> passes no `crossing`); trunk trace.tsx:205,:350 `crossing` defaults to none, halo built in trace.crossing.ts",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/wire/WireFace.tsx",
+    "apps/systemsketch/src/app.css"
+   ],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Pass crossing='halo' and define --bbox-canvas from tldraw's background. Check the casing does not paint over block bodies."
+  },
+  {
+   "id": "P-098",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/wire/wireGesture.ts:362-369 (gate is button + canBindShapes + anchor); no getIsReadonly, getEditingShapeId or tool check in the file",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/wire/wireGesture.ts"
+   ],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Live bug, more reachable now: title, description and port editors are real. Stand down while editing, readonly, or a non-select tool."
+  },
+  {
+   "id": "P-099",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/port/PortShapeUtil.tsx:143-146 (getIndicatorPath is path.rect(0,0,w,h), the whole token)",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/port/PortShapeUtil.tsx",
+    "apps/storybook-basics/src/skin/portVariants.ts"
+   ],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Draw a circle from the measured dot anchor (props.anchors) with the ring radius; block-rail dots are not shapes."
+  },
+  {
+   "id": "P-100",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/wire/WireFace.tsx:124-149",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/wire/WireFace.tsx",
+    "apps/systemsketch/src/chrome/problems.ts",
+    "apps/systemsketch/src/shapes/shared/findingsBySubject.ts"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Trace takes diagnostics/highlighterKind; app passes neither. Share one findings-by-subject store with P-142."
+  },
+  {
+   "id": "P-101",
+   "verdict": "PARTIAL",
+   "evidence": "apps/storybook-basics/src/editor/settingsCategories.tsx:388; apps/systemsketch/src/chrome/ShareMenu/cameraGestureHost.tsx:205-224",
+   "left": "Switch is shown; nothing applies isPasteAtCursorMode to the editor",
+   "writeSet": [
+    "apps/systemsketch/src/chrome/ShareMenu/cameraGestureHost.tsx"
+   ],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "The 'Copy/paste under cursor' Settings switch is inert; tldraw 5.3.2 has the user preference."
+  },
+  {
+   "id": "P-102",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/chrome/ContextualPopupMenu/floatingToolbar.tsx:141-144,174,195",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/floatingToolbar.tsx"
+   ],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Gate is still three select.* states; no getEditingShapeId() or current-tool read."
+  },
+  {
+   "id": "P-103",
+   "verdict": "STILL-ABSENT",
+   "evidence": "no elkjs in any package.json; no autoLayout symbol in apps/systemsketch/src",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/package.json",
+    "apps/systemsketch/src/document/autoLayout.ts",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/arrangeActions.ts"
+   ],
+   "size": "L",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Only ELK mentions are comments in trunk routing code. Orchestrator must install elkjs; positions-only write-back."
+  },
+  {
+   "id": "P-104",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/backend/pyblocksConsumer.ts:153-165 (applied always 0); apps/storybook-basics/src/hosts/pyblocksScene.ts:74-78",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/backend/pyblocksConsumer.ts",
+    "apps/systemsketch/src/backend/OpenPython.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/document/applySceneDiff.ts"
+   ],
+   "size": "L",
+   "blockedOn": "",
+   "needsZach": true,
+   "note": "Which surface shows role/effect/certainty (badge, pill or panel) is unrecorded. Write-back is still read-only, applied 0."
+  },
+  {
+   "id": "P-105",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/files/session.tsx:911-917",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/files/session.tsx",
+    "apps/systemsketch/src/files/launchConfig.ts"
+   ],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Boot opens documentLocation().initialBoard() only; recents (:183) feed the navigator, never boot."
+  },
+  {
+   "id": "P-107",
+   "verdict": "PARTIAL",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockFace.tsx:712; apps/storybook-basics/src/components/blockPort.tsx:417",
+   "left": "App fixed on inline default; no offset/inline control or Ports section",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/chrome/panels.tsx"
+   ],
+   "size": "S",
+   "blockedOn": "P-057",
+   "needsZach": false,
+   "note": "BlockPort defaults portLayout to inline, so compact already holds; the switch to choose offset is missing."
+  },
+  {
+   "id": "P-109",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:47-107",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/document/sceneFromStore.ts",
+    "apps/systemsketch/src/document/applySceneDiff.ts"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Block props still w/h/name/view/description/showDescription/glyph/diff/ports/anchors. Needs a migration; gates P-074/P-115."
+  },
+  {
+   "id": "P-110",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:272-300",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/block/BlockTool.ts"
+   ],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Stock frame-like containment; no handler reparents a fully clipped member. Zach's quote is explicit."
+  },
+  {
+   "id": "P-112",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/chrome/problems.ts:291-321",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/chrome/problems.ts",
+    "apps/systemsketch/src/shapes/shared/nodeShapeComponent.tsx"
+   ],
+   "size": "S",
+   "blockedOn": "P-142",
+   "needsZach": false,
+   "note": "Trunk scene/bubble.ts (surfaceFindings) exists but no app import; nothing paints a mark on a container to bubble to."
+  },
+  {
+   "id": "P-116",
+   "verdict": "PARTIAL",
+   "evidence": "apps/systemsketch/src/shapes/wire/wireGesture.ts:485 (dotUnderPoint) with 40px halo at apps/storybook-basics/src/components/port.tsx:603",
+   "left": "Radius-based nearest-legal magnet and dotted proposal absent; only 40px halo",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/wire/wireGesture.ts",
+    "apps/systemsketch/src/shapes/wire/portAvailability.ts",
+    "apps/systemsketch/src/shapes/wire/WireFace.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Release within the halo (20px radius) connects; terminal re-drag snaps at 20px. Trunk scene/interactions/magnet/* is unused by the app."
+  },
+  {
+   "id": "P-118",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockFace.tsx:697-703 (portEdgeProps carries only laneOpen)",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Trunk PortEdge now has mode/freeOffsets/customNeighbour with order+min-gap rules (portEdge.tsx:225-245). App persists and passes none."
+  },
+  {
+   "id": "P-119",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockFace.tsx:36-72",
+   "left": "",
+   "writeSet": [
+    "apps/storybook-basics/src/components/portEdge.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "P-057,P-011",
+   "needsZach": false,
+   "note": "LabeledPort has labelOrigin/secondaryOrigin, but PortEdge and BlockPort do not forward them. App passes producers only."
+  },
+  {
+   "id": "P-120",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:47-107 (no fold state); region arm chevrons at apps/systemsketch/src/shapes/region/RegionFace.tsx:96-104",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/chrome/ShareMenu/appSettings.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": true,
+   "note": "Region arms fold; ss-block does not. Does block folding still stand beside 1/2/3 views and the 09-22 no-region-chevron ruling?"
+  },
+  {
+   "id": "P-121",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:284",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/wire/WireFace.tsx",
+    "apps/systemsketch/src/shapes/wire/wireGeometry.ts",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionClusters.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Enum is still data/async/delayed. No UI picks a wire variant at all; needs a schema migration plus a picker. Shares that seam with P-137."
+  },
+  {
+   "id": "P-123",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/chrome/problems.ts:274-280; apps/systemsketch/src/shapes/wire/wireGesture.ts:424",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/chrome/problems.ts",
+    "apps/systemsketch/src/shapes/wire/wireGesture.ts"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": true,
+   "note": "Block ports have no direction. Derive it from the wall (left=in, right=out) or store it per port?"
+  },
+  {
+   "id": "P-124",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockFace.tsx:712 (no groups/groupMode)",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": true,
+   "note": "Trunk PortEdge groups are edge-owned text ('a port never carries its own group', portEdge.tsx:255). The item wants a per-port group id. Which model?"
+  },
+  {
+   "id": "P-126",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockTool.ts:124-140",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockTool.ts",
+    "apps/systemsketch/src/shapes/code/CodeTool.ts",
+    "apps/systemsketch/src/shapes/port/PortTool.ts"
+   ],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "No tool calls setEditingShape on create. Only Enter on a selected region (cornerBlock.ts:661) and second-click paths edit."
+  },
+  {
+   "id": "P-127",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/chrome/ContextualPopupMenu/floatingToolbar.tsx:288-330 (language only); apps/systemsketch/src/shapes/code/CodeFace.tsx:157 (lineNumbers hard-on)",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/code/CodeShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/code/CodeFace.tsx",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/floatingToolbar.tsx",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionActions.ts"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Line numbers are always on with no toggle. CodeEditor already takes fontSizePx/lineNumbers, so this is two new ss-code props plus pill controls."
+  },
+  {
+   "id": "P-128",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/storybook-basics/src/components/codeEditor.tsx:19-20",
+   "left": "",
+   "writeSet": [
+    "apps/storybook-basics/src/components/codeEditor.tsx",
+    "apps/storybook-basics/src/components/codeFieldRows.tsx",
+    "apps/systemsketch/src/shapes/code/CodeFace.tsx"
+   ],
+   "size": "L",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Rows/chevrons exist only in packages/bbox-ui/src/codeFieldRows.tsx (263 lines). It needs codeGrammar, which the trunk also dropped."
+  },
+  {
+   "id": "P-130",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/storybook-basics/src/components/portEdge.tsx:827-845 and blockMembers.tsx:218-238 (real card overlay); BlockFace.tsx:712 passes no showCard",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx"
+   ],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": true,
+   "note": "Trunk showCard already paints a kanban-style overlay; the triage's 'no kanban anywhere' was wrong. Does the app expose Show card at all?"
+  },
+  {
+   "id": "P-131",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:56,284",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/wire/createWire.ts",
+    "apps/systemsketch/src/chrome/FocusLens/focusLens.tsx"
+   ],
+   "size": "L",
+   "blockedOn": "P-069",
+   "needsZach": false,
+   "note": "No semantic kind exists to infer or filter by. Still three authored data variants."
+  },
+  {
+   "id": "P-133",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:47-107; trunk block.tsx:162,173 (showHeaderDivider/showFooterDivider)",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/source/sourceContextMenu.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Trunk Block has both divider props and editor/contextMenuModel.ts buildBlockMenu has the four toggles, but the app mounts neither. App right-click is stock plus bbox-source."
+  },
+  {
+   "id": "P-134",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockFace.tsx:712 (no functionPort); trunk blockPort.tsx:222",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/shapes/wire/wireGesture.ts"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Trunk BlockPort has a functionPort prop (pinned header-left); the app sets no flag and has no toggle. Check wires can start from it."
+  },
+  {
+   "id": "P-137",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/wire/WireFace.tsx:124-149 (no badge)",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/wire/WireFace.tsx",
+    "apps/systemsketch/src/shapes/wire/wireGesture.ts"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "TraceBadge exists in trunk but is unmounted. Also no UI to set variant delayed. Build with P-156 and P-121 (shared badge and variant seam)."
+  },
+  {
+   "id": "P-138",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/chrome/panels.tsx:124-187 (glyph, description, eye only)",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/chrome/panels.tsx",
+    "apps/storybook-basics/src/editor/inspectorPanel.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "P-057",
+   "needsZach": false,
+   "note": "No property table, so no rows to reset. Trunk propertyTable.tsx is the Compare dialog diff table, not the inspector."
+  },
+  {
+   "id": "P-139",
+   "verdict": "STILL-ABSENT",
+   "evidence": "packages/inspector/src/inspector/ScrubNumber.tsx (not imported by trunk or app)",
+   "left": "",
+   "writeSet": [
+    "apps/storybook-basics/src/components/scrubNumber.tsx"
+   ],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Port the named component into trunk components/. Nothing mounts it until P-057 exists."
+  },
+  {
+   "id": "P-141",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:47-50 (bare w/h)",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/shared/measure.ts",
+    "apps/systemsketch/src/source/sourceContextMenu.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "No sizeMode. Only simple view hugs, and minBlockHeightFor sets a floor. Settle with P-166/P-212. Right-click seam is sourceContextMenu."
+  },
+  {
+   "id": "P-142",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/shared/nodeShapeComponent.tsx:38-58 (only the diff half is painted); apps/systemsketch/src/shapes/shared/diffMark.ts:41",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/shared/nodeShapeComponent.tsx",
+    "apps/systemsketch/src/shapes/wire/WireFace.tsx",
+    "apps/systemsketch/src/chrome/problems.ts"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Zero highlighter references in the app. Top-right corner is reserved for the diagnostic flag. Build with P-100 on one findings-by-subject store."
+  },
+  {
+   "id": "P-144",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/chrome/DevMenu/variantSwitch.tsx:287 (port/region only); apps/storybook-basics/src/skin/skin.ts:57",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/chrome/ShareMenu/appSettings.tsx",
+    "apps/systemsketch/src/App.tsx",
+    "apps/systemsketch/src/chrome/ShareMenu/skinHost.ts"
+   ],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Nothing sets data-bbox-skin. Default seat is Settings > Appearance; reversible."
+  },
+  {
+   "id": "P-146",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockFace.tsx:712-770 (Block gets no footer)",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFooterMenu.tsx"
+   ],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": true,
+   "note": "Only Block.stories has the menu. Step into/out has no app meaning (regions are frames you pan to). Ship Duplicate and Delete only?"
+  },
+  {
+   "id": "P-149",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/chrome/panels.tsx:124-187",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/chrome/panels.tsx",
+    "apps/storybook-basics/src/editor/inspectorPanel.tsx"
+   ],
+   "size": "S",
+   "blockedOn": "P-057",
+   "needsZach": false,
+   "note": "Inspector dock exists but has no schema-driven sections. This is one more section once P-057 lands."
+  },
+  {
+   "id": "P-150",
+   "verdict": "PARTIAL",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockFace.tsx:712 with trunk apps/storybook-basics/src/components/blockPort.layout.ts:343-351 (expanded = distribute/space-evenly)",
+   "left": "Inner-face wiring (wallPort innerFaceHandle) unused by app",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/wire/wireGeometry.ts",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "P-058",
+   "needsZach": false,
+   "note": "Even spacing already comes from the trunk default in expanded view (triage grepped only the app). Cables to the inner face need the scope model."
+  },
+  {
+   "id": "P-152",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/chrome/panels.tsx:124-187; apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:47-50",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/chrome/panels.tsx",
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "P-015,P-057",
+   "needsZach": false,
+   "note": "Still one w/h and no size fields in the inspector."
+  },
+  {
+   "id": "P-154",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/App.tsx:76 (ContextMenu: SourceContextMenu); apps/systemsketch/src/source/sourceContextMenu.tsx",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/source/sourceContextMenu.tsx",
+    "apps/systemsketch/src/shapes/registry.ts",
+    "apps/systemsketch/src/App.tsx"
+   ],
+   "size": "L",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Detach machine moved to apps/storybook-basics/src/hosts/detach and packages/adapter-tldraw/src/detach; the app imports neither. ss-* kinds need their own lowering."
+  },
+  {
+   "id": "P-155",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:313-315 (stock resizeBox)",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/source/sourceContextMenu.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "scene/fitToContent.ts and hosts/blockAutoFit.ts are unimported by the app. Fix alongside live bug P-190 on the same resize seam."
+  },
+  {
+   "id": "P-156",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/wire/WireFace.tsx:124-149 (no badge); apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:47-101 (no label field)",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/wire/WireFace.tsx",
+    "apps/systemsketch/src/shapes/wire/wireGesture.ts"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Trunk traceBadge.tsx is finished and unmounted. Needs label and fraction props, double-click create, drag. Share the badge mount with P-137."
+  },
+  {
+   "id": "P-161",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockFace.tsx:713-767 passes no members. Trunk half exists but nothing in the app mounts it: apps/storybook-basics/src/components/block.tsx:229-239, blockMembers.tsx, blockPortMembers.tsx (e214ede).",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/shapes/block/memberStack.ts",
+    "apps/systemsketch/src/document/documentModel.test.ts"
+   ],
+   "size": "L",
+   "blockedOn": "P-188",
+   "needsZach": false,
+   "note": "App members are real tldraw children; stack must write child x/y (donor stackMemberPlacements). The trunk flex version does not transfer."
+  },
+  {
+   "id": "P-166",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockFace.tsx:762 (only simple view hugs); apps/systemsketch/src/shapes/shared/measure.ts:89-125. Trunk has fitBoxToMembers and hosts/blockAutoFit.ts (scene/fitToContent.ts:244-280), with no app importer.",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/shapes/shared/measure.ts",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionActions.ts",
+    "apps/storybook-basics/src/hosts/blockAutoFit.ts"
+   ],
+   "size": "M",
+   "blockedOn": "P-212",
+   "needsZach": true,
+   "note": "The 56px padding is superseded: trunk uses per-side insets. Zach call: automatic grow contradicts P-212's 'only explicit commands' \u2014 opt-in toggle or Fit command?"
+  },
+  {
+   "id": "P-167",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/storybook-basics/src/components/trace.tidy.ts:241 tidyTraces exists (pure), but git grep finds no importer in apps/systemsketch/src.",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/wire/tidyWires.ts",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionActions.ts",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionClusters.tsx",
+    "apps/storybook-basics/src/components/trace.tidy.ts"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Needs a command plus block-rect obstacle collection. Tidied routes must convert back to props.pins (P-028), and locked = cables that already have pins."
+  },
+  {
+   "id": "P-169",
+   "verdict": "PARTIAL",
+   "evidence": "apps/storybook-basics/src/components/BlockPort.stories.tsx:490 has a live Simple|Port|Expanded Segmented switch (ViewMatrix). apps/storybook-basics/src/components/Block.stories.tsx has no view control.",
+   "left": "A Storybook Controls arg flipping one Block; the ViewMatrix switch swaps faces.",
+   "writeSet": [
+    "apps/storybook-basics/src/components/BlockPort.stories.tsx",
+    "apps/storybook-basics/src/components/Block.stories.tsx"
+   ],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Trunk chore only, no app impact. The 'Storybook is opt-in' rule in CLAUDE.md names apps/storybook, not storybook-basics."
+  },
+  {
+   "id": "P-170",
+   "verdict": "OBSOLETE",
+   "evidence": "apps/docs/src/components/create/contract.ts:105-113 \u2014 the complaint is the /create bench placeholder; replaced by 'Highlight slots', off by default (3176192, 2899b29, both in main). portEdge.tsx:704 EMPTY_SLOT_MIN_PX is an unpainted layout reserve, not a chip.",
+   "left": "",
+   "writeSet": [],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Triage read the wrong surface. The app paints no empty-slot placeholder anywhere; retire the item."
+  },
+  {
+   "id": "P-171",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:31-100 has no label prop; :402 canEdit false. Trunk half unmounted: components/traceBadge.tsx:157 and trace.tsx:160-165 (labelPosition).",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/wire/WireFace.tsx",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionClusters.tsx",
+    "apps/systemsketch/src/document/documentModel.test.ts"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Same capability as P-156; build once. A new prop needs a migration and an update to the pinned wire defaults at documentModel.test.ts:227."
+  },
+  {
+   "id": "P-176",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/storybook-basics/src/files/workspaceModel.ts:14-18 says the watcher is not ported. apps/systemsketch/src/files/session.tsx:374 finds a conflict only on save. lifecycle.ts's visibilitychange only flushes.",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/files/session.tsx",
+    "apps/storybook-basics/src/files/workspaceModel.ts",
+    "apps/storybook-basics/src/files/workspaceClient.ts",
+    "apps/systemsketch/src/chrome/TitleBar/chromeBar.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Port the donor's nextSyncAction and canApplyExternalReload (1500ms single-flight) plus a reload-offer toast. Digest fence still protects against clobber."
+  },
+  {
+   "id": "P-177",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:47-107 has no title* props; BlockFace.tsx:158 hardcodes BLOCK_TITLE_FONT_PX. The only titleSize hits are fixtures in editor/controlRegistry.test.ts.",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionClusters.tsx",
+    "apps/systemsketch/src/document/documentModel.test.ts"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Needs schema, migration, editing-title font sync (textEditing.smoke pins it) and the pill controls. Trunk controlRegistry is not mounted in the app."
+  },
+  {
+   "id": "P-178",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/App.tsx:76 still mounts SourceContextMenu (stock + bbox-source group only). No 'Turn into' or convert-to-block anywhere; no double-click handler, so tldraw's stock double-click-on-empty makes a text shape.",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/source/sourceContextMenu.tsx",
+    "apps/systemsketch/src/shapes/block/convertToBlock.ts",
+    "apps/systemsketch/src/App.tsx",
+    "apps/systemsketch/src/shapes/block/blockPlacement.ts"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": true,
+   "note": "Reuse blockPlacement.ts view rule. Zach call: which kinds 'Turn into \u25b8' lists, and whether double-click-empty stops making stock text."
+  },
+  {
+   "id": "P-179",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/shared/pointerOwnership.ts:54 contentOwnsPress is still ad-hoc. No app importer of apps/storybook-basics/src/scene/interactions/dragPolicy.ts (DRAG_DECLARATIONS, resolveGrab), which is used only by hit-region stories.",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/shared/pointerOwnership.ts",
+    "apps/systemsketch/src/shapes/shared/nodeShapeComponent.tsx",
+    "apps/storybook-basics/src/scene/interactions/dragPolicy.ts",
+    "apps/systemsketch/src/blockBodyPress.smoke.test.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": true,
+   "note": "His backlog note 'This is not entirely true' on the premise is unexplained. The P-007 body-drag fix (view-aware branch) already changed the ground."
+  },
+  {
+   "id": "P-183",
+   "verdict": "STILL-ABSENT",
+   "evidence": "Trunk has BlockRegionBlackboxToggle (apps/storybook-basics/src/components/blockRegion.tsx:782). App RegionFace.tsx:138 hardcodes view=\"expanded\" with no toggle; ss-block has no opaque state (viewHotkeys.tsx:15-27 makes key 4 a no-op).",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/region/RegionFace.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/viewHotkeys.tsx",
+    "apps/storybook-basics/src/components/blockRegion.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Follow RegionFace's recorded rule: opaque is a scene lens (@trunk/scene/regionView), not a fourth BlockView enum. Wiring the trunk toggle."
+  },
+  {
+   "id": "P-185",
+   "verdict": "PARTIAL",
+   "evidence": "apps/systemsketch/src/shapes/code/CodeFace.tsx:218 mirrors CodeMirror focus into setEditingShape, so one click edits. Block title, description and port label still open only via tldraw double-click or Enter (BlockShapeUtil.tsx:430 canEdit).",
+   "left": "Block title, description and port label still need double-click or Enter.",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/shapes/port/PortFace.tsx",
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/textEditing.smoke.test.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Must not break P-044 (drag from title moves block) or the pointerdown-capture caret hints. Selected-then-click, at any delay, opens editing."
+  },
+  {
+   "id": "P-188",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:47-107 has none of memberLayout, memberGap, memberGutter, expandedWeights or blockType. Trunk props exist as component props only (block.tsx:229-239, blockMembers.tsx).",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/document/documentModel.test.ts",
+    "apps/systemsketch/src/document/sceneFromStore.ts"
+   ],
+   "size": "L",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Schema half of P-161. Migration required (legacy boards refuse to open otherwise); documentModel.test.ts:77 pins the block defaults with an exact toEqual."
+  },
+  {
+   "id": "P-190",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:313 onResize=resizeBox, no canResizeChildren override; tldraw ShapeUtil default is true (only tldraw's FrameShapeUtil:129 overrides). RegionShapeUtil.tsx:234 already fixed it.",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/blockResize.smoke.test.tsx"
+   ],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Live bug: resizing an expanded block scales its member shapes. One-line override plus a child-geometry-across-resize test (none exists)."
+  },
+  {
+   "id": "P-191",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/storybook-basics/src/scene/sceneDiff.ts:33-38 says matching is the id rung only; :102 DIFF_OPERATIONS is added|removed|modified, no 'unmatched'. Compare view (editor/sceneCompare.ts) inherits id-only.",
+   "left": "",
+   "writeSet": [
+    "apps/storybook-basics/src/scene/sceneDiff.ts",
+    "apps/storybook-basics/src/scene/sceneDiff.test.ts",
+    "apps/storybook-basics/src/editor/sceneCompare.ts",
+    "apps/storybook-basics/src/editor/compareModel.ts"
+   ],
+   "size": "L",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Name rung and unmatched are pure trunk work. Graph and source-ordinal rungs need pyblocks call-site data; consider shipping rungs 1-2 plus unmatched first."
+  },
+  {
+   "id": "P-194",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/storybook-basics/src/components/block.tsx:143-145 has three slots. Trunk Bar (bar.tsx:66) can compose L/C/R inside header or footer, but the app header is glyph+title only (BlockFace.tsx:715-724).",
+   "left": "",
+   "writeSet": [
+    "apps/storybook-basics/src/components/block.tsx",
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/chrome/panels.tsx"
+   ],
+   "size": "L",
+   "blockedOn": "P-188,P-057",
+   "needsZach": false,
+   "note": "Seven member lists presuppose the member model and the tree-and-slots inspector. Trunk composition via Bar already gives the visual structure."
+  },
+  {
+   "id": "P-196",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/chrome/panels.tsx:124 InspectorSurface edits glyph and description of one block only. No X/Y, rotation or Locked rows anywhere (git grep shapeFacts empty).",
+   "left": "",
+   "writeSet": [
+    "apps/storybook-basics/src/editor/shapeFactsPanel.tsx",
+    "apps/systemsketch/src/chrome/panels.tsx",
+    "apps/systemsketch/src/chrome/inspectorFollowsSelection.ts",
+    "apps/systemsketch/src/inspector.smoke.test.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Narrow to X/Y/rotation/locked rows: style, opacity, arrange and zoom are already on the pill. Chrome belongs in editor kit per his 2026-09-19 rule."
+  },
+  {
+   "id": "P-200",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/chrome/panels.tsx:124-176 InspectorSurface has no port list; no header-port or row/branch model in BlockShapeUtil.tsx:168.",
+   "left": "",
+   "writeSet": [
+    "apps/storybook-basics/src/editor/inspectorPanel.tsx",
+    "apps/systemsketch/src/chrome/panels.tsx",
+    "apps/storybook-basics/src/components/portEdge.tsx"
+   ],
+   "size": "L",
+   "blockedOn": "P-057,P-060",
+   "needsZach": false,
+   "note": "Reorder gesture must match the rail's dnd-kit reorder (P-219 row-drag grammar). Needs the row/branch schema first."
+  },
+  {
+   "id": "P-201",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/port/PortFace.tsx:464 labelSlot is fixed RestingLabel/LabelEditor. Trunk labeledPort.tsx:353,357 labelSlot/secondarySlot already take any ReactNode; the app has no member model or delete.",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/port/PortFace.tsx",
+    "apps/systemsketch/src/shapes/port/PortShapeUtil.tsx",
+    "apps/storybook-basics/src/components/labeledPort.tsx",
+    "apps/systemsketch/src/document/documentModel.test.ts"
+   ],
+   "size": "L",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Trunk slot seam is already generic; the missing piece is a stored member list per slot with a persistent-deletion rule for the default member."
+  },
+  {
+   "id": "P-202",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/chrome/panels.tsx:124 InspectorSurface has fixed description/glyph rows and no member lists, so there are no headers to de-duplicate.",
+   "left": "",
+   "writeSet": [
+    "apps/storybook-basics/src/editor/inspectorPanel.tsx",
+    "apps/systemsketch/src/chrome/panels.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "P-057",
+   "needsZach": false,
+   "note": "Row grammar (label, count, chevron, unfolds in place, one header) is a rule for the schema-driven inspector; nothing to compact yet."
+  },
+  {
+   "id": "P-208",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/port/PortFace.tsx:464 fills labelSlot with a fixed label or editor; no user path puts generic content (e.g. three inputs) there. Trunk labeledPort.tsx:353 accepts ReactNode.",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/port/PortFace.tsx",
+    "apps/systemsketch/src/shapes/port/PortShapeUtil.tsx",
+    "apps/storybook-basics/src/components/labeledPort.tsx",
+    "apps/systemsketch/src/document/documentModel.test.ts"
+   ],
+   "size": "L",
+   "blockedOn": "P-201",
+   "needsZach": false,
+   "note": "Same capability as P-201 \u2014 build once. Component-level generic slot content already exists; the app has no member store."
+  },
+  {
+   "id": "P-209",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:168-173 ports is Record<side, spec[]> (one side per port); anchors are one measured point per portId. git grep arrangement|perView finds nothing.",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/shapes/shared/props.ts",
+    "apps/systemsketch/src/document/documentModel.test.ts"
+   ],
+   "size": "L",
+   "blockedOn": "P-090",
+   "needsZach": false,
+   "note": "Per-arrangement placement only matters once a second arrangement (communication view) exists; no such mode in the app."
+  },
+  {
+   "id": "P-210",
+   "verdict": "STILL-ABSENT",
+   "evidence": "No add-member action anywhere; the only way in is BlockShapeUtil.tsx:291 onDragShapesIn. Name-based linking is unmounted (@trunk/scene/linking has no app importer; no definitionId).",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/addMember.ts",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionActions.ts",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionClusters.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "P-074",
+   "needsZach": false,
+   "note": "Blank-member half is unblocked (pill action on an expanded block); only the naming-links-it half waits on P-074."
+  },
+  {
+   "id": "P-211",
+   "verdict": "STILL-ABSENT",
+   "evidence": "No go-to-definition anywhere in apps/systemsketch/src. source/originResolution.ts feeds only the code-cell badge; App.tsx:76 context menu is still stock + convert/expand rows.",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/block/goToDefinition.ts",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionActions.ts",
+    "apps/systemsketch/src/source/originResolution.ts",
+    "apps/systemsketch/src/source/sourceContextMenu.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "P-074",
+   "needsZach": false,
+   "note": "Canonical for P-220. Camera move plus isolate only, with no view mutation. Needs a definition identity; a viewport journal (P-215) would record it."
+  },
+  {
+   "id": "P-212",
+   "verdict": "PARTIAL",
+   "evidence": "apps/systemsketch/src/shapes/block/BlockFace.tsx:750-762 makes props.h the authored box in port/expanded, so typing never rewrites it. But measure.ts:89-125 writes the hugged simple-view height into props.h, and setBlockView (selectionActions.ts:152) keeps that h on the way back.",
+   "left": "A view switch through simple overwrites the authored height; per-view sizes (P-015) missing.",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/shared/measure.ts",
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionActions.ts",
+    "apps/systemsketch/src/document/documentModel.test.ts"
+   ],
+   "size": "M",
+   "blockedOn": "P-015",
+   "needsZach": false,
+   "note": "Core complaint (typing snaps size) largely holds by construction now; residual is expanded\u2192simple\u2192expanded losing the height. Decide with P-141/P-166."
+  },
+  {
+   "id": "P-213",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/registry.ts:82 KITS is block, code, port, wire, region \u2014 no glyph kit or dock row. The old adapter glyph util (packages/adapter-tldraw/src/glyph-shape-util.tsx) is not in the app.",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/glyph/GlyphShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/glyph/index.ts",
+    "apps/systemsketch/src/shapes/registry.ts",
+    "apps/systemsketch/src/shapes/types.ts"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Picker and glyph grammar already mounted (P-043). Needs a new ss-glyph shape: aspect-locked resize (docs/GLYPH-PLAN.md), a dock row and a test update at documentModel.test.ts:70."
+  },
+  {
+   "id": "P-215",
+   "verdict": "STILL-ABSENT",
+   "evidence": "No viewport journal in the app. Mouse 4/5 are bound to SELECTION history (apps/systemsketch/src/document/selectionHistory.ts:39, installed at App.tsx:~166); chromeBar.tsx:149 arrows are hard-disabled.",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/document/viewportHistory.ts",
+    "apps/systemsketch/src/document/selectionHistory.ts",
+    "apps/systemsketch/src/chrome/TitleBar/chromeBar.tsx",
+    "apps/systemsketch/src/App.tsx"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": true,
+   "note": "Zach call: share or displace the mouse 4/5 selection-history binding (P-029). Frames-panel focus is a recordable move today; step-in/move-to depend on P-070."
+  },
+  {
+   "id": "P-218",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/chrome/panels.tsx:215-244 SurfaceSwitch is a Frames|Problems|Inspector ToggleGroup. No Details|Connections split and no neighbour list; git grep finds no app use of the trunk tabs component.",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/chrome/panels.tsx",
+    "apps/storybook-basics/src/editor/inspectorPanel.tsx",
+    "apps/systemsketch/src/chrome/inspectorFollowsSelection.ts"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Nest the tab bar inside the Inspector surface. Neighbours are derivable from the scene edges; the tab bar must not fight the existing surface switcher."
+  },
+  {
+   "id": "P-219",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/storybook-basics/src/components/portEdge.tsx and blockMembers.tsx still use dnd-kit transform-in-place. git grep dropIndicator|insertionBar|gapBar|dropBar finds nothing in trunk or app.",
+   "left": "",
+   "writeSet": [
+    "apps/storybook-basics/src/components/portEdge.tsx",
+    "apps/storybook-basics/src/components/blockMembers.tsx",
+    "apps/storybook-basics/src/components/portEdge.layout.ts"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Trunk-side change (outline in place, single gap bar, commit on release, no bar at a no-op boundary). Also feeds P-200's inspector reorder. Needs a story per change."
+  },
+  {
+   "id": "P-221",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/wire/createWire.ts:87 createShape with no index and no sendToBack, so every new cable lands on top of the page's z-order.",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/wire/createWire.ts",
+    "apps/systemsketch/src/wiring.smoke.test.tsx"
+   ],
+   "size": "S",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Place the cable below the lowest node shape, not global sendToBack. Check region frames and cable grab-corridor hit-testing (P-003) with opaque port-view blocks."
+  },
+  {
+   "id": "P-223",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:284 variant is still literalEnum data|async|delayed; no semantic kind or bundle exists (git grep finds only geometric bundling in trace.tidy.ts).",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/wire/createWire.ts",
+    "apps/storybook-basics/src/scene/edgeValidation.ts"
+   ],
+   "size": "L",
+   "blockedOn": "P-069",
+   "needsZach": false,
+   "note": "Nothing to pack or unpack until wires carry a semantic kind (P-069)."
+  },
+  {
+   "id": "P-226",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/storybook-basics/src/components/blockRegion.tsx:527-530 is a static 1px borderTop between arms with no handle. git grep onDividerDrag|rowHeights|colWidths|expandedWeights finds nothing.",
+   "left": "",
+   "writeSet": [
+    "apps/storybook-basics/src/components/blockRegion.tsx",
+    "apps/storybook-basics/src/components/blockMembers.tsx",
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx"
+   ],
+   "size": "L",
+   "blockedOn": "P-188",
+   "needsZach": false,
+   "note": "Weights live in the P-188 schema (expandedWeights). Region-arm heights only redistribute on frame resize (armsAfterDelta); no divider drag exists."
+  },
+  {
+   "id": "P-232",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src/chrome/Toolbar/dock.tsx:249-260 librarySlot is mounted with eyebrow 'Coming soon' and placeholder copy; no library contents anywhere.",
+   "left": "",
+   "writeSet": [
+    "apps/systemsketch/src/chrome/Toolbar/dock.tsx",
+    "apps/systemsketch/src/chrome/Toolbar/libraryPanel.tsx"
+   ],
+   "size": "L",
+   "blockedOn": "",
+   "needsZach": true,
+   "note": "Zach call: what the library holds (saved shapes, palette of stock components, importable blocks). dock.tsx:239-247 records it as unbuilt product work. Canonical for P-234/P-235."
+  },
+  {
+   "id": "P-236",
+   "verdict": "STILL-ABSENT",
+   "evidence": "No extension package under packages/ or apps/; only forward-looking comments (apps/systemsketch/src/chrome/TitleBar/chromeBar.tsx:14-16). The board format is .bbox now.",
+   "left": "",
+   "writeSet": [
+    "packages/vscode-bbox/package.json",
+    "packages/vscode-bbox/src/extension.ts",
+    "apps/systemsketch/src/files/session.tsx",
+    "apps/systemsketch/vite.config.ts"
+   ],
+   "size": "L",
+   "blockedOn": "",
+   "needsZach": true,
+   "note": "Zach call: VS Code/Cursor extension in this repo vs a Clank plugin (his global rule says a file view is a Clank plugin). Needs real-host headless acceptance in each editor."
+  },
+  {
+   "id": "P-238",
+   "verdict": "PARTIAL",
+   "evidence": "scripts/launch_systemsketch.py:4-6,41-42 serves a pinned Stable on :4341 and --update rebuilds it (refuses a dirty tree); vite dev on :4340 is Preview. chrome/siteStatus.ts shows channel status in menu rows. devtools.tsx:259 'Build channel' is read-only.",
+   "left": "No in-app Stable/Preview flip, and no independent Preview duplicate of the open board.",
+   "writeSet": [
+    "apps/systemsketch/stable-preview.json",
+    "scripts/launch_systemsketch.py",
+    "apps/systemsketch/src/chrome/DevMenu/devtools.tsx",
+    "apps/systemsketch/vite.config.ts"
+   ],
+   "size": "M",
+   "blockedOn": "",
+   "needsZach": true,
+   "note": "His skill says adopt /home/bam/stable_preview_switcher, not hand-roll. Zach call: what 'independent Preview duplicate of the board' means (copy on switch? shared file?)."
+  },
+  {
+   "id": "P-239",
+   "verdict": "STILL-ABSENT",
+   "evidence": "apps/systemsketch/src has 59 *.smoke.test.tsx (24 on 09-21, incl. arrowCycle, wheelConvention, shortcuts, textEditing) but no Excalidraw gesture inventory or checklist; git grep excalidraw finds only elbow-router provenance comments.",
+   "left": "",
+   "writeSet": [
+    "docs/excalidraw-parity-inventory.md",
+    "apps/systemsketch/src/excalidrawParity.smoke.test.tsx"
+   ],
+   "size": "L",
+   "blockedOn": "",
+   "needsZach": false,
+   "note": "Enumerate Excalidraw gestures, mark supported/unsupported, assert the supported set. Start from the existing smoke files. The scoreboard is the deliverable."
+  }
+ ]
+}
