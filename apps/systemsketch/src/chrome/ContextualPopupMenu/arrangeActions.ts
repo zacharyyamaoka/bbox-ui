@@ -27,26 +27,15 @@ import {
   ArrowDown,
   ArrowUp,
   BringToFront,
-  GitCompareArrows,
-  Minus,
-  PaintBucket,
   SendToBack,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
-  DefaultColorStyle,
-  DefaultDashStyle,
-  DefaultFillStyle,
-  DefaultFontStyle,
-  DefaultHorizontalAlignStyle,
-  DefaultSizeStyle,
   type Editor,
-  type ReadonlySharedStyleMap,
   type StyleProp,
   type TLShapeId,
 } from "tldraw";
 
-import { DIFF_MARK_LABELS, DiffMarkStyle } from "../../shapes/shared/diffMark";
 
 /* ------------------------------------------------------------------ arrange */
 
@@ -172,144 +161,36 @@ export function selectionOpacityPercent(editor: Editor): number {
   return Math.round(shared.value * 100);
 }
 
-export function setSelectionOpacityPercent(editor: Editor, percent: number): void {
+export function setSelectionOpacityPercent(
+  editor: Editor,
+  percent: number,
+  opts?: { continuous?: boolean },
+): void {
   const clamped = Math.min(100, Math.max(0, percent));
-  // tldraw's own setter: it writes every selected shape and handles the
-  // "ephemeral while dragging, committed on release" split internally.
+  // WHY the stopping point is marked only on the SETTLING call: a range input
+  // fires per pixel, so marking each one would make a single drag cost forty
+  // presses of undo. tldraw's own setter handles the ephemeral/committed split
+  // for the shapes; the history granularity is ours to choose.
+  if (!opts?.continuous) editor.markHistoryStoppingPoint("opacity");
   editor.setOpacityForSelectedShapes(clamped / 100);
 }
 
 /* -------------------------------------------------------------------- style */
 
-/**
- * The style rows the pill offers — Zach's second ask on 2026-09-20:
- * "FLoating toolbar over the tldraw primatives for styling".
- *
- * Every option set is read off the `StyleProp` object rather than re-listed as
- * string literals here. A hand-written copy would be a second place for the
- * enum to be wrong the day tldraw adds a colour — the exact trap
- * `selectionActions.ts` calls out for `BlockView`.
- *
- * AMENDED BY P-035, and the amendment matters to how this list reads: until
- * then every row here was one of TLDRAW'S OWN styles, so the whole cluster was
- * native-only as an emergent property — no `ss-*` shape declared a style, so
- * `getSharedStyles()` returned nothing for one. `ss:diff` is this app's OWN
- * `StyleProp` (`shapes/shared/diffMark.ts`), declared on `ss-block`, `ss-port`
- * and `ss-wire`, so the Diff row appears for THOSE and the six tldraw rows do
- * not — and vice versa. The mechanism that sorts them is unchanged and is
- * still tldraw's: `activeStyleRows` drops any row the selection does not
- * actually carry. Nothing here switches on a shape type, and nothing should.
- */
-export interface StyleRow {
-  /** Stable id for a test id and a React key. */
-  id: string;
-  label: string;
-  style: StyleProp<string>;
-  /** The allowed values, in tldraw's own order. */
-  values: readonly string[];
-  /** How the panel paints each OPTION: a colour chip, or its name. */
-  paint: "swatch" | "label";
-  /**
-   * What the row's TRIGGER shows in the pill — which is NOT the same question
-   * as how its options are painted.
-   *
-   * WHY these differ (measured in the running app, capture 01): painting each
-   * trigger with its current raw value produced the row
-   * `None Draw M Draw Middle`. That is five tldraw enum values in a row with
-   * nothing saying which family each belongs to, "M" is cryptic, and — the
-   * part that makes it a bug rather than a blemish — "Draw" appears TWICE,
-   * because `dash: "draw"` and `font: "draw"` are unrelated values that
-   * happen to share a name. A face has to identify its FAMILY first; the
-   * current value is already in the tooltip and the aria-label.
-   *
-   * `swatch` — a colour chip (the value IS the thing to show).
-   * `glyph`  — a family icon: fill, dash, align.
-   * `word`   — a readable word, for the two families whose value is the
-   *            point and reads fine: size, and the "Aa" font face.
-   */
-  face: "swatch" | "glyph" | "word";
-  /** The family glyph, for `face: "glyph"`. */
-  icon?: LucideIcon;
-  /** Readable names for raw enum values, where tldraw's are not. */
-  valueLabels?: Readonly<Record<string, string>>;
-}
-
-/** tldraw's size enum is `s | m | l | xl`; "M" alone tells the reader nothing. */
-const SIZE_LABELS = { s: "Small", m: "Medium", l: "Large", xl: "X-Large" } as const;
-
-function valuesOf(style: StyleProp<string>): readonly string[] {
-  // `StyleProp.values` is the runtime enum tldraw validates against.
-  return (style as unknown as { values: readonly string[] }).values ?? [];
-}
-
-export const STYLE_ROWS: readonly StyleRow[] = [
-  { id: "color", label: "Color", style: DefaultColorStyle, values: valuesOf(DefaultColorStyle), paint: "swatch", face: "swatch" },
-  { id: "fill", label: "Fill", style: DefaultFillStyle, values: valuesOf(DefaultFillStyle), paint: "label", face: "glyph", icon: PaintBucket },
-  { id: "dash", label: "Dash", style: DefaultDashStyle, values: valuesOf(DefaultDashStyle), paint: "label", face: "glyph", icon: Minus },
-  { id: "size", label: "Size", style: DefaultSizeStyle, values: valuesOf(DefaultSizeStyle), paint: "label", face: "word", valueLabels: SIZE_LABELS },
-  // The font row's face is the literal "Aa" — the donor pill's own face for
-  // it, and the one every design tool uses, so it needs no icon and no value.
-  { id: "font", label: "Font", style: DefaultFontStyle, values: valuesOf(DefaultFontStyle), paint: "label", face: "word", valueLabels: { __face: "Aa" } },
-  { id: "align", label: "Align", style: DefaultHorizontalAlignStyle, values: valuesOf(DefaultHorizontalAlignStyle), paint: "label", face: "glyph", icon: AlignCenterHorizontal },
-  // P-035, the app's own style. LAST because it is the only row the six above
-  // can never share a selection with, so it never shifts one of their triggers
-  // sideways.
-  //
-  // `face: "glyph"` and not `"swatch"`, for this file's own reason: a swatch
-  // says "the value IS the thing to show", and a diff mark's value is a WORD
-  // ("Added"), not a colour — the colour is how it is painted on the board,
-  // not what it is. `valueLabels` carries Zach's spelling for the trunk's
-  // `modified` ("Changed"), exactly as `SIZE_LABELS` carries "Medium" for
-  // tldraw's `m`.
-  {
-    id: "diff",
-    label: "Diff",
-    style: DiffMarkStyle as unknown as StyleProp<string>,
-    values: valuesOf(DiffMarkStyle as unknown as StyleProp<string>),
-    paint: "label",
-    face: "glyph",
-    icon: GitCompareArrows,
-    valueLabels: DIFF_MARK_LABELS,
-  },
-];
-
-/**
- * What a row's trigger shows. `__face` is a deliberate escape hatch for a row
- * whose face is FIXED regardless of value (the font row's "Aa"), rather than
- * a second optional field that every other row would carry as undefined.
- */
-export function faceLabelFor(row: StyleRow, value: string | null): string {
-  const fixed = row.valueLabels?.__face;
-  if (fixed) return fixed;
-  if (value === null) return "Mixed";
-  return row.valueLabels?.[value] ?? value;
-}
-
-/**
- * Which style rows this selection can actually change, and what each reads
- * right now.
- *
- * WHY it is driven by `editor.getSharedStyles()` rather than by the shape
- * type: tldraw already computes exactly this — which styles the current
- * selection has in common and whether they agree — and it is the same source
- * its own style panel uses. Switching on `shape.type` here would mean
- * re-deriving that per shape kind and getting arrows (which have a colour but
- * no fill) or text (font and align but no dash) subtly wrong.
- */
-export interface ActiveStyleRow extends StyleRow {
-  /** The shared value, or null when the selection disagrees ("mixed"). */
-  value: string | null;
-}
-
-export function activeStyleRows(shared: ReadonlySharedStyleMap): ActiveStyleRow[] {
-  const rows: ActiveStyleRow[] = [];
-  for (const row of STYLE_ROWS) {
-    const current = shared.get(row.style);
-    if (current === undefined) continue; // not a style this selection has at all
-    rows.push({ ...row, value: current.type === "shared" ? current.value : null });
-  }
-  return rows;
-}
+// THE VOCABULARY MOVED, 2026-09-24. `StyleRow`, `STYLE_ROWS`, `ActiveStyleRow`,
+// `activeStyleRows` and `faceLabelFor` lived here and described the six
+// per-tldraw-style rows the pill used to render. The pill is now four triggers
+// — shape, inside, edge, text — and its vocabulary is declared as kit data in
+// `appearanceModel.ts`, rendered by `@trunk/editor/controlStrip`.
+//
+// Deleted rather than deprecated on purpose. A second, unused description of
+// the same controls is exactly what this round was about: the old bar hand-
+// rolled a renderer the trunk already had, and printed the word "dashed"
+// because the drawn glyph sat in the copy nobody called. Leaving these behind
+// would have recreated that, with no test covering them.
+//
+// What stays below is what the new model still uses: `setStyle` (the two-call
+// arming fix), `swatchColorFor`, and the opacity pair.
 
 /**
  * Set a style on the selection AND arm it for the next shape drawn.

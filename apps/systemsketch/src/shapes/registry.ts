@@ -24,6 +24,7 @@ import type {
 
 import type { ToolItem } from "@trunk/editor/toolDock";
 
+import { STOCK_PAINT_SHAPE_UTILS } from "../appearance/stockPaintOverrides";
 import { blockKit } from "./block";
 import { codeKit } from "./code";
 import { portKit } from "./port";
@@ -81,7 +82,20 @@ export const EMPTY_KIT: ShapeKit = {
 /** Display order of the system family's rows follows this order. */
 export const KITS: readonly ShapeKit[] = [blockKit, codeKit, portKit, wireKit, regionKit];
 
-export const SHAPE_UTILS: readonly TLAnyShapeUtilConstructor[] = KITS.flatMap((kit) => [...kit.shapeUtils]);
+// The kits' own shapes, plus the four STOCK utils re-registered so the canvas
+// reads the `src/appearance` models' meta overrides. (No glob in this comment
+// on purpose: `stockBoundary.test.ts`'s `withoutComments` strips everything
+// between a literal slash-star and the next star-slash, so a path ending in a
+// star would swallow the rest of this file's declarations.) They keep tldraw's
+// own `type` ids, so `<Tldraw shapeUtils>` REPLACES the defaults rather than adding a
+// sixth kind (@tldraw/utils `mergeArraysAndReplaceDefaults`). WHY here and not
+// in a kit: a kit is one shape KIND this app invents, and geo/draw/line/arrow
+// are tldraw's — they arrive with the engine whether or not any kit exists,
+// and the only thing this app adds to them is paint.
+export const SHAPE_UTILS: readonly TLAnyShapeUtilConstructor[] = [
+  ...KITS.flatMap((kit) => [...kit.shapeUtils]),
+  ...STOCK_PAINT_SHAPE_UTILS,
+];
 export const BINDING_UTILS: readonly TLAnyBindingUtilConstructor[] = KITS.flatMap((kit) => [...kit.bindingUtils]);
 export const TOOLS: readonly TLStateNodeConstructor[] = KITS.flatMap((kit) => [...kit.tools]);
 export const OVERLAY_UTILS: readonly TLAnyOverlayUtilConstructor[] = KITS.flatMap((kit) => [...(kit.overlayUtils ?? [])]);

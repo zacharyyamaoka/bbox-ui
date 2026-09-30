@@ -1,10 +1,12 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, waitFor } from "storybook/test";
 
+import { cn } from "../lib/utils";
 import { ControlPanel } from "./controlPanel";
 import { DEFAULT_GLYPH_FAMILIES, swatchGlyph, type GlyphFamilies } from "./controlGlyphs";
 import { createControlRegistry, type ControlDefinition } from "./controlRegistry";
+import { PILL_POPOVER } from "./floatingToolbar";
 
 /**
  * `ControlPanel` (controlPanel.tsx), colocated — the popover BODY every
@@ -22,7 +24,17 @@ import { createControlRegistry, type ControlDefinition } from "./controlRegistry
  * spatial ones are measured, not read off attributes.
  */
 
-type PanelKind = "fill" | "fillMode" | "lineStyle" | "strokeWidth" | "fontSize";
+type PanelKind = "fill" | "fillMode" | "lineStyle" | "strokeWidth" | "fontSize" | "shape";
+
+/** The Shape picker's twenty names — the panel Zach photographed unreadable
+    (`ReadableOnASkinnedSurface` below). Labels only, no glyph family: the
+    contrast under test is the word's. */
+const SHAPE_NAMES = [
+  "rectangle", "ellipse", "triangle", "diamond", "pentagon",
+  "hexagon", "octagon", "star", "rhombus", "rhombus-2",
+  "oval", "trapezoid", "arrow-right", "arrow-left", "arrow-up",
+  "arrow-down", "x-box", "check-box", "cloud", "heart",
+] as const;
 
 /** Ten swatches in five columns — two clean rows, so a column count is a
  *  thing a play function can actually count. */
@@ -106,6 +118,13 @@ const definitions: Readonly<Record<PanelKind, ControlDefinition<PanelKind>>> = {
       { value: "l", label: "Large" },
       { value: "xl", label: "Extra large" },
     ],
+  },
+  shape: {
+    kind: "shape",
+    label: "Shape",
+    trigger: "value",
+    layout: "library",
+    options: SHAPE_NAMES.map((name) => ({ value: name, label: name })),
   },
 };
 
@@ -498,5 +517,349 @@ export const CustomSizeCommitsAndReverts: Story = {
       await expect(input).toHaveValue(30);
     });
     await expect(applyPx).toHaveBeenCalledTimes(1);
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Readable on a skinned surface — the light/dark gate
+// ---------------------------------------------------------------------------
+
+/**
+ * The theme's own token values, from `globals.css` — the light `:root` block
+ * and the `prefers-color-scheme: dark` block — forced onto a wrapper as inline
+ * custom properties.
+ *
+ * WHY force them rather than trust the runner's colour scheme: the bug this
+ * gate exists for (controlPanel.tsx, change 4) shows in ONE scheme — a page
+ * token resolved to its light value on a fixed dark panel — and a test that
+ * happens to run in the other scheme passes while the panel is unreadable.
+ * Pinning both blocks makes the gate say the same thing on every machine, and
+ * it makes the tempting fix (a class that is right in dark and wrong in
+ * light, or the reverse) fail in whichever half it breaks.
+ */
+const THEME_TOKENS: Record<"light" | "dark", CSSProperties> = {
+  light: {
+    "--foreground": "oklch(0.145 0 0)",
+    "--popover": "oklch(1 0 0)",
+    "--popover-foreground": "oklch(0.145 0 0)",
+    "--primary": "oklch(0.205 0 0)",
+    "--primary-foreground": "oklch(0.985 0 0)",
+    "--muted": "oklch(0.97 0 0)",
+    "--muted-foreground": "oklch(0.556 0 0)",
+    "--border": "oklch(0.922 0 0)",
+    "--input": "oklch(0.922 0 0)",
+  } as CSSProperties,
+  dark: {
+    "--foreground": "oklch(0.985 0 0)",
+    "--popover": "oklch(0.205 0 0)",
+    "--popover-foreground": "oklch(0.985 0 0)",
+    "--primary": "oklch(0.922 0 0)",
+    "--primary-foreground": "oklch(0.205 0 0)",
+    "--muted": "oklch(0.269 0 0)",
+    "--muted-foreground": "oklch(0.708 0 0)",
+    "--border": "oklch(1 0 0 / 10%)",
+    "--input": "oklch(1 0 0 / 15%)",
+  } as CSSProperties,
+};
+
+/** The surface the pill hangs every panel on — the host's `panelClassName`
+    (`selectionClusters.tsx` passes exactly `PILL_POPOVER`). */
+function PillSurface({ children }: { children: ReactNode }) {
+  return <div className={cn("w-fit p-2.5", PILL_POPOVER)}>{children}</div>;
+}
+
+function SkinnedPanels({ scheme }: { scheme: "light" | "dark" }) {
+  return (
+    <div
+      data-testid={`scheme-${scheme}`}
+      data-scheme={scheme}
+      style={THEME_TOKENS[scheme]}
+      className="flex flex-col gap-3"
+    >
+      <span className="text-xs opacity-60">page tokens forced to: {scheme}</span>
+      <div className="flex flex-wrap items-start gap-4">
+        <PillSurface>
+          <ControlPanel
+            control={registry.bindControl("shape", {
+              id: `${scheme}-shape`,
+              value: { type: "shared", value: "rectangle" },
+              onSelect: () => {},
+            })}
+            glyphs={glyphs}
+          />
+        </PillSurface>
+        <PillSurface>
+          <ControlPanel
+            control={registry.bindControl("fontSize", {
+              id: `${scheme}-fontSize`,
+              value: { type: "shared", value: "l" },
+              onSelect: () => {},
+              rungPxByValue: RUNG_PX,
+              customSize: { sharedPx: 36, onPresetRungs: true, applyPx: () => {}, minPx: 8, maxPx: 200 },
+            })}
+            glyphs={glyphs}
+          />
+        </PillSurface>
+        <PillSurface>
+          <ControlPanel
+            control={registry.bindControl("fill", {
+              id: `${scheme}-fill`,
+              value: { type: "shared", value: "c4" },
+              onSelect: () => {},
+              modeControl: registry.bindControl("fillMode", {
+                id: `${scheme}-fillMode`,
+                value: { type: "shared", value: "semi" },
+                onSelect: () => {},
+              }),
+              modePlacement: "above",
+            })}
+            glyphs={glyphs}
+          />
+        </PillSurface>
+      </div>
+    </div>
+  );
+}
+
+// --- the story's own ruler: what the browser painted. Computed `rgb()`
+// strings in, WCAG ratios out; nothing here reads a class name.
+
+type Rgb = [number, number, number, number];
+
+function rgbOf(css: string): Rgb {
+  const m = css.match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\s*\)/);
+  if (m) return [Number(m[1]), Number(m[2]), Number(m[3]), m[4] === undefined ? 1 : Number(m[4])];
+  // `color-mix(...)` and `oklab(...)` come back unresolved from some
+  // properties; a 1x1 canvas resolves anything the browser can paint.
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 1;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+  ctx.clearRect(0, 0, 1, 1);
+  ctx.fillStyle = css;
+  ctx.fillRect(0, 0, 1, 1);
+  const d = ctx.getImageData(0, 0, 1, 1).data;
+  return [d[0], d[1], d[2], d[3] / 255];
+}
+
+function over(top: Rgb, under: Rgb): Rgb {
+  const a = top[3] + under[3] * (1 - top[3]);
+  const ch = (i: number) => (a === 0 ? 0 : (top[i] * top[3] + under[i] * under[3] * (1 - top[3])) / a);
+  return [ch(0), ch(1), ch(2), a];
+}
+
+/** The colour actually behind an element: its ancestors' backgrounds,
+    composited from the element outward until opaque. */
+function backdropOf(el: Element): Rgb {
+  let acc: Rgb = [0, 0, 0, 0];
+  for (let node: Element | null = el; node && acc[3] < 0.999; node = node.parentElement) {
+    const bg = rgbOf(getComputedStyle(node).backgroundColor);
+    if (bg[3] > 0) acc = over(acc, bg);
+  }
+  return acc[3] < 0.999 ? over(acc, [255, 255, 255, 1]) : acc;
+}
+
+function luminance([r, g, b]: Rgb): number {
+  const lin = (c: number) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+
+function ratio(a: Rgb, b: Rgb): number {
+  const la = luminance(a);
+  const lb = luminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/** Ink of `el` against the colour behind it. A translucent ink is composited
+    onto that backdrop first, the way the eye sees it. */
+function inkContrast(el: Element): number {
+  const backdrop = backdropOf(el);
+  const ink = rgbOf(getComputedStyle(el).color);
+  return ratio(ink[3] < 1 ? over(ink, backdrop) : ink, backdrop);
+}
+
+/**
+ * The colour of the ring Tailwind draws on `el` — read off the computed
+ * `box-shadow`, where the browser has already resolved it, never off
+ * `--tw-ring-color`, which computes to the literal word `currentcolor` and
+ * measured 1.26:1 against the panel when a canvas was asked to paint it. A
+ * ring is the layer with a spread and no offset; the other layers (an unset
+ * ring-offset, the popover's own drop shadow) have none or are transparent.
+ */
+function ringColourOf(el: Element): Rgb | null {
+  const shadow = getComputedStyle(el).boxShadow;
+  const layer = /(rgba?\([^)]*\))\s+(-?[\d.]+)px\s+(-?[\d.]+)px\s+(-?[\d.]+)px\s+(-?[\d.]+)px/g;
+  for (let m = layer.exec(shadow); m; m = layer.exec(shadow)) {
+    const colour = rgbOf(m[1]);
+    const [dx, dy, blur, spread] = [m[2], m[3], m[4], m[5]].map(Number);
+    if (dx === 0 && dy === 0 && blur === 0 && spread > 0 && colour[3] > 0) return colour;
+  }
+  return null;
+}
+
+/** WCAG 1.4.3 AA for text. */
+const TEXT_MIN = 4.5;
+/** WCAG 1.4.11 for a graphical mark or a state indicator. */
+const MARK_MIN = 3;
+
+/**
+ * What the browser would paint behind `el` on hover — from the REAL
+ * stylesheet, resolved by the REAL engine, without a pointer.
+ *
+ * WHY not `userEvent.hover`: measured 2026-09-25, `storybook/test`'s pointer
+ * is synthetic — it dispatches the events and never sets `:hover`, so the
+ * hovered background read back byte-identical to idle and a "hover is a
+ * wash" assertion had nothing to be false about. A story cannot reach CDP
+ * (it also has to run inside Storybook proper), so instead: walk every rule
+ * in every sheet, keep the `:hover` rules whose selector matches this
+ * element once `:hover` is stripped, and hand the LAST matching declared
+ * `background-color` to a probe that sits where the element sits, so
+ * `currentcolor` and `color-mix()` resolve exactly as they would on it. The
+ * real pointer is exercised by the Playwright run against the live app
+ * (scratchpad `contrast.mjs`, label on hover 12.28:1), which this cannot
+ * replace and does not claim to.
+ */
+function hoverBackgroundOf(el: HTMLElement): Rgb | null {
+  let declared: string | null = null;
+  const visit = (rules: CSSRuleList) => {
+    for (const rule of Array.from(rules)) {
+      if ("cssRules" in rule && (rule as CSSGroupingRule).cssRules) visit((rule as CSSGroupingRule).cssRules);
+      if (!(rule instanceof CSSStyleRule) || !rule.selectorText.includes(":hover")) continue;
+      const bg = rule.style.getPropertyValue("background-color");
+      if (!bg) continue;
+      const withoutHover = rule.selectorText.replace(/:hover/g, "");
+      try {
+        if (el.matches(withoutHover)) declared = bg;
+      } catch {
+        // A selector this browser cannot parse once `:hover` is gone — not ours.
+      }
+    }
+  };
+  for (const sheet of Array.from(document.styleSheets)) {
+    try {
+      visit(sheet.cssRules);
+    } catch {
+      // A cross-origin sheet; nothing of ours lives there.
+    }
+  }
+  if (declared === null) return null;
+  const probe = document.createElement("span");
+  probe.style.backgroundColor = declared;
+  el.appendChild(probe);
+  const resolved = rgbOf(getComputedStyle(probe).backgroundColor);
+  probe.remove();
+  return resolved;
+}
+
+function labelOf(option: HTMLElement): HTMLElement {
+  const label = Array.from(option.querySelectorAll<HTMLElement>("span")).find(
+    (span) => !span.hasAttribute("aria-hidden") && (span.textContent ?? "").trim() !== "",
+  );
+  if (!label) throw new Error(`option ${option.dataset.value} has no label`);
+  return label;
+}
+
+/**
+ * The gate. Every panel the pill opens, on the pill's own surface, with the
+ * page's tokens forced to LIGHT and then to DARK — and every kind of ink the
+ * panel paints measured against what is actually behind it:
+ *
+ *   • every option label ≥ 4.5:1 (the Shape picker Zach photographed at
+ *     1.19:1 in light mode);
+ *   • the chosen row's check mark ≥ 4.5:1 (1.19:1 before);
+ *   • the rung-px readout and the Custom cell's words ≥ 4.5:1;
+ *   • the chosen chip is VISIBLE — its fill ≥ 3:1 against the panel — and
+ *     its label ≥ 4.5:1 on that fill (before: `oklch(0.205)` on #1e1e1e,
+ *     1.19:1, a chip you could not find);
+ *   • hover is a wash on the panel, not a chip cut out of it: the hover
+ *     rule's background < 3:1 against the panel, and the label still ≥ 4.5:1
+ *     on it (before: `oklch(0.97)`, 18:1 — a white slab under the cursor).
+ *     Read from the stylesheet and resolved by the browser, not by a
+ *     pointer — see `hoverBackgroundOf` for why.
+ *
+ * Mutation-tested 2026-09-25: restoring `text-foreground` on the option
+ * button fails the light half at 1.19:1 on every label; restoring
+ * `hover:bg-muted` fails the hover wash; restoring `bg-primary` fails the
+ * chosen chip's visibility. Each one is a single class put back.
+ */
+export const ReadableOnASkinnedSurface: Story = {
+  render: () => (
+    <div className="flex flex-col gap-6">
+      <SkinnedPanels scheme="light" />
+      <SkinnedPanels scheme="dark" />
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    // WHY findBy first (CLAUDE.md): every assertion below is comparative,
+    // and comparisons against an unmounted DOM are vacuously true.
+    await waitFor(() => {
+      if (!canvasElement.querySelector('[data-testid="bbox-control-panel-light-shape"]')) throw new Error("not mounted");
+    });
+
+    for (const scheme of ["light", "dark"] as const) {
+      const scope = requireEl(canvasElement, `[data-testid="scheme-${scheme}"]`);
+      const shape = requireEl(scope, `[data-testid="bbox-control-panel-${scheme}-shape"]`);
+      const fontSize = requireEl(scope, `[data-testid="bbox-control-panel-${scheme}-fontSize"]`);
+      const fill = requireEl(scope, `[data-testid="bbox-control-panel-${scheme}-fill"]`);
+      const tag = (what: string) => `${scheme}: ${what}`;
+
+      // ---- labels, everywhere a panel writes a word ----------------------
+      for (const panel of [shape, fontSize, fill]) {
+        for (const option of options(panel)) {
+          const label = option.querySelector("span:not([aria-hidden])");
+          if (!label || (label.textContent ?? "").trim() === "") continue;
+          await expect(
+            inkContrast(label),
+            tag(`label "${label.textContent}" on ${panel.dataset.layout}`),
+          ).toBeGreaterThanOrEqual(TEXT_MIN);
+        }
+      }
+      // The Shape picker specifically — Zach's photograph.
+      await expect(options(shape)).toHaveLength(SHAPE_NAMES.length);
+
+      // ---- the check mark on the chosen list row ------------------------
+      const [chosenRow] = checked(fontSize);
+      const check = requireEl<SVGSVGElement>(chosenRow, "svg");
+      await expect(getComputedStyle(check).opacity).toBe("1");
+      await expect(inkContrast(check), tag("check mark")).toBeGreaterThanOrEqual(TEXT_MIN);
+
+      // ---- secondary text: rung px, the Custom cell ---------------------
+      for (const px of Array.from(fontSize.querySelectorAll('[data-testid^="control-option-rung-px-"]'))) {
+        await expect(inkContrast(px), tag(`rung px "${px.textContent}"`)).toBeGreaterThanOrEqual(TEXT_MIN);
+      }
+      const custom = requireEl(fontSize, '[data-testid="control-custom-size-input"]').closest("label")!;
+      for (const word of Array.from(custom.querySelectorAll("span"))) {
+        await expect(inkContrast(word), tag(`custom cell "${word.textContent}"`)).toBeGreaterThanOrEqual(TEXT_MIN);
+      }
+
+      // ---- the chosen chip: visible, and readable on itself ---------------
+      const [chosenChip] = checked(requireEl(fill, '[data-mode-control]'));
+      const chipFill = rgbOf(getComputedStyle(chosenChip).backgroundColor);
+      const panelSurface = backdropOf(fill);
+      await expect(chipFill[3], tag("the chosen chip is filled")).toBeGreaterThan(0);
+      await expect(ratio(over(chipFill, panelSurface), panelSurface), tag("chosen chip against the panel")).toBeGreaterThanOrEqual(MARK_MIN);
+      await expect(inkContrast(labelOf(chosenChip)), tag("chosen chip's label")).toBeGreaterThanOrEqual(TEXT_MIN);
+      // The chosen swatch's ring is drawn in the ink, so it is visible too.
+      const [chosenSwatch] = checked(optionsGroup(fill));
+      const ring = ringColourOf(chosenSwatch);
+      await expect(ring, tag("the chosen swatch has a ring")).not.toBeNull();
+      await expect(ratio(over(ring!, panelSurface), panelSurface), tag("chosen swatch ring")).toBeGreaterThanOrEqual(MARK_MIN);
+
+      // ---- hover: a wash, never a slab ---------------------------------
+      const idle = options(shape).find((option) => option.getAttribute("aria-checked") !== "true")!;
+      const hoverBg = hoverBackgroundOf(idle);
+      await expect(hoverBg, tag("an idle option has a hover rule at all")).not.toBeNull();
+      const hovered = over(hoverBg!, panelSurface);
+      await expect(ratio(hovered, panelSurface), tag("hovered background against the panel")).toBeLessThan(MARK_MIN);
+      // …and it is a change, not a no-op: the wash is visibly there.
+      await expect(hoverBg![3], tag("the hover wash has some opacity")).toBeGreaterThan(0);
+      const labelInk = rgbOf(getComputedStyle(labelOf(idle)).color);
+      await expect(
+        ratio(labelInk[3] < 1 ? over(labelInk, hovered) : labelInk, hovered),
+        tag("label on the hovered background"),
+      ).toBeGreaterThanOrEqual(TEXT_MIN);
+    }
   },
 };

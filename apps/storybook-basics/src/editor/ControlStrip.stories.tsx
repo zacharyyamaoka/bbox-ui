@@ -9,7 +9,7 @@ import {
   createControlRegistry,
   type ControlDefinition,
 } from "./controlRegistry";
-import { DEFAULT_GLYPH_FAMILIES, swatchGlyph, type GlyphFamilies } from "./controlGlyphs";
+import { DEFAULT_GLYPH_FAMILIES, paintFaceGlyph, swatchGlyph, type GlyphFamilies } from "./controlGlyphs";
 
 /**
  * `ControlStrip`/`ControlPanel` (`controlStrip.tsx`/`controlPanel.tsx`) are
@@ -41,7 +41,12 @@ export type DemoKind =
   | "align"
   | "fontSize"
   | "shapeLibrary"
-  | "duplicate";
+  | "duplicate"
+  // The two label-less triggers of the "Two Faces" bar Zach picked on
+  // 2026-09-24 — same swatch vocabulary as `fill`, but their trigger face
+  // draws the RESULT rather than naming the control (see `TwoFacesBar`).
+  | "inside"
+  | "edge";
 
 /** 21 real swatches + the 22nd (custom) cell — an 11-column, 2-row grid,
     the exact shape docs/menus/screenshots/01 draws (`columns` on the
@@ -71,6 +76,17 @@ export const DEMO_SWATCH_HEX: Record<string, string> = {
 };
 
 export const FONT_SIZE_PX: Readonly<Record<string, number>> = { s: 18, m: 24, l: 36, xl: 44 };
+
+/** What each `strokeWidth` rung actually paints at. `controlGlyphs.tsx` keeps
+    its own copy of these three numbers module-private on purpose ("a host that
+    needs the pixel value elsewhere owns its own copy"), and a `FacePaint`
+    takes px, not a rung name — so this is that host copy. */
+export const DEMO_STROKE_PX: Readonly<Record<string, number>> = { thin: 2, medium: 3.5, thick: 7 };
+
+const SWATCH_OPTIONS = Object.keys(DEMO_SWATCH_HEX).map((value, index) => ({
+  value,
+  label: `Color ${index + 1}`,
+}));
 
 /** Exported so `ControlLab.stories.tsx` can read each kind's registered
     default layout/trigger and option list when building its lever rows —
@@ -177,6 +193,42 @@ export const demoDefinitions: Readonly<Record<DemoKind, ControlDefinition<DemoKi
     glyph: "duplicate",
     options: [],
   },
+  // WHY `inside`/`edge` are colour controls rather than treatment controls:
+  // the trigger's VALUE is what its face is handed (`controlStrip.tsx`'s
+  // `TriggerFace` passes `current?.value` for `trigger: "value"`), and the
+  // colour is the one thing the face cannot infer. Everything else it paints
+  // — treatment, dash, width, opacity — rides in through the `read` closure
+  // the host builds over its own live state, which is exactly what
+  // `TwoFacesBar` below demonstrates.
+  //
+  // WHY two glyph fields and not one: `glyph` draws an OPTION, `triggerGlyph`
+  // draws the TRIGGER, and here they are deliberately different families. The
+  // trigger paints the live combination (this colour, at this treatment, at
+  // this opacity); an option cell has to paint the colour you would be
+  // choosing, plainly. One field for both made the palette render 21 copies
+  // of the trigger's own washed-out face instead of 21 colours.
+  inside: {
+    kind: "inside",
+    label: "Inside",
+    trigger: "value",
+    layout: "swatches",
+    glyph: "swatch",
+    triggerGlyph: "insideFace",
+    columns: 11,
+    custom: true,
+    options: SWATCH_OPTIONS,
+  },
+  edge: {
+    kind: "edge",
+    label: "Edge",
+    trigger: "value",
+    layout: "swatches",
+    glyph: "swatch",
+    triggerGlyph: "edgeFace",
+    columns: 11,
+    custom: true,
+    options: SWATCH_OPTIONS,
+  },
 };
 
 export const demoRegistry = createControlRegistry<DemoKind>(demoDefinitions);
@@ -189,6 +241,20 @@ export const demoGlyphs: GlyphFamilies = {
   ...DEFAULT_GLYPH_FAMILIES,
   swatch: swatchGlyph((name) => DEMO_SWATCH_HEX[name]),
   duplicate: () => <Copy aria-hidden="true" className="size-4" />,
+  // The two paint faces at their RESTING paint — a plain solid fill, a plain
+  // medium solid edge. That is all a surface with no live shape state (the
+  // lab board, an options row inside a panel) can truthfully say. A surface
+  // that DOES own the state spreads its own pair over these, which is what
+  // makes the bar's face answer "what is it now" — see `TwoFacesBar`.
+  insideFace: paintFaceGlyph("inside", (value) => ({
+    hex: value ? DEMO_SWATCH_HEX[value] : undefined,
+    fillStyle: "solid",
+  })),
+  edgeFace: paintFaceGlyph("edge", (value) => ({
+    hex: value ? DEMO_SWATCH_HEX[value] : undefined,
+    dash: "solid",
+    widthPx: DEMO_STROKE_PX.medium,
+  })),
 };
 
 const meta = {
@@ -218,6 +284,199 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+/**
+ * The bar Zach picked on 2026-09-24 — "Two Faces": Inside and Edge carry NO
+ * text, and the font-size combobox beside them still does.
+ *
+ * *"no need to put the text (inside and edge) on the drop down menu btw, we
+ * can learn to just know it by the icon"* — which is only survivable because
+ * each trigger's face paints the selection's actual answer. Both faces here
+ * are built over the SAME live state the panels write to, so pressing
+ * Hatched, or dragging Opacity, changes the bar itself; a fixed icon could
+ * not, and the two triggers would then be indistinguishable at rest.
+ *
+ * Opacity is inside each panel rather than on the bar (*"that is something
+ * that relates to the fill and stroke"*) — a `ContinuousBinding`, one per
+ * paint, so Inside and Edge fade independently.
+ *
+ * LOOK AT THE OPEN PANEL: the trigger and the palette under it draw through
+ * DIFFERENT glyph families, and that split is the whole reason the bar works.
+ * `triggerGlyph: "insideFace"` paints the live combination on the trigger;
+ * `glyph: "swatch"` paints each option as the plain colour you would be
+ * choosing. They were one field until 2026-09-24, and with one field a
+ * trigger that painted 60% transparent made all 21 swatches 60% transparent
+ * too — the popover lost the only thing it was open to show. `triggerGlyph`
+ * wins in `controlStrip.tsx`'s `TriggerFace` and nowhere else;
+ * `ControlOptionButton` (`controlPanel.tsx`) always reads `glyph`. The play
+ * function below pins both halves, because "the palette shows colours" is
+ * exactly the kind of claim a presence assertion passes while it is false.
+ */
+export const TwoFacesBar: Story = {
+  render: () => {
+    const [insideColor, setInsideColor] = useState("c5");
+    const [fillMode, setFillMode] = useState("semi");
+    const [insideOpacity, setInsideOpacity] = useState(0.6);
+    const [edgeColor, setEdgeColor] = useState("c7");
+    const [lineStyle, setLineStyle] = useState("dashed");
+    const [strokeWidth, setStrokeWidth] = useState("thick");
+    const [edgeOpacity, setEdgeOpacity] = useState(1);
+    const [fontSize, setFontSize] = useState("l");
+
+    // The faces, rebuilt per render over live state — see `demoGlyphs`'s own
+    // note. This closure IS the host's theme/shape resolver; the kit never
+    // reaches for either.
+    const glyphs: GlyphFamilies = {
+      ...demoGlyphs,
+      insideFace: paintFaceGlyph("inside", (value) => ({
+        hex: value ? DEMO_SWATCH_HEX[value] : undefined,
+        fillStyle: fillMode,
+        opacity: insideOpacity,
+      })),
+      edgeFace: paintFaceGlyph("edge", (value) => ({
+        hex: value ? DEMO_SWATCH_HEX[value] : undefined,
+        dash: lineStyle,
+        widthPx: DEMO_STROKE_PX[strokeWidth],
+        opacity: edgeOpacity,
+      })),
+    };
+
+    const fillModeBound = demoRegistry.bindControl("fillMode", {
+      id: "fillMode",
+      value: { type: "shared", value: fillMode },
+      onSelect: (value) => value && setFillMode(value),
+    });
+    const insideBound = demoRegistry.bindControl("inside", {
+      id: "inside",
+      value: { type: "shared", value: insideColor },
+      onSelect: (value) => value && setInsideColor(value),
+      modeControl: fillModeBound,
+      modePlacement: "above",
+      continuous: {
+        label: "Opacity",
+        value: insideOpacity,
+        min: 0,
+        max: 1,
+        step: 0.01,
+        format: (n) => `${Math.round(n * 100)}%`,
+        apply: (value) => setInsideOpacity(value),
+      },
+    });
+
+    // Three sections stacked above the Edge swatches — thickness, then line
+    // style, then the palette. `stackModes`'s chain walk is what makes that
+    // one link per section rather than one renderer per shape.
+    const strokeWidthBound = demoRegistry.bindControl("strokeWidth", {
+      id: "strokeWidth",
+      value: { type: "shared", value: strokeWidth },
+      onSelect: (value) => value && setStrokeWidth(value),
+    });
+    const lineStyleBound = demoRegistry.bindControl("lineStyle", {
+      id: "lineStyle",
+      value: { type: "shared", value: lineStyle },
+      onSelect: (value) => value && setLineStyle(value),
+      modeControl: strokeWidthBound,
+      modePlacement: "above",
+    });
+    const edgeBound = demoRegistry.bindControl("edge", {
+      id: "edge",
+      value: { type: "shared", value: edgeColor },
+      onSelect: (value) => value && setEdgeColor(value),
+      modeControl: lineStyleBound,
+      modePlacement: "above",
+      continuous: {
+        label: "Opacity",
+        value: edgeOpacity,
+        min: 0,
+        max: 1,
+        step: 0.01,
+        format: (n) => `${Math.round(n * 100)}%`,
+        apply: (value) => setEdgeOpacity(value),
+      },
+    });
+    const fontSizeBound = demoRegistry.bindControl("fontSize", {
+      id: "fontSize",
+      value: { type: "shared", value: fontSize },
+      onSelect: (value) => value && setFontSize(value),
+      rungPxByValue: FONT_SIZE_PX,
+    });
+
+    const composition = demoRegistry.composeControls(
+      {
+        id: "two-faces",
+        groups: [
+          { id: "paint", items: ["inside", "edge"] },
+          { id: "text", items: ["fontSize"] },
+        ],
+      },
+      [insideBound, edgeBound, fontSizeBound],
+    );
+
+    return <ControlStrip composition={composition} glyphs={glyphs} aria-label="Selection style" />;
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const inside = await canvas.findByTestId("bbox-control-inside");
+    const edge = canvas.getByTestId("bbox-control-edge");
+    const text = canvas.getByTestId("bbox-control-fontSize");
+
+    // The whole point: neither face trigger renders a word…
+    await expect(inside.textContent?.trim()).toBe("");
+    await expect(edge.textContent?.trim()).toBe("");
+    // …while the `text` trigger beside them still spells its value out.
+    await expect(text.textContent).toContain("Large");
+
+    // The words moved to the accessible name, they did not disappear — a
+    // label-less trigger still has to be nameable.
+    await expect(inside).toHaveAccessibleName(/^Inside,/);
+    await expect(edge).toHaveAccessibleName(/^Edge,/);
+
+    // Each face paints, and the two paint differently: Inside fills its box,
+    // Edge only inks its border. Both read the rect that actually carries the
+    // selection's colour — never a `data-role` underlay (`keyline`, or the
+    // conditional `hairline` a low-contrast edge draws), which is the
+    // control's own ink by design (`controlGlyphs.tsx`).
+    const coloured = (trigger: HTMLElement) =>
+      [...trigger.querySelectorAll("svg rect")].filter((rect) => !rect.hasAttribute("data-role"));
+    const insideFill = coloured(inside).map((rect) => getComputedStyle(rect).fill);
+    const edgeStyle = getComputedStyle(coloured(edge).at(-1)!);
+    await expect(insideFill.some((fill) => fill !== "none")).toBe(true);
+    await expect(edgeStyle.fill).toBe("none");
+    await expect(edgeStyle.stroke).not.toBe(edgeStyle.color);
+
+    // Opacity lives in the paint's own panel, never on the bar.
+    await expect(
+      canvas.getByTestId("bbox-control-strip").querySelector('[data-slot="control-continuous"]'),
+    ).toBeNull();
+    await userEvent.click(inside);
+    const body = within(document.body);
+    await waitFor(() => expect(body.getByTestId("control-continuous-input")).toBeInTheDocument());
+    await expect(body.getByRole("menuitemradio", { name: "Hatched" })).toBeInTheDocument();
+
+    // An option cell does NOT inherit the trigger's face. The trigger is
+    // painting `semi` at 60%; every swatch below it must still be its own
+    // flat colour, because it draws through `glyph` and the trigger through
+    // `triggerGlyph`.
+    const panel = document.body.querySelector('[data-testid="bbox-control-panel-inside"]')!;
+    const cells = [...panel.querySelectorAll('[role="menuitemradio"][data-kind="inside"]')];
+    await expect(cells).toHaveLength(SWATCH_OPTIONS.length);
+    const backgrounds = new Set<string>();
+    for (const cell of cells) {
+      const swatch = cell.querySelector(".bbox-control-glyph-swatch");
+      // A swatch, never a paint face: an `<svg>` here would mean the option
+      // grid had been handed the trigger's family.
+      await expect(swatch).not.toBeNull();
+      await expect(cell.querySelector("svg")).toBeNull();
+      backgrounds.add(getComputedStyle(swatch!).backgroundColor);
+    }
+    // 21 options, 21 distinct colours — the palette really is showing the
+    // palette, not 21 copies of one washed-out face.
+    await expect(backgrounds.size).toBe(SWATCH_OPTIONS.length);
+    // …and the mirror image on the trigger: a face, never a swatch.
+    await expect(inside.querySelector(".bbox-control-glyph-swatch")).toBeNull();
+    await expect(inside.querySelector("svg.bbox-control-glyph")).not.toBeNull();
+  },
+};
 
 /**
  * docs/menus/screenshots/01-floating-toolbar-fill-popover.png. `fillMode`

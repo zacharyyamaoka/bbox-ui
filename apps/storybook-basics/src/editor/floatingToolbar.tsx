@@ -78,8 +78,26 @@ import { Toolbar } from "./toolbar";
  * `prefers-color-scheme` block to flip. When the root scope lands, these two
  * constants become `var(--bbox-pill-surface)` / `var(--bbox-pill-ink)` and
  * nothing else moves.
+ *
+ * That pair is ALREADY declared here, ahead of the root scope, for one
+ * consumer: `controlPanel.tsx`'s chosen chip, which inverts — the ink for
+ * its fill, the surface for its word (see that file's change 4). CSS has no
+ * "the background behind me" value, and `currentColor` is no substitute for
+ * "the ink around me" either: measured, a chip painted `bg-current` with its
+ * text set to the surface came out #1e1e1e on #1e1e1e, 1:1, because
+ * `currentColor` is the element's OWN `color`, which the chip had just set.
+ * So the skin that sets the pair says both once more as custom properties,
+ * and the panel falls back to the theme's `--popover` /
+ * `--popover-foreground` when no skin declared them — the exact colours an
+ * unskinned popover already paints in. The hexes are written twice on this
+ * line on purpose: Tailwind v4 scans source for literal class names, so a
+ * `bg-[${hex}]` built from `PILL_SURFACE_HEX` would never be generated.
+ * `PaintFace.stories.tsx` pins that the class string still contains the
+ * constant.
  */
-export const PILL_SURFACE = "bg-[#1e1e1e] text-white";
+export const PILL_SURFACE_HEX = "#1e1e1e";
+export const PILL_SURFACE =
+  "bg-[#1e1e1e] text-white [--bbox-pill-surface:#1e1e1e] [--bbox-pill-ink:#fff]";
 
 /** FigJam's three-layer float, traced verbatim. The 10px-offset middle layer
  *  is what lifts the bar off the canvas; Tailwind's `shadow-lg` is a

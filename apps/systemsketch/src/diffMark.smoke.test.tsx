@@ -64,19 +64,34 @@ async function pill(): Promise<HTMLElement> {
   });
 }
 
-/** Press the Diff row's trigger, then the named value inside its panel — the
- *  REAL user path, through the pill, not `setStyleForSelectedShapes`. */
+/** Press the Diff control's trigger, then the named value inside its panel —
+ *  the REAL user path, through the pill, not `setStyleForSelectedShapes`.
+ *
+ *  SELECTORS MOVED, 2026-09-24, and nothing this file asserts moved with them.
+ *  The pill's six per-style rows were replaced by the trunk's `ControlStrip`
+ *  over `chrome/ContextualPopupMenu/appearanceModel.ts`, so the Diff row is now
+ *  a control with `id: "diff"` in the recipe's last group:
+ *
+ *    ss-style-diff        → ss-control-diff
+ *    ss-style-diff-panel  → ss-control-panel-diff
+ *    ss-style-diff-<v>    → [data-control="diff"][data-value="<v>"]
+ *
+ *  The last one is the kit's contract rather than a rename: a `ControlPanel`
+ *  option button carries no test id at all (`controlPanel.tsx`'s
+ *  `ControlOptionButton`), so control-and-value IS how an option is addressed.
+ *  Everything below still measures the editor and the painted DOM, never the
+ *  presence of a button. */
 async function pressDiff(value: string): Promise<void> {
   const bar = await pill();
-  const trigger = await waitFor(() => bar.querySelector<HTMLElement>('[data-testid="ss-style-diff"]'), {
-    what: "the Diff row trigger on the pill",
+  const trigger = await waitFor(() => bar.querySelector<HTMLElement>('[data-testid="ss-control-diff"]'), {
+    what: "the Diff control's trigger on the pill",
   });
   await userEvent.click(trigger);
   // The panel portals to document.body, so it is not inside `bar`.
-  const panel = await waitFor(() => document.querySelector<HTMLElement>('[data-testid="ss-style-diff-panel"]'), {
+  const panel = await waitFor(() => document.querySelector<HTMLElement>('[data-testid="ss-control-panel-diff"]'), {
     what: "the Diff panel",
   });
-  const option = await waitFor(() => panel.querySelector<HTMLElement>(`[data-testid="ss-style-diff-${value}"]`), {
+  const option = await waitFor(() => panel.querySelector<HTMLElement>(`[data-control="diff"][data-value="${value}"]`), {
     what: `the "${value}" option`,
   });
   await userEvent.click(option);
