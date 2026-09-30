@@ -11,7 +11,10 @@
         "health": "/api/health"
       }
     ],
-    "proxy": { "/api/workspace": "files", "/api/recordings": "files" }
+    "proxy": {
+      "/api/workspace": { "to": "files", "rewriteOrigin": true },
+      "/api/recordings": { "to": "files", "rewriteOrigin": true }
+    }
   },
   "preview": { "port": 4340 },
   "chip": { "position": "bottom-right", "avoid": ["[data-slot=\"status-strip\"]"] },

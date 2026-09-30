@@ -499,7 +499,11 @@ JSON has no comments, so the WHY of each choice in `stable-preview.json` is here
   mounted `/api/workspace/*` and `/api/recordings/*` in-process; now Stable runs the
   same `scripts/systemsketch_files.py serve` the Vite plugin (`devFileHost.ts`)
   starts, over the real home as files root, and proxies both prefixes to it
-  same-origin. No `--lock-root`: the script's default IS `resolveSharedLockRoot`
+  same-origin. Both routes set `rewriteOrigin` (the package's contract §6): the file
+  host refuses any write whose `Origin` is not its own `Host`, and behind the proxy the
+  `Host` is the backend's, so without it every save from Stable came back 403. The
+  rewrite touches only the Stable page's own `Origin` — a foreign page is still refused,
+  the same rule `devFileHost.ts`'s `crossOriginRefusal` applies in Preview. No `--lock-root`: the script's default IS `resolveSharedLockRoot`
   (pinned by `src/devFileHost.test.ts`). `--source-root {root}/../..` keeps the
   recorder reading the main checkout's sources, as the old Stable did. Preview needs
   no process — `devFileHostPlugin` spawns its own.
