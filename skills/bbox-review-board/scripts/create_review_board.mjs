@@ -25,7 +25,7 @@
 // stance the archived SystemSketch helper took (tldraw's serializer docs, and
 // the r0b0tlab tldraw skill, say the same thing).
 //
-// The app is reached through FOUR seams (plus one soft one) and nothing else. If a lane moves one,
+// The app is reached through FIVE seams (plus one soft one) and nothing else. If a lane moves one,
 // this script fails naming it — update the seam here, do not work around it:
 const SEAMS = {
   editorHandle: 'window.editor — <app>/src/main.tsx, set only under import.meta.env.DEV',
@@ -34,6 +34,9 @@ const SEAMS = {
   // (claude/chrome-files-settings-2026-09-19) replaced the second with.
   loadBoard: '/src/chrome/FileMenu/fileActions.ts  loadBoardText(editor, text) -> {ok} (preferred)  |  openBoard(editor, helpers) -> file chooser (main, until that lane merges)',
   createWire: '/src/shapes/wire/createWire.ts  createWire(editor, {from,to,routing?,color?}) -> id | null',
+  // The paste-safe `?board=` link the handoff copies — the app's OWN builder,
+  // imported through the dev server like the seams above, never a copy here.
+  boardLink: '/src/files/launchConfig.ts  boardLinkFor(path, origin) -> http://…/?board=/abs/path.tldr',
   // SOFT — informational only, never fails a build if it moves:
   problems: '/src/document/sceneFromStore.ts sceneFromRecords + /src/chrome/problems.ts boardLintFindings -> what the Problems badge will show',
 }
@@ -58,6 +61,10 @@ import { validateRecipe } from './layout_quality.mjs'
 const HERE = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(HERE, '../../..')
 const DEFAULT_APP = 'apps/systemsketch'
+// The origin the printed link points at when the script started its own
+// (throwaway) server: the app's `pnpm dev` port (<app>/package.json `dev`).
+// With --url the link points at the server it attached to instead.
+const HANDOFF_ORIGIN = 'http://127.0.0.1:4340'
 const MIN_CARD_TO_SUBJECT_GAP = 80
 
 function usage() {
@@ -323,6 +330,18 @@ async function main() {
     log(`containment real · ${checks.wires} cable(s) painted · cue arrows on their edge, square · cards clear of the subject`)
     if (checks.problems?.length) log(`the Problems badge will read ${checks.problems.length}: ${checks.problems.map((problem) => problem.rule).join(', ')} — intended for this review?`)
     if (checks.freeTips) log(`${checks.freeTips} cue tip(s) are fixed points (the target refuses arrow bindings) — they will not follow a moved target`)
+    // WHY the link is printed rather than left to the handoff to assemble
+    // (ported from claude/board-url-2026-09-20 `869eb22`): hand-assembled
+    // links shipped as markdown [text](url), whose escaped `=` the app cannot
+    // read, and Zach rated that handoff Bad on 2026-09-19 — "you should make
+    // it so I can open this file directly." Printed on its own line so it is
+    // copied out of this output, never retyped or wrapped in markdown.
+    const openUrl = await reopened.evaluate(
+      async ({ path, origin }) => (await import(/* @vite-ignore */ '/src/files/launchConfig.ts')).boardLinkFor(path, origin),
+      { path: outputPath, origin: args.url ? new URL(server.url).origin : HANDOFF_ORIGIN },
+    )
+    log(`open it with one link (an app served from THIS tree, so the shapes match its code):`)
+    log(`  ${openUrl}`)
 
     await reopened.evaluate(() => {
       window.editor.selectNone()
@@ -350,6 +369,9 @@ async function main() {
       derivedByApp: built.derived.length,
       boardBytes: (await stat(outputPath)).size,
       camera: `${Math.round(framed.zoom * 100)}%`,
+      // The `?board=` link a handoff pastes (see the log line above). Swap the
+      // origin if the app is served somewhere else; never re-encode the path.
+      openUrl,
       cueTips: { bound: checks.boundTips, fixed: checks.freeTips },
       problems: checks.problems,
       verified: 'cold-reopen · containment · painted cables · cue arrows attached + square · card clearance',
@@ -379,6 +401,7 @@ async function probeSeams(page) {
       }
     } catch { /* already reported by need() above */ }
     await need('/src/shapes/wire/createWire.ts', ['createWire'])
+    await need('/src/files/launchConfig.ts', ['boardLinkFor'])
     return found
   })
   if (problems.length) {

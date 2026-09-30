@@ -112,6 +112,39 @@ export const browserDocumentLocation: DocumentLocation = {
 };
 
 /**
+ * The absolute link a HUMAN is handed — `http://127.0.0.1:4340/?board=/abs/path.tldr`
+ * — as opposed to `boardHref`, the relative href the app navigates ITSELF
+ * with. Same value space, two renderings: `URLSearchParams.set` (what
+ * `boardHref` uses) escapes every `/` to `%2F`, which opens fine but is
+ * unreadable in a handoff; this keeps the `=` and every `/` literal and
+ * escapes only `# & + %`, the four characters that would end the query,
+ * split it, turn into a space, or be read as an escape. A literal `/` is
+ * legal in a query (RFC 3986 §3.4), so `URLSearchParams` on the receiving
+ * side (`initialBoard`, `persistenceKeyForSearch`) reads it back unchanged —
+ * `launchConfig.test.ts` pins that both spellings parse to the same path.
+ *
+ * Ported from claude/board-url-2026-09-20 (`boardParam.ts` `boardLinkFor`,
+ * `869eb22`) WITHOUT that branch's second boot path: this app already
+ * opens `?board=` here, through the real file host. The review-board
+ * generator (`skills/bbox-review-board/scripts/create_review_board.mjs`)
+ * imports THIS function through the dev server, so there is one builder,
+ * not a copy kept "in step". WHY here and not in the trunk: it spells THIS
+ * app's launch contract (`BOARD_PARAM`, read by `initialBoard` above); the
+ * trunk's `documentHref` (`@trunk/files/workspaceModel`) stays the in-app
+ * builder, and the test parses all three renderings back to one path.
+ *
+ * WHY it exists (Zach, 2026-09-19, rating a handoff that made him open the
+ * board by hand Bad): "you should make it so I can open this file
+ * directly." And WHY never a markdown `[text](url)` link around it: a chat
+ * client escapes the `=` to `%3D`, `URLSearchParams` then reads one key
+ * named `board=/abs/path` and there is no `board` param at all.
+ */
+export function boardLinkFor(path: string, origin: string): string {
+  const literal = path.replace(/[#&+%]/g, (character) => encodeURIComponent(character));
+  return `${origin.replace(/\/+$/, "")}/?${BOARD_PARAM}=${literal}`;
+}
+
+/**
  * What `main.tsx` passes as `<App persistenceKey>`: a file-backed or fresh
  * window persists NOTHING to IndexedDB (the file on disk is the persistence,
  * or there is none yet); a plain launch keeps the app's own scratch board
