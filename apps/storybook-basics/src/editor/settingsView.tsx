@@ -907,6 +907,15 @@ export function SettingsView(props: SettingsViewProps): ReactElement | null {
           data-slot="settings-view"
           data-presentation={presentation}
           data-testid={testIdPrefix}
+          /* This frame is sized against the real window (`POPUP_DIALOG`'s
+             `min(1040px, calc(100vw-4rem))`, `POPUP_PAGE`'s `h-screen`), so a
+             host that scales its chrome must hold the BOX in real pixels and
+             scale the interior instead. `apps/systemsketch/src/
+             interface-scale.css` used to name this element by its own
+             `data-slot`; the attribute says the same thing as a contract the
+             next viewport-bound dialog inherits without editing that host —
+             `fileNavigator.tsx` is the one that made the case. */
+          data-viewport-frame=""
           className={cn(POPUP_BASE, presentation === "page" ? POPUP_PAGE : POPUP_DIALOG, popupClassName)}
         >
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-3">
