@@ -92,7 +92,12 @@ export async function runHostContract(makeHost: MakeHost): Promise<ContractResul
     }
   };
 
-  const assert = (condition: unknown, message: string) => {
+  // `asserts condition` so a guard like `assert(box !== null, …)` narrows what
+  // follows it. The explicit annotation is required: TS only honours an
+  // assertion signature on a `const` that is declared with one. Without it the
+  // trunk's `tsc` reports 14 "possibly null" errors here — the branch tip was
+  // already red on them; vitest strips types, so its green never saw them.
+  const assert: (condition: unknown, message: string) => asserts condition = (condition, message) => {
     if (!condition) throw new Error(message);
   };
 
