@@ -20,9 +20,11 @@ for now".
 What changes from the donor, and why:
   * The routes live in ``WorkspaceApi`` — a mixin-free object any
     ``BaseHTTPRequestHandler`` can delegate to — so the SAME code serves the
-    dock's Stable server (``scripts/launch_systemsketch.py`` mounts it on
-    :4341, same origin as the app) and this file's own standalone server (the
-    vite dev proxy and the smoke tests).
+    dock's old Stable server (the retired ``scripts/launch_systemsketch.py``
+    mounted it on :4341) and this file's own standalone server — which is now
+    what Stable runs too (``apps/systemsketch/stable-preview.json``'s
+    ``stable.processes``, proxied same-origin on :4341), besides the vite dev
+    proxy and the smoke tests.
   * ``Desktop`` is injected. The donor shelled out to ``gio trash`` and
     xdg-open directly; a test run must never move a real file to the
     desktop Trash or open a file manager on Zach's screen, so tests pass

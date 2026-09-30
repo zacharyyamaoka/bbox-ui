@@ -4,8 +4,9 @@
 // Zach, 2026-09-21: "please connect the bbox whiteboard app to open when I
 // press bbox-ui, and then somewhere in that whiteboard app in a drop down
 // menu somewhere give the option to open the bbox-ui.com site and the
-// storybook site". The dock icon is the first half (assets/bbox-ui.desktop
-// now runs scripts/launch_systemsketch.py); these rows are the second.
+// storybook site". The dock icon is the first half (the `bbox-ui` entry
+// `sps install-desktop` writes from apps/systemsketch/stable-preview.json);
+// these rows are the second.
 //
 // WHY they open a NEW window instead of navigating this one — the opposite
 // of ./legacyApp.ts, deliberately: the archived app is the SAME artifact one
@@ -20,12 +21,12 @@
 // this machine, so from anywhere else the row would point at nothing. Absent
 // beats broken — the same rule, for the same reason, as ./legacyApp.ts.
 //
-// WHY the LAUNCHER is what starts Storybook and not this row: a page cannot
-// start a process. `scripts/launch_systemsketch.py --open` brings :5421 up
-// before the window opens, exactly as it already does for the archived app's
-// Stable server. Press the row without that launcher (a bare `vite dev`, say)
-// and you get a connection-refused tab — which is why the launcher, not this
-// file, is the thing that had to change.
+// WHY this row does not start Storybook: a page cannot start a process.
+// The retired dock launcher (`scripts/launch_systemsketch.py`, deleted
+// 2026-09-29) brought :5421 up on every press; the shared
+// stable-preview-switcher runtime that replaced it runs only this app. With
+// nothing on :5421 the row is probed dead and disabled (below) rather than
+// opening a connection-refused tab.
 import { createElement, useEffect, useMemo, useState } from "react";
 import { BookOpen, Globe } from "lucide-react";
 
@@ -90,12 +91,14 @@ const STATUS_POLL_MS = 5000;
  * WHY the whiteboard's OWN origin names two products and that is not a bug:
  * this app is served by two different things depending on the channel —
  * `apps/systemsketch/statusEndpoint.ts` (the `vite dev` Preview) says
- * `bbox-ui-systemsketch`, and `scripts/launch_systemsketch.py` (the dock's
- * pinned Stable build) says `systemsketch-next`. Two names for two channels
- * of one product, from before the naming was unified. Unifying them would
- * mean changing a string that `launch_systemsketch.py`'s own `health()`
- * gate and two script test suites already pin, for cosmetics — so the set is
- * named honestly here instead, where the comparison happens.
+ * `bbox-ui-systemsketch`, and the retired dock launcher
+ * (`scripts/launch_systemsketch.py`, deleted 2026-09-29) said
+ * `systemsketch-next` for the pinned Stable build. The Stable server that
+ * replaced it (the shared stable-preview-switcher runtime) answers no
+ * `/api/health` at all, so on Stable this probe reads "unsupported" and the
+ * rows show no mismatch — the chip in the corner carries Stable's commit and
+ * relation instead. `systemsketch-next` stays accepted for a window still
+ * served by the old launcher until its server is stopped.
  */
 const OWN_PRODUCTS = ["bbox-ui-systemsketch", "systemsketch-next"] as const;
 const STORYBOOK_PRODUCTS = ["bbox-ui-storybook"] as const;

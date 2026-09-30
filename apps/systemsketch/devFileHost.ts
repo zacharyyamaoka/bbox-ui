@@ -5,12 +5,14 @@
 // `src/devFileHost.test.ts` is the acceptance and is off-limits to the builder.
 //
 // WHY the dev server owns this at all: the app reaches its file host SAME
-// ORIGIN — the dock's Stable server mounts `/api/workspace/*` next to the
-// build it serves (scripts/launch_systemsketch.py). `pnpm --filter
-// systemsketch dev` has no such server, so without this plugin Open/Save
-// would work in the dock and fail on :4340 — the two surfaces Zach actually
-// uses, disagreeing. The plugin starts the SAME `scripts/systemsketch_files.py`
-// on an ephemeral port and proxies the same paths to it.
+// ORIGIN — the dock's Stable server proxies `/api/workspace/*` to this same
+// script, run as a Stable process (`stable.processes` + `stable.proxy` in
+// apps/systemsketch/stable-preview.json). Preview (`sps open --preview`), an
+// agent's `sps dev` lane and a bare `pnpm --filter systemsketch dev` all run
+// this Vite config, so without this plugin Open/Save would work in the dock
+// and fail on :4340 — the two surfaces Zach actually uses, disagreeing. The
+// plugin starts the SAME `scripts/systemsketch_files.py` on an ephemeral port
+// and proxies the same paths to it.
 //
 // WHY it refuses to guess a files root under a test runner: a suite that
 // spawned this with the default root would be writing into
