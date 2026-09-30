@@ -798,9 +798,29 @@ export function useDocumentSession(options: {
         return;
       }
       if (current.path === null) {
-        // No file to rename (a scratch board, or native mode's opaque
-        // handle): this renames the BOARD, which is tldraw's own
-        // `TLDocument.name` record — the one place two writers can agree on.
+        // WHY a native handle is refused here instead of falling through to
+        // the board-name write below (Zach, 2026-09-23: "rename is not
+        // saving on the file name: I click it, type in the new name but it
+        // doesn't update when I press enter or click away"): the File System
+        // Access API hands back an OPAQUE handle — no path, no rename — so
+        // in native mode there is no file here to rename at all. Falling
+        // through renamed the BOARD, and that was silent twice over: the
+        // file kept its name on disk, and `identity.title` is
+        // `session.title ?? boardName`, so an opened file's title shadows
+        // the very board name the write had just changed. Nothing moved and
+        // nothing showed. Settings already promises this — the native option
+        // reads "No recent list, no rename, no Show in Files" — so honouring
+        // it is the fix, and the error names the control that grants it.
+        // The guard lives HERE and not only on the menu row because F2 opens
+        // this same field with no menu involved (see `commandsRef` above).
+        if (current.native !== null) {
+          setRenameError("Renaming needs the SystemSketch file browser (Settings ▸ File navigation).");
+          return;
+        }
+        // A true scratch board has no file to disagree with, so this really
+        // IS the board's name — tldraw's own `TLDocument.name` record, the
+        // one place two writers can agree on. `session.title` is null here,
+        // so the bar shows the change.
         editor.updateDocumentSettings({ name: trimmed });
         setRenaming(false);
         return;
@@ -1076,8 +1096,24 @@ export function useDocumentSession(options: {
   ]);
 
   const titleActions = useMemo<MenuAction[]>(() => {
+    // A board opened through a File System Access handle has no path to
+    // rename. DISABLED with a reason rather than dropped the way the File
+    // menu drops its five native rows: Zach's other report the same day was
+    // that a row vanishing is itself confusing ("I like how in old systm
+    // sketch I had this option to show in files or copy absolute path"), so
+    // a row he can still see, greyed, with the reason one hover away beats
+    // one that silently is not there. `disabled` is STATE here, exactly as
+    // it is for the three path-only rows below.
+    const openedNatively = document_.native !== null;
     const rows: MenuAction[] = [
-      { id: "rename", label: "Rename", icon: ChromeBarIcons.rename, run: beginRename },
+      {
+        id: "rename",
+        label: "Rename",
+        icon: ChromeBarIcons.rename,
+        disabled: openedNatively,
+        title: openedNatively ? "Renaming needs the SystemSketch file browser (Settings ▸ File navigation)." : undefined,
+        run: beginRename,
+      },
       { id: "save-as", label: "Save As…", icon: ChromeBarIcons.saveAs, run: () => void saveAs() },
     ];
     if (mode === "app") {
@@ -1101,7 +1137,7 @@ export function useDocumentSession(options: {
       );
     }
     return rows;
-  }, [beginRename, copyPath, document_.digest, document_.path, mode, reveal, saveAs, trash]);
+  }, [beginRename, copyPath, document_.digest, document_.native, document_.path, mode, reveal, saveAs, trash]);
 
   const navigatorProps = useMemo<FileNavigatorProps | null>(() => {
     if (navigatorMode === null) return null;
