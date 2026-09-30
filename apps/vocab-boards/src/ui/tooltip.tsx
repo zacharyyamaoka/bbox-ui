@@ -1,0 +1,89 @@
+// src/components/tooltip.tsx — copied verbatim from
+// apps/docs/src/registry/new-york-v4/ui/tooltip.tsx (the stock shadcn
+// `new-york` Tooltip over Base UI's Tooltip primitive). packages/inspector
+// also has a tooltip.tsx, but it's coupled to the dock's own portal
+// container and z-index stack (`dockPortalContainer()`, `z-[320]`) — plumbing
+// this standalone app doesn't have, so the docs version is the cleaner,
+// self-contained pick. Only the `cn` import path changed to match this
+// app's own src/lib/utils.ts.
+"use client";
+
+import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
+
+import { cn } from "../lib/utils";
+
+function TooltipProvider({ delay = 0, ...props }: TooltipPrimitive.Provider.Props) {
+  return <TooltipPrimitive.Provider data-slot="tooltip-provider" delay={delay} {...props} />;
+}
+
+function Tooltip({ ...props }: TooltipPrimitive.Root.Props) {
+  return <TooltipPrimitive.Root data-slot="tooltip" {...props} />;
+}
+
+function TooltipTrigger({ ...props }: TooltipPrimitive.Trigger.Props) {
+  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />;
+}
+
+function TooltipContent({
+  className,
+  side = "top",
+  sideOffset = 4,
+  align = "center",
+  alignOffset = 0,
+  anchor,
+  collisionPadding,
+  container,
+  children,
+  style,
+  ...props
+}: TooltipPrimitive.Popup.Props &
+  // WHY `anchor` was added to this Pick (2026-09-18, menu kit build): same
+  // reason as dropdown-menu.tsx's matching edit — a canvas-anchored hint (a
+  // pointer-position tooltip with no DOM trigger) needs Positioner's own
+  // `anchor` (a Floating UI VirtualElement), which this Pick never
+  // surfaced. Adds-only; every current consumer that omits `anchor` is
+  // unaffected.
+  //
+  // `collisionPadding` and `container` followed in the same pass that fixed
+  // dropdown-menu.tsx — see the longer note there. The pair has to stay in
+  // lockstep across these two files: a host that scopes its design tokens
+  // to a container element and gets themed MENUS but unthemed TOOLTIPS has
+  // a bug that is much harder to read than one where neither works.
+  Pick<
+    TooltipPrimitive.Positioner.Props,
+    "align" | "alignOffset" | "side" | "sideOffset" | "anchor" | "collisionPadding"
+  > &
+  Pick<TooltipPrimitive.Portal.Props, "container">) {
+  return (
+    <TooltipPrimitive.Portal container={container}>
+      <TooltipPrimitive.Positioner
+        align={align}
+        alignOffset={alignOffset}
+        side={side}
+        sideOffset={sideOffset}
+        anchor={anchor}
+        collisionPadding={collisionPadding}
+        className="isolate z-50"
+      >
+        <TooltipPrimitive.Popup
+          data-slot="tooltip-content"
+          className={cn(
+            "data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-[state=delayed-open]:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs has-data-[slot=kbd]:pr-1.5 **:data-[slot=kbd]:relative **:data-[slot=kbd]:isolate **:data-[slot=kbd]:z-50 **:data-[slot=kbd]:rounded-sm data-[side=inline-start]:slide-in-from-right-2 data-[side=inline-end]:slide-in-from-left-2 z-50 w-fit max-w-xs origin-(--transform-origin) bg-foreground text-background",
+            className,
+          )}
+          // The skin seam (src/skin/skin.ts + skin.css) — `rounded-md`
+          // moved off the class list above and onto here so a skin can
+          // reach it; `var(--radius-md)` is exactly what it resolved to,
+          // so a consumer who never imports skin.css is byte-identical.
+          style={{ borderRadius: "var(--bbox-skin-radius, var(--radius-md))", ...style }}
+          {...props}
+        >
+          {children}
+          <TooltipPrimitive.Arrow className="size-2.5 translate-y-[calc(-50%-2px)] rotate-45 rounded-[2px] data-[side=inline-end]:top-1/2! data-[side=inline-end]:-left-1 data-[side=inline-end]:-translate-y-1/2 data-[side=inline-start]:top-1/2! data-[side=inline-start]:-right-1 data-[side=inline-start]:-translate-y-1/2 z-50 bg-foreground fill-foreground data-[side=bottom]:top-1 data-[side=left]:top-1/2! data-[side=left]:-right-1 data-[side=left]:-translate-y-1/2 data-[side=right]:top-1/2! data-[side=right]:-left-1 data-[side=right]:-translate-y-1/2 data-[side=top]:-bottom-2.5" />
+        </TooltipPrimitive.Popup>
+      </TooltipPrimitive.Positioner>
+    </TooltipPrimitive.Portal>
+  );
+}
+
+export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger };

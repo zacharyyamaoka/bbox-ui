@@ -1,0 +1,153 @@
+/* Everything a board needs to draw, and nothing that needs JavaScript.
+   scripts/build-css.mjs concatenates theme.css + this + the static subset of
+   @xyflow/react's own stylesheet into dist/board.css, which the report inlines
+   once for all 705 boards. */
+
+/* WHY overflow is hidden and not visible: a node tag wider than its own node
+   paints outside the board box — measured 16.2px past the left edge on
+   B1__b1__ex1. docs/vocab_board.py clips that at the SVG viewBox, and inside
+   the app React Flow's own wrapper clips it too, so the app and the original
+   agree. The CAPTURED markup has no such wrapper: without this rule the report
+   is the only surface where a tag bleeds over its neighbour, which is exactly
+   the kind of difference that only shows up once all 705 are on one page. */
+.vb-board {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* --- the ink ----------------------------------------------------------- */
+
+/* A node's box, title, labels and tag are one inline <svg> in node-local
+   coordinates, oversized and overflowing so a tag under the box or a frame
+   title above it is never clipped. */
+.vb-ink {
+  position: absolute;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.vb-ink text,
+.vb-m {
+  font-family: var(--vb-mono);
+}
+
+.vb-ink text.vb-s,
+.vb-s {
+  font-family: var(--vb-sans);
+}
+
+.vb-i {
+  font-style: italic;
+}
+
+.vb-wire {
+  fill: none;
+}
+
+.vb-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* --- the ports --------------------------------------------------------- */
+
+/* WHY zero-size: React Flow resolves a Left handle to its box's LEFT edge and a
+   Right handle to its RIGHT edge. At 0x0 every position resolves to the
+   element's own point — the exact anchor layout.ts computed — and the mark is
+   drawn by an absolutely-positioned child that does not grow the border box. */
+.vb-h.react-flow__handle {
+  width: 0;
+  height: 0;
+  min-width: 0;
+  min-height: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+  transform: none;
+  pointer-events: none;
+}
+
+.vb-h > * {
+  position: absolute;
+  pointer-events: none;
+}
+
+/* r 3.4 stroked 1.6 == an 8.4px box with a 1.6px border, centred on the wall. */
+.vb-dot {
+  left: -4.2px;
+  top: -4.2px;
+  width: 8.4px;
+  height: 8.4px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 1.6px solid var(--dim2);
+  background: var(--bg);
+}
+
+/* The execution pin: a white triangle straddling the wall, point-first. */
+.vb-tri {
+  width: 0;
+  height: 0;
+  border-top: 4.5px solid transparent;
+  border-bottom: 4.5px solid transparent;
+  border-left: 8px solid #f2f4f8;
+}
+
+.vb-tri-in {
+  left: -5px;
+  top: -4.5px;
+}
+
+.vb-tri-out {
+  left: -4px;
+  top: -4.5px;
+}
+
+/* Max/MSP inlets and outlets: 12x5 tabs on the top and bottom walls. */
+.vb-tab {
+  left: -6px;
+  width: 12px;
+  height: 5px;
+  border-radius: 1px;
+  opacity: 0.9;
+}
+
+.vb-tab-in {
+  top: -1px;
+}
+
+.vb-tab-out {
+  top: -4px;
+}
+
+/* A LabVIEW tunnel: a hole in the wall, not a port on a node. */
+.vb-tunnel {
+  left: -5px;
+  top: -5px;
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  border-radius: 1.5px;
+  border: 1.8px solid var(--gold);
+  background: var(--bg);
+}
+
+/* --- paint order ------------------------------------------------------- */
+
+/* React Flow writes these z-indexes inline, but the captured markup is read
+   back in a page whose cascade we do not control, so pin them in CSS too:
+   frames under the wires, wires under the nodes — vocab_board.svg()'s order. */
+.react-flow__node.vb-frame-node {
+  z-index: 0;
+}
+
+.react-flow__edges {
+  z-index: 1;
+}
+
+.react-flow__node {
+  z-index: 2;
+}
