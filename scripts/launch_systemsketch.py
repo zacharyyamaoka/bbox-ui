@@ -218,7 +218,7 @@ def health_document(build: str) -> dict:
     """
     return {
         "product": PRODUCT,
-        "displayName": "SystemSketch",
+        "displayName": "bbox studio",
         "build": build,
         "commit": build or None,
         # Computed by bbox_release.checkout_id so this value is comparable
