@@ -14,6 +14,20 @@ Starts as the W0 set (`baseline.md`). A merge may not add a red outside this lis
 - APP menus.smoke.test.tsx:130 View/Preferences/Export (until L-FILES)
 - FLAKY_FILES allowance (re-run once alone; counts only if it fails again) until G-FLAKE: storybook-basics DraftBar, DevPanel, FileNavigatorGeometry, FitToContentHosts, BlockPortHosts, Grouping
 
+## W0 Baseline
+
+Copied from `baseline.md` (planner, 2026-09-29, main `705847c`; integration branch cut at `2535683`, same code). W1a re-measures it on its own merges.
+
+- **Typecheck:** `pnpm -r typecheck` clean across every package.
+- **Studio** (`apps/systemsketch`, `pnpm exec vitest run`): **10 failed / 672 passed** (86 files, 3 failed files).
+  - `draft.smoke.test.tsx` ×7 — chip reads Main; New draft enters draft mode; counts an edit; Compare opens the trunk dialog; Merge promotes; Exit leaves; survives a remount (acceptance ahead of the draft engine → L-FILES)
+  - `corner.smoke.test.tsx` — narrow (720×900), bottom-right cluster 28 px over its limit (→ G-STALE)
+  - `menus.smoke.test.tsx:130` — View ▸ Zoom to 100% …; Preferences ▸ always-snap …; Export … — 30 s timeout (→ L-FILES)
+  - `menus.smoke.test.tsx:80` — the burger order, stale since the 09-22 channel rows (→ G-STALE)
+- **storybook-basics** (`pnpm exec vitest run`): health run 1 failed / 3,676 (`DraftBar.stories.tsx:185`, `toHaveFocus`); the simulated W1 stack gave a different 0–4 failures per run in DraftBar, DevPanel, FileNavigatorGeometry, FitToContentHosts, BlockPortHosts — flaky under load (→ G-FLAKE), not merge damage.
+- **Simulated W1 stack** (objects only, since removed): zero conflicts, typecheck clean, studio red = exactly main's 10.
+- **Peers:** no worktree modified after 2026-09-23 at plan time; `merge-ready-integrator-2c63dc` holds a dead uncommitted merge of `1f9fd45` (already on main).
+
 ## Lanes
 
 | lane | wave | model | status | branch/sha | audit | evidence |
