@@ -31,9 +31,11 @@
 //
 // The dnd machinery mirrors portEdge.tsx (this app's prior art for
 // kanban-style reorder): PointerSensor with a 4px activation distance, and
-// `neutralizeScale` pinning scaleX/scaleY to 1 — see that file's B1
-// comment for why `useDerivedTransform` otherwise stretches non-uniform
-// siblings mid-reorder. The whole DndContext only mounts when the caller
+// `neutralizeScale` pinning scaleX/scaleY to 1 — see this file's own
+// `neutralizeScale` doc for why `useDerivedTransform` otherwise stretches
+// non-uniform siblings mid-reorder. (Its donor, portEdge.tsx's comment B1,
+// was deleted when PortEdge moved to anchor-space layout — W1, ported
+// 2026-09-30 — which dropped `useSortable` there; this file still uses it.) The whole DndContext only mounts when the caller
 // passes `onMembersChange` AND the layout is `stack`: a static gallery
 // (or a nested Block inside a sortable member) never grows drag listeners
 // it can't honour, which is also what keeps nested membership safe from
