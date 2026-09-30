@@ -39,39 +39,56 @@ class RootsFromEnvironmentTests(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.home = Path(self._tmp.name)
         self.shared = systemsketch_files.default_lock_root(self.home)
+        self.app = Path("/checkout/apps/systemsketch")
 
     def tearDown(self) -> None:
         self._tmp.cleanup()
 
     def test_no_override_keeps_the_named_root_and_the_shared_lock_root(self) -> None:
-        self.assertEqual(roots_from_environment({}, self.home, None, self.home), (self.home, self.shared))
+        self.assertEqual(roots_from_environment({}, self.home, None, self.home, self.app), (self.home, self.shared))
 
     def test_no_override_keeps_an_explicit_lock_root(self) -> None:
-        self.assertEqual(roots_from_environment({}, self.home, Path("/l"), self.home), (self.home, Path("/l")))
+        self.assertEqual(roots_from_environment({}, self.home, Path("/l"), self.home, self.app), (self.home, Path("/l")))
 
     def test_the_override_wins_with_the_shared_lock_root(self) -> None:
         environment = {"SYSTEMSKETCH_FILES_ROOT": "/scratch/boards"}
-        self.assertEqual(roots_from_environment(environment, self.home, None, self.home), (Path("/scratch/boards"), self.shared))
+        self.assertEqual(roots_from_environment(environment, self.home, None, self.home, self.app), (Path("/scratch/boards"), self.shared))
 
     def test_the_override_wins_with_its_own_lock_root(self) -> None:
         environment = {"SYSTEMSKETCH_FILES_ROOT": "/scratch/boards", "SYSTEMSKETCH_LOCK_ROOT": "/scratch/locks"}
-        self.assertEqual(roots_from_environment(environment, self.home, Path("/l"), self.home),
+        self.assertEqual(roots_from_environment(environment, self.home, Path("/l"), self.home, self.app),
+                         (Path("/scratch/boards"), Path("/scratch/locks")))
+
+    def test_an_empty_lock_root_is_unset_and_means_the_shared_one(self) -> None:
+        # Round 2: Path("") is the cwd — Stable's release snapshot, Preview's checkout. Never that.
+        environment = {"SYSTEMSKETCH_FILES_ROOT": "/scratch/boards", "SYSTEMSKETCH_LOCK_ROOT": ""}
+        self.assertEqual(roots_from_environment(environment, self.home, None, self.home, self.app),
+                         (Path("/scratch/boards"), self.shared))
+
+    def test_relative_overrides_resolve_against_the_app_dir_never_the_cwd(self) -> None:
+        environment = {"SYSTEMSKETCH_FILES_ROOT": "boards", "SYSTEMSKETCH_LOCK_ROOT": "../locks/"}
+        self.assertEqual(roots_from_environment(environment, self.home, None, self.home, self.app),
+                         (Path("/checkout/apps/systemsketch/boards"), Path("/checkout/apps/locks")))
+
+    def test_absolute_overrides_are_kept_as_they_are(self) -> None:
+        environment = {"SYSTEMSKETCH_FILES_ROOT": "/scratch/boards/", "SYSTEMSKETCH_LOCK_ROOT": "/scratch/locks"}
+        self.assertEqual(roots_from_environment(environment, self.home, None, self.home, self.app),
                          (Path("/scratch/boards"), Path("/scratch/locks")))
 
     def test_a_lock_root_alone_changes_nothing(self) -> None:
         # devFileHost.ts reads SYSTEMSKETCH_LOCK_ROOT only beside SYSTEMSKETCH_FILES_ROOT.
         environment = {"SYSTEMSKETCH_LOCK_ROOT": "/scratch/locks", "SYSTEMSKETCH_FILES_ROOT": ""}
-        self.assertEqual(roots_from_environment(environment, self.home, None, self.home), (self.home, self.shared))
+        self.assertEqual(roots_from_environment(environment, self.home, None, self.home, self.app), (self.home, self.shared))
 
 
 class ServeTests(unittest.TestCase):
     """The real CLI: where a save actually lands, and where its lock does."""
 
-    def serve(self, base: Path, *flags: str, environment: dict[str, str]) -> tuple[subprocess.Popen, str]:
+    def serve(self, base: Path, *flags: str, environment: dict[str, str], cwd: Path | None = None) -> tuple[subprocess.Popen, str]:
         process = subprocess.Popen(
             [sys.executable, str(SCRIPTS / "systemsketch_files.py"), "serve", "--files-root", str(base / "home"),
              "--port", "0", "--desktop", f"record:{base / 'desktop.jsonl'}", *flags],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=cwd,
             env={key: value for key, value in {**os.environ, "HOME": str(base / "home"), **environment}.items()
                  if not (key in ("SYSTEMSKETCH_FILES_ROOT", "SYSTEMSKETCH_LOCK_ROOT") and key not in environment)},
         )
@@ -106,7 +123,7 @@ class ServeTests(unittest.TestCase):
             base = Path(temporary).resolve()
             (base / "home" / "SystemSketch").mkdir(parents=True)
             (base / "boards" / "SystemSketch").mkdir(parents=True)
-            process, origin = self.serve(base, "--files-root-from-env", environment={
+            process, origin = self.serve(base, "--files-root-from-env", "--app-dir", str(base / "app"), environment={
                 "SYSTEMSKETCH_FILES_ROOT": str(base / "boards"), "SYSTEMSKETCH_LOCK_ROOT": str(base / "locks")})
             try:
                 self.assertEqual(self.health(origin)["filesRoot"], str(base / "boards"))
@@ -121,11 +138,43 @@ class ServeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary).resolve()
             (base / "home" / "SystemSketch").mkdir(parents=True)
-            process, origin = self.serve(base, "--files-root-from-env", environment={})
+            process, origin = self.serve(base, "--files-root-from-env", "--app-dir", str(base / "app"), environment={})
             try:
                 self.assertEqual(self.health(origin)["filesRoot"], str(base / "home"))
             finally:
                 self.stop(process)
+
+    def test_an_empty_or_relative_lock_root_is_the_same_folder_from_any_cwd(self) -> None:
+        """Round 2, measured through real saves: two hosts started from two different cwds (Stable's
+        release snapshot vs Preview's checkout) lock in ONE folder for each value."""
+        for value, expected in (("", None), ("locks", "app/locks")):
+            with tempfile.TemporaryDirectory() as temporary:
+                base = Path(temporary).resolve()
+                for directory in ("home/SystemSketch", "boards/SystemSketch", "app", "snapshot", "checkout"):
+                    (base / directory).mkdir(parents=True)
+                environment = {"SYSTEMSKETCH_FILES_ROOT": str(base / "boards"), "SYSTEMSKETCH_LOCK_ROOT": value}
+                folders = []
+                for index, cwd in enumerate((base / "snapshot", base / "checkout")):
+                    process, origin = self.serve(base, "--files-root-from-env", "--app-dir", str(base / "app"),
+                                                 environment=environment, cwd=cwd)
+                    try:
+                        self.assertEqual(self.save(origin, base / "boards" / "SystemSketch" / f"B{index}.tldr"), 200)
+                    finally:
+                        self.stop(process)
+                    folders.append({lock.parent for lock in base.rglob("*.lock")})
+                wanted = systemsketch_files.default_lock_root(base / "home") if expected is None else base / expected
+                self.assertEqual(folders, [{wanted}, {wanted}], value)
+                self.assertFalse(any((base / "snapshot").iterdir()) or any((base / "checkout").iterdir()), value)
+
+    def test_the_flag_needs_an_absolute_app_dir(self) -> None:
+        for extra in ((), ("--app-dir", "relative/app")):
+            completed = subprocess.run(
+                [sys.executable, str(SCRIPTS / "systemsketch_files.py"), "serve", "--files-root", "/tmp",
+                 "--port", "0", "--files-root-from-env", *extra],
+                capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(completed.returncode, 2, extra)
+            self.assertIn("--app-dir", completed.stderr)
 
     def test_without_the_flag_the_override_is_ignored(self) -> None:
         # Plain CLI use is unchanged: only the root it was given, never an environment's.

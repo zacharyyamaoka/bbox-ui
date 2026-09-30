@@ -508,7 +508,11 @@ JSON has no comments, so the WHY of each choice in `stable-preview.json` is here
   `devFileHost.ts` does for Preview: `SYSTEMSKETCH_FILES_ROOT` (with
   `SYSTEMSKETCH_LOCK_ROOT`, or the shared lock root) wins when set, so an isolated or
   agent run of Stable never writes into the real home; the runtime hands a Stable
-  process the environment of whoever started it (its contract §9.20). Both routes set `rewriteOrigin` (the package's contract §6): the file
+  process the environment of whoever started it (its contract §9.20). An empty value
+  counts as unset and a relative one resolves against `apps/systemsketch` on BOTH
+  channels — `--app-dir {root}` here, the module's own directory in `devFileHost.ts` —
+  never against a cwd: Stable's cwd is its release snapshot, so anything cwd-relative
+  split Preview's locks from Stable's. Both routes set `rewriteOrigin` (the package's contract §6): the file
   host refuses any write whose `Origin` is not its own `Host`, and behind the proxy the
   `Host` is the backend's, so without it every save from Stable came back 403. The
   rewrite touches only the Stable page's own `Origin` — a foreign page is still refused,

@@ -90,6 +90,49 @@ describe("resolveDevFileHostRoots", () => {
       resolveDevFileHostRoots({ HOME: homedir(), SYSTEMSKETCH_FILES_ROOT: "/tmp/elsewhere", SYSTEMSKETCH_LOCK_ROOT: "/tmp/locks" } as NodeJS.ProcessEnv),
     ).toEqual({ filesRoot: "/tmp/elsewhere", lockRoot: "/tmp/locks" });
   });
+
+  // ADDED 2026-09-29 (Codex audit round 2), NEW CASES ONLY: Stable now runs the
+  // same host as a process whose cwd is its release snapshot, so an empty or
+  // relative override must mean ONE path on both channels — never "the cwd".
+  // Python's `roots_from_environment` (what Stable runs, given `--app-dir
+  // {root}`) is the oracle, run here rather than restated.
+  function stableRoots(environment: Record<string, string>): { filesRoot: string; lockRoot: string } {
+    const [filesRoot, lockRoot] = JSON.parse(
+      execFileSync(
+        "python3",
+        [
+          "-c",
+          "import json, sys; sys.path.insert(0, sys.argv[1]); from pathlib import Path; from systemsketch_files import roots_from_environment; " +
+            "print(json.dumps([str(p) for p in roots_from_environment(json.loads(sys.argv[2]), Path('/unused'), None, Path(sys.argv[3]), Path(sys.argv[4]))]))",
+          scriptsDir,
+          JSON.stringify(environment),
+          homedir(),
+          appDir,
+        ],
+        { encoding: "utf8" },
+      ),
+    ) as [string, string];
+    return { filesRoot, lockRoot };
+  }
+
+  it("treats an empty lock root as unset — the shared folder, never the cwd — exactly as Stable does", () => {
+    const environment = { HOME: homedir(), SYSTEMSKETCH_FILES_ROOT: "/tmp/elsewhere", SYSTEMSKETCH_LOCK_ROOT: "" };
+    const roots = resolveDevFileHostRoots(environment as NodeJS.ProcessEnv);
+    expect(roots).toEqual({ filesRoot: "/tmp/elsewhere", lockRoot: SHARED_LOCKS });
+    expect(roots).toEqual(stableRoots(environment));
+  });
+
+  it("resolves relative overrides against this app's directory, exactly as Stable does", () => {
+    const environment = { HOME: homedir(), SYSTEMSKETCH_FILES_ROOT: "boards", SYSTEMSKETCH_LOCK_ROOT: "../locks/" };
+    const roots = resolveDevFileHostRoots(environment as NodeJS.ProcessEnv);
+    expect(roots).toEqual({ filesRoot: path.join(appDir, "boards"), lockRoot: path.resolve(appDir, "../locks") });
+    expect(roots).toEqual(stableRoots(environment));
+  });
+
+  it("keeps absolute overrides as they are, exactly as Stable does", () => {
+    const environment = { HOME: homedir(), SYSTEMSKETCH_FILES_ROOT: "/tmp/elsewhere/", SYSTEMSKETCH_LOCK_ROOT: "/tmp/locks" };
+    expect(resolveDevFileHostRoots(environment as NodeJS.ProcessEnv)).toEqual(stableRoots(environment));
+  });
 });
 
 describe("startFileHost", () => {

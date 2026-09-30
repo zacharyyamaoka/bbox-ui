@@ -88,12 +88,16 @@ export function resolveSharedLockRoot(home: string, directoryExists: (candidate:
   return directoryExists(archived) ? archived : path.join(home, ...NEXT_LOCK_ROOT);
 }
 
+/** This app's own directory: the base a RELATIVE root override resolves against. */
+const APP_DIR = path.dirname(fileURLToPath(import.meta.url));
+
 /**
  * The roots for an environment, or `null` when this dev server must not start
  * a host at all.
  *
- *   - `SYSTEMSKETCH_FILES_ROOT` set → that root (and `SYSTEMSKETCH_LOCK_ROOT`,
- *     or `resolveSharedLockRoot(HOME)`);
+ *   - `SYSTEMSKETCH_FILES_ROOT` set and non-empty → that root (and a non-empty
+ *     `SYSTEMSKETCH_LOCK_ROOT`, or `resolveSharedLockRoot(HOME)`), each resolved
+ *     against `appDir` when relative;
  *   - otherwise, `VITEST` set → `null`;
  *   - otherwise → `{ filesRoot: HOME, lockRoot: the shared lock root }`, the
  *     same pair the dock's Stable server uses, so a board saved from `vite
@@ -102,13 +106,22 @@ export function resolveSharedLockRoot(home: string, directoryExists: (candidate:
 export function resolveDevFileHostRoots(
   environment: NodeJS.ProcessEnv,
   directoryExists: (candidate: string) => boolean = isDirectory,
+  appDir: string = APP_DIR,
 ): DevFileHostRoots | null {
   const home = environment.HOME ?? "";
   const sharedLockRoot = resolveSharedLockRoot(home, directoryExists);
   if (environment.SYSTEMSKETCH_FILES_ROOT) {
+    // WHY an empty lock root means the shared default and a relative one is
+    // resolved against THIS app's directory (Codex audit, 2026-09-29): Stable
+    // runs the same host as a process whose cwd is its release snapshot, not
+    // this checkout, so `""` (→ cwd) or `locks` resolved against each cwd put
+    // Preview's and Stable's locks in different folders — two lock files for
+    // one board, no mutual exclusion. Stable passes this same directory as
+    // `--app-dir {root}` to `systemsketch_files.py serve --files-root-from-env`
+    // (`roots_from_environment`), so both channels land on one path.
     return {
-      filesRoot: environment.SYSTEMSKETCH_FILES_ROOT,
-      lockRoot: environment.SYSTEMSKETCH_LOCK_ROOT ?? sharedLockRoot,
+      filesRoot: path.resolve(appDir, environment.SYSTEMSKETCH_FILES_ROOT),
+      lockRoot: environment.SYSTEMSKETCH_LOCK_ROOT ? path.resolve(appDir, environment.SYSTEMSKETCH_LOCK_ROOT) : sharedLockRoot,
     };
   }
   // WHY: a suite that spawned this with the default root would be writing
