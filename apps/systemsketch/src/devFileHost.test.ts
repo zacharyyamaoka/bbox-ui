@@ -29,7 +29,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { devFileHostPlugin, resolveDevFileHostRoots, resolveSharedLockRoot, startFileHost, type RunningFileHost } from "../devFileHost";
+import { devFileHostPlugin, resolveDevFileHostRoots, resolveSharedLockRoot, RootOverrideError, startFileHost, type RunningFileHost } from "../devFileHost";
 
 const appDir = path.dirname(fileURLToPath(new URL("../vite.config.ts", import.meta.url)));
 const scriptsDir = path.resolve(appDir, "../../scripts");
@@ -91,28 +91,32 @@ describe("resolveDevFileHostRoots", () => {
     ).toEqual({ filesRoot: "/tmp/elsewhere", lockRoot: "/tmp/locks" });
   });
 
-  // ADDED 2026-09-29 (Codex audit round 2), NEW CASES ONLY: Stable now runs the
-  // same host as a process whose cwd is its release snapshot, so an empty or
-  // relative override must mean ONE path on both channels — never "the cwd".
-  // Python's `roots_from_environment` (what Stable runs, given `--app-dir
-  // {root}`) is the oracle, run here rather than restated.
-  function stableRoots(environment: Record<string, string>): { filesRoot: string; lockRoot: string } {
-    const [filesRoot, lockRoot] = JSON.parse(
-      execFileSync(
-        "python3",
-        [
-          "-c",
-          "import json, sys; sys.path.insert(0, sys.argv[1]); from pathlib import Path; from systemsketch_files import roots_from_environment; " +
-            "print(json.dumps([str(p) for p in roots_from_environment(json.loads(sys.argv[2]), Path('/unused'), None, Path(sys.argv[3]), Path(sys.argv[4]))]))",
-          scriptsDir,
-          JSON.stringify(environment),
-          homedir(),
-          appDir,
-        ],
-        { encoding: "utf8" },
-      ),
-    ) as [string, string];
-    return { filesRoot, lockRoot };
+  // ADDED 2026-09-29 (Codex audit rounds 2-3), NEW CASES ONLY: Stable runs the
+  // same host from its release snapshot and an `sps dev` lane runs this file
+  // from its own worktree, so an override must mean ONE path everywhere: empty
+  // is unset, relative is refused. Python's `roots_from_environment` (what
+  // Stable runs) is the oracle, run here rather than restated.
+  function stableRoots(environment: Record<string, string>): { filesRoot: string; lockRoot: string } | { refused: string } {
+    try {
+      const [filesRoot, lockRoot] = JSON.parse(
+        execFileSync(
+          "python3",
+          [
+            "-c",
+            "import json, sys; sys.path.insert(0, sys.argv[1]); from pathlib import Path; from systemsketch_files import roots_from_environment; " +
+              "print(json.dumps([str(p) for p in roots_from_environment(json.loads(sys.argv[2]), Path('/unused'), None, Path(sys.argv[3]))]))",
+            scriptsDir,
+            JSON.stringify(environment),
+            homedir(),
+          ],
+          { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+        ),
+      ) as [string, string];
+      return { filesRoot, lockRoot };
+    } catch (cause) {
+      const stderr = String((cause as { stderr?: unknown }).stderr ?? "");
+      return { refused: stderr.trim().split("\n").pop() ?? "" };
+    }
   }
 
   it("treats an empty lock root as unset — the shared folder, never the cwd — exactly as Stable does", () => {
@@ -122,11 +126,16 @@ describe("resolveDevFileHostRoots", () => {
     expect(roots).toEqual(stableRoots(environment));
   });
 
-  it("resolves relative overrides against this app's directory, exactly as Stable does", () => {
-    const environment = { HOME: homedir(), SYSTEMSKETCH_FILES_ROOT: "boards", SYSTEMSKETCH_LOCK_ROOT: "../locks/" };
-    const roots = resolveDevFileHostRoots(environment as NodeJS.ProcessEnv);
-    expect(roots).toEqual({ filesRoot: path.join(appDir, "boards"), lockRoot: path.resolve(appDir, "../locks") });
-    expect(roots).toEqual(stableRoots(environment));
+  it("refuses a relative files or lock root, naming it — and so does Stable", () => {
+    for (const [environment, named] of [
+      [{ HOME: homedir(), SYSTEMSKETCH_FILES_ROOT: "boards" }, 'SYSTEMSKETCH_FILES_ROOT="boards"'],
+      [{ HOME: homedir(), SYSTEMSKETCH_FILES_ROOT: "/tmp/elsewhere", SYSTEMSKETCH_LOCK_ROOT: "locks" }, 'SYSTEMSKETCH_LOCK_ROOT="locks"'],
+    ] as const) {
+      expect(() => resolveDevFileHostRoots(environment as NodeJS.ProcessEnv)).toThrow(RootOverrideError);
+      expect(() => resolveDevFileHostRoots(environment as NodeJS.ProcessEnv)).toThrow(named);
+      const stable = stableRoots(environment);
+      expect("refused" in stable && stable.refused).toContain(named);
+    }
   });
 
   it("keeps absolute overrides as they are, exactly as Stable does", () => {
@@ -271,6 +280,37 @@ describe("resolveSharedLockRoot — dev and Stable must name the SAME lock folde
     });
     expect(saved.status).toBe(200);
     expect(readdirSync(roots.lockRoot).filter((name) => name.endsWith(".lock"))).toHaveLength(1);
+  });
+});
+
+describe("a relative root override stops the file host loudly (Codex round 3)", () => {
+  it("answers every file request 503 naming the variable, and never spawns a host", async () => {
+    const saved = { files: process.env.SYSTEMSKETCH_FILES_ROOT, locks: process.env.SYSTEMSKETCH_LOCK_ROOT };
+    process.env.SYSTEMSKETCH_FILES_ROOT = "/tmp/relative-test-boards";
+    process.env.SYSTEMSKETCH_LOCK_ROOT = "locks";
+    const { createServer } = await import("vite");
+    const server = await createServer({
+      configFile: false,
+      root: appDir,
+      logLevel: "silent",
+      server: { port: 0, strictPort: false, host: "127.0.0.1" },
+      plugins: [devFileHostPlugin()],
+    });
+    try {
+      await server.listen();
+      const origin = (server.resolvedUrls?.local[0] ?? "").replace(/\/$/, "");
+      for (const route of ["/api/workspace/list", "/api/recordings/last"]) {
+        const answer = await fetch(`${origin}${route}`);
+        expect(answer.status).toBe(503);
+        expect(((await answer.json()) as { error: string }).error).toContain('SYSTEMSKETCH_LOCK_ROOT="locks" is relative');
+      }
+    } finally {
+      await server.close();
+      for (const [name, value] of [["SYSTEMSKETCH_FILES_ROOT", saved.files], ["SYSTEMSKETCH_LOCK_ROOT", saved.locks]] as const) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+    }
   });
 });
 

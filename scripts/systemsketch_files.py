@@ -1013,41 +1013,51 @@ def default_lock_root(home: Path) -> Path:
     return home / ".local" / "state" / "systemsketch-next" / "locks" / "workspace"
 
 
+class RootOverrideError(ValueError):
+    """A ``SYSTEMSKETCH_*_ROOT`` override that is not an absolute path."""
+
+
+def _absolute_override(environment: "dict[str, str] | os._Environ[str]", name: str) -> Path | None:
+    """A non-empty override, which must be absolute; empty (or unset) → None."""
+    value = environment.get(name)
+    if not value:
+        return None
+    if not os.path.isabs(value):
+        raise RootOverrideError(f"{name}={json.dumps(value)} is relative; it must be an absolute path (or empty for unset)")
+    return Path(value)
+
+
 def roots_from_environment(
     environment: "dict[str, str] | os._Environ[str]",
     files_root: Path,
     lock_root: Path | None,
     home: Path,
-    app_dir: Path,
 ) -> tuple[Path, Path]:
     """``(files_root, lock_root)`` for ``serve --files-root-from-env``.
 
-    The SAME precedence ``apps/systemsketch/devFileHost.ts``'s
-    ``resolveDevFileHostRoots`` applies to Preview: a non-empty
-    ``SYSTEMSKETCH_FILES_ROOT`` wins for the files root, with a non-empty
-    ``SYSTEMSKETCH_LOCK_ROOT`` or the shared default for locks, each resolved
-    against ``app_dir`` when relative; otherwise the explicit ``--files-root``
-    and ``--lock-root``/the shared default, exactly as without the flag.
+    The SAME rule ``apps/systemsketch/devFileHost.ts``'s
+    ``resolveDevFileHostRoots`` applies to Preview and ``sps dev`` lanes: a
+    non-empty ``SYSTEMSKETCH_FILES_ROOT`` wins for the files root, with a
+    non-empty ``SYSTEMSKETCH_LOCK_ROOT`` or the shared default for locks;
+    otherwise the explicit ``--files-root`` and ``--lock-root``/the shared
+    default, exactly as without the flag. A relative value of either raises
+    ``RootOverrideError``.
 
     WHY (Codex audit, 2026-09-29): the dock's Stable now runs this CLI as a
     process (``apps/systemsketch/stable-preview.json``) with ``--files-root
     {home}``, so an isolated or agent run of Stable that set
     ``SYSTEMSKETCH_FILES_ROOT`` — honoured by Preview and by the old launcher —
     would have written into the real home instead.
-    WHY ``app_dir`` and never the cwd (round 2): Stable's cwd is its release
-    snapshot and Preview's is the checkout, so an empty (``Path("")`` is the
-    cwd) or relative override put the two channels' locks in different
-    folders and a board saved from both lost its mutual exclusion. Stable
-    passes the checkout's app dir as ``--app-dir {root}``; devFileHost.ts uses
-    its own directory — the same path.
+    WHY empty is unset and relative is refused (rounds 2-3): Stable's cwd is
+    its release snapshot, Preview's is the main checkout and a lane's is its
+    worktree, so ``""`` (``Path("")`` is the cwd) or ``locks`` resolved against
+    any per-process base put the channels' locks in different folders — two
+    lock files for one board, no mutual exclusion. No base is shared by all of
+    them; only an absolute path names one place.
     """
-    override = environment.get("SYSTEMSKETCH_FILES_ROOT")
-    if override:
-        locks = environment.get("SYSTEMSKETCH_LOCK_ROOT")
-        return (
-            Path(os.path.normpath(app_dir / override)),
-            Path(os.path.normpath(app_dir / locks)) if locks else default_lock_root(home),
-        )
+    override = _absolute_override(environment, "SYSTEMSKETCH_FILES_ROOT")
+    if override is not None:
+        return override, _absolute_override(environment, "SYSTEMSKETCH_LOCK_ROOT") or default_lock_root(home)
     return files_root, lock_root or default_lock_root(home)
 
 
@@ -1513,18 +1523,15 @@ def main(argv: list[str] | None = None) -> int:
     # override may only REPLACE the root that was named, the way Preview's
     # devFileHost.ts honours it — see `roots_from_environment`.
     serve_parser.add_argument("--files-root-from-env", action="store_true")
-    # The directory a relative override resolves against — the checkout's
-    # apps/systemsketch, the one devFileHost.ts resolves against in Preview.
-    # Required with the flag so it is never silently this process's cwd.
-    serve_parser.add_argument("--app-dir", type=Path, default=None)
     arguments = parser.parse_args(argv)
 
     if arguments.files_root_from_env:
-        if arguments.app_dir is None or not arguments.app_dir.is_absolute():
-            parser.error("--files-root-from-env needs an absolute --app-dir to resolve a relative override against")
-        files_root, lock_root = roots_from_environment(
-            os.environ, arguments.files_root, arguments.lock_root, Path.home(), arguments.app_dir
-        )
+        try:
+            files_root, lock_root = roots_from_environment(
+                os.environ, arguments.files_root, arguments.lock_root, Path.home()
+            )
+        except RootOverrideError as refused:
+            parser.error(str(refused))
     else:
         files_root = arguments.files_root
         lock_root = arguments.lock_root or default_lock_root(Path.home())
