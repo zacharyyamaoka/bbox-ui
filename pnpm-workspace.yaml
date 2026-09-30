@@ -5,6 +5,7 @@ packages:
   - apps/storybook-basics
   - apps/vocab-boards
   - apps/systemsketch
+  - apps/bbox-no-host
   - apps/docs
   - demos/reactflow
   - demos/tldraw

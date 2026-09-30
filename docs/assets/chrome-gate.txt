@@ -1,0 +1,9 @@
+TOUCHES    claude/chrome-files-settings-2026-09-19
+TOUCHES    claude/devtools-2026-09-19
+TOUCHES    claude/draft-compare-2026-09-19
+TOUCHES    claude/review-boards-2026-09-19
+TOUCHES    claude/settings-pages-2026-09-19
+UNRELATED  lab-extract  (no merge base with main — NOT a hit)
+--- dirty working trees (a lane mid-edit is invisible to a branch diff) ---
+--- gate: 5 touching · 173 clean · 1 unrelated · 1 multi-base ---
+GATE CLOSED

@@ -1,0 +1,37 @@
+
+=== broken fake: undo-does-not-restore — 2 of 30 checks FAILED ===
+  ✗ [history] undo RESTORES the previous state, not just the flag
+      undo() did not restore the previous scene — a history flag that moves without the state is not undo
+  ✗ [history] one transact is ONE undo step
+      one transact took more than one undo to reverse
+
+=== broken fake: selection-does-not-notify — 1 of 30 checks FAILED ===
+  ✗ [lifecycle] subscribe returns a working unsubscribe
+      a change did not notify the subscriber
+
+=== broken fake: scene-is-stored — 8 of 30 checks FAILED ===
+  ✗ [scene] the scene is DERIVED — a command is visible in the next read
+      scene() did not reflect the write: expected (177, 81), read (40, 40) — a stored scene, not a derived one
+  ✗ [scene] no record survives deleting every node the scene reports
+      after deleting all 3 reported node(s), scene() still returns 3 (n1:block, n2:block, n3:block) — a derived scene is leaking a record the shell can see but cannot address
+  ✗ [nodes] delete removes exactly the named nodes
+      delete left the node in the scene
+  ✗ [nodes] update merges data rather than replacing it
+      data write did not land
+  ✗ [nodes] duplicate adds a node with a new id
+      duplicate produced 0 nodes, expected 1
+  ✗ [history] undo RESTORES the previous state, not just the flag
+      the transact did not change anything, so undo cannot be tested
+  ✗ [history] an undoable:false write does not become an undo step
+      the undoable:false write changed nothing, so there is nothing to test
+  ✗ [document] serialize then load restores the scene
+      clearing the board changed nothing, so load cannot be tested
+
+=== broken fake: scene-leaks-helper — 2 of 30 checks FAILED ===
+  ✗ [scene] no record survives deleting every node the scene reports
+      after deleting all 4 reported node(s), scene() still returns 1 (h1:anchor) — a derived scene is leaking a record the shell can see but cannot address
+  ✗ [scene] every node the scene reports can actually be selected
+      scene() reports node h1, but select([h1]) read back [] — the shell is being shown a record it cannot act on
+
+=== fakeHost (unbroken): 0 of 30 checks failed, 0 skipped ===
+=== fakeHost (no capabilities declared): 0 failed, 11 of 30 SKIPPED — the suite says so rather than reading clean ===

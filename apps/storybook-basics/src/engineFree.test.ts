@@ -2,9 +2,13 @@
 // SYSTEMSKETCH-REBUILD-PLAN.md §2, "The core imports no canvas engine").
 //
 // `components/layering.test.ts` already walls `components/` off from the
-// scene kit. This file walls the THREE engine-free kits — `components/`,
-// `scene/`, `editor/` — off from BOTH canvas engines (`presets/` was a fourth
-// until 2026-09-22; presets now live with the component they configure).
+// scene kit. This file walls every engine-free kit off from BOTH canvas
+// engines — the list is `ENGINE_FREE_DIRS` below and the tests name
+// themselves from it, rather than repeating it in prose that goes stale (this
+// comment once said "the FOUR" while naming five). Today: `components/`,
+// `scene/`, `editor/` and `shell/` (the host-less shell's kit, ported
+// 2026-09-29); `presets/` left on 2026-09-22 (presets now live with the
+// component they configure) and `layout/` on 2026-09-21.
 // The rebuild (`apps/systemsketch`) imports these directories through one
 // alias and mounts them inside tldraw; the day one of them imports `tldraw`
 // or `@xyflow/react` the "bbox-ui + stock tldraw" claim silently becomes
@@ -81,7 +85,30 @@ const SRC = dirname(fileURLToPath(import.meta.url));
  *  this list — and the directory drained to empty. Leaving the name here
  *  would fail the existsSync sanity check below; deleting it costs nothing
  *  because the file it protected is still behind the wall. */
-const ENGINE_FREE_DIRS = ["components", "scene", "editor"] as const;
+const ENGINE_FREE_DIRS = ["components", "scene", "editor", "shell"] as const;
+
+/**
+ * Named files the kits must actually contain, so "the directory exists" cannot
+ * pass vacuously on an empty or renamed one.
+ *
+ * WHY `shell/` gets its own entries (host-less shell A0.2,
+ * docs/WORK-ORDER-HOST-LESS-SHELL.md): the existence check asserts
+ * `existsSync(dir)` and nothing more, and an EMPTY directory sails through it
+ * (`presets/` did, the day this rule was written). The shell is the kit the
+ * whole host-less migration rests on, so a rename that silently empties it
+ * must be a failure, not a green.
+ */
+const REQUIRED_FILES = [
+  "components/block.tsx",
+  "components/codeEditor.tsx",
+  "components/trace.tsx",
+  "editor/toolDock.tsx",
+  "editor/chromeBar.tsx",
+  "scene/region.branch.ts",
+  "shell/hostPort.ts",
+  "shell/hostContract.ts",
+  "shell/fakeHost.ts",
+] as const;
 
 const ENGINE_IMPORT_PATTERN = /from\s+["'](?:tldraw|@tldraw\/[^"']+|@xyflow\/[^"']+)["']/g;
 
@@ -193,12 +220,14 @@ describe("engine wall — the kits the rebuild imports never import a canvas eng
     }
     // At least the files the rebuild leans on hardest.
     const files = new Set(ENGINE_FREE_DIRS.flatMap((dir) => sourceFilesUnder(join(SRC, dir))).map((f) => relative(SRC, f)));
-    for (const expected of ["components/block.tsx", "components/codeEditor.tsx", "components/trace.tsx", "editor/toolDock.tsx", "editor/chromeBar.tsx", "scene/region.branch.ts"]) {
+    for (const expected of REQUIRED_FILES) {
       expect(files.has(expected), expected).toBe(true);
     }
   });
 
-  it("no non-test file under components/, scene/, editor/ imports tldraw or @xyflow/react", () => {
+  // The name is DERIVED from the list, so adding a kit can never leave a test
+  // whose name describes a smaller wall than the one it enforces.
+  it(`no non-test file under ${ENGINE_FREE_DIRS.map((d) => `${d}/`).join(", ")} imports tldraw or @xyflow/react`, () => {
     const offenders: { file: string; specifier: string }[] = [];
     for (const dir of ENGINE_FREE_DIRS) {
       for (const file of sourceFilesUnder(join(SRC, dir))) {

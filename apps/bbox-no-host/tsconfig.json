@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@trunk/*": ["../storybook-basics/src/*"]
+    }
+  },
+  "include": ["src", "vite.config.ts"]
+}
