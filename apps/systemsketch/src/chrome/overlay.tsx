@@ -8,6 +8,16 @@
 import { useCallback, useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { useEditor, usePassThroughWheelEvents } from "tldraw";
 
+import {
+  CORNER_INSET,
+  cornerClusterForm,
+  placeCornerCluster,
+  watermarkCoverRect,
+  type CornerClusterForm,
+  type CornerPlacement,
+  type CornerRect,
+  type WatermarkCoverRect,
+} from "./cornerClusterForm";
 import { useForceCornerPlacement } from "./ShareMenu/cornerPlacementHost";
 import { KITS } from "../shapes/registry";
 import { SystemSketchChromeBar } from "./TitleBar";
@@ -33,154 +43,20 @@ export function Overlay() {
 /* The bottom-right corner                                             */
 /* ------------------------------------------------------------------ */
 
-/** Both edges, and the same 8px the chrome bar keeps from the opposite
- *  (top-left) corner, so the two clusters frame the board symmetrically. */
-export const CORNER_INSET = 8;
-
-/** Viewport px, `getBoundingClientRect` shape. */
-export interface CornerRect {
-  left: number;
-  top: number;
-  right: number;
-  bottom: number;
-}
-
-export type CornerPlacementKind = "corner" | "beside-licence" | "above-licence" | "above-dock";
-
-/** Offsets from the container's right and bottom edges, and which rule won. */
-export interface CornerPlacement {
-  right: number;
-  bottom: number;
-  placement: CornerPlacementKind;
-}
-
-function overlaps(a: CornerRect, b: CornerRect): boolean {
-  return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-}
-
-/**
- * Where the bottom-right cluster goes: the first of these that covers
- * neither tldraw's licence watermark nor any obstacle (the dock) —
- *
- *   1. `corner`         — flush, `CORNER_INSET` from both edges;
- *   2. `beside-licence` — the bottom edge, immediately LEFT of the watermark;
- *   3. `above-licence`  — flush right, immediately ABOVE the watermark — and
- *                         above the dock too, if the row is wide enough to
- *                         reach it (`above-dock` when no watermark exists
- *                         and only the dock is in the way). The last resort,
- *                         so it is built to clear everything beneath it.
- *
- * WHY this order, Zach 2026-09-19 (Pasted image 20260919134814.png): "please
- * move the right corner menu to be truly in the right corner right now its
- * above this text 'get a license for production'". 1 is what he asked for
- * and what a licensed build gets. When the watermark owns the corner, 2 keeps
- * the cluster on the corner's own bottom edge instead of parked above the
- * text — the placement he rejected — and 3 is only the narrow-window
- * fallback.
- *
- * WHY the watermark is a hard wall and never something to paint over: it is
- * tldraw's licence notice, and tldraw's own stylesheet binds users to keep it
- * "visible, unobscured, and available to user-interaction" (@tldraw/editor
- * Watermark.mjs:123-129). It sits at `--tl-layer-watermark: 248`, BELOW this
- * slot's 250 (editor.css:45-46), so nothing in tldraw stops chrome here from
- * covering it — the archive's bottom-right strip did exactly that, sitting on
- * the watermark's own 4px anchor one layer above it. Covering is removing.
- *
- * WHY 3 lifts over the dock rather than falling back to 2: a trial merge with
- * main at 52506fa, whose temporary variant pill rides in this same row
- * (482px wide), measured the first version of this rule at 1024px: nothing
- * fitted, so it fell back to "beside" and laid the row straight across the
- * dock. A cluster in the air is a cosmetic cost; one on top of the tools is
- * a broken toolbar.
- */
-export function placeCornerCluster({
-  container,
-  cluster,
-  watermark,
-  obstacles,
-}: {
-  container: CornerRect;
-  cluster: { width: number; height: number };
-  watermark: CornerRect | null;
-  obstacles: readonly CornerRect[];
-}): CornerPlacement {
-  const candidates: CornerPlacement[] = [{ right: CORNER_INSET, bottom: CORNER_INSET, placement: "corner" }];
-  if (watermark) {
-    candidates.push({ right: container.right - watermark.left + CORNER_INSET, bottom: CORNER_INSET, placement: "beside-licence" });
-  }
-  // 3: flush right, lifted clear of whatever sits under that flush-right span.
-  const spanLeft = container.right - CORNER_INSET - cluster.width;
-  const spanRight = container.right - CORNER_INSET;
-  const beneath = [...(watermark ? [watermark] : []), ...obstacles].filter((rect) => rect.left < spanRight && spanLeft < rect.right);
-  if (beneath.length > 0) {
-    candidates.push({
-      right: CORNER_INSET,
-      bottom: container.bottom - Math.min(...beneath.map((rect) => rect.top)) + CORNER_INSET,
-      placement: watermark && beneath.includes(watermark) ? "above-licence" : "above-dock",
-    });
-  }
-  const candidateRect = (candidate: CornerPlacement): CornerRect => {
-    const right = container.right - candidate.right;
-    const bottom = container.bottom - candidate.bottom;
-    return { left: right - cluster.width, top: bottom - cluster.height, right, bottom };
-  };
-  const blockers = watermark ? [watermark, ...obstacles] : obstacles;
-  const fits = candidates.find((candidate) => !blockers.some((rect) => overlaps(candidateRect(candidate), rect)));
-  // Always found: if nothing lies beneath the flush-right span the corner
-  // itself is clear, and if something does, 3 is lifted above all of it. The
-  // fallback only satisfies the type checker.
-  return fits ?? candidates[candidates.length - 1];
-}
-
-/**
- * The forced-corner opt-in's own finishing touch (Zach, 2026-09-22, after
- * seeing it running: "there is this little piece of the letter showing, can
- * you please... cover that"). `useCornerPlacement` gets the CLUSTER's own
- * placement by calling `placeCornerCluster` with NO watermark, so it always
- * lands at the plain `CORNER_INSET` (8px) — but tldraw sits its own
- * watermark closer to the true corner than that (measured ~4px at 1400x900
- * desktop), so the cluster's flush-8px box does not fully contain the
- * watermark's, and a sliver of its right/bottom edge — the tail of a letter
- * — pokes out past the cluster.
- *
- * The first fix here shrank the CLUSTER's own offset to hug the watermark
- * (`Math.min` against `CORNER_INSET`), and Zach caught the real cost of
- * that: it broke the 8px inset every other piece of chrome in this app
- * shares (the top-left bar keeps the same `CORNER_INSET`), so the corner
- * cluster alone sat 4px closer to the edge than its mirror — "I don't like
- * how that made the spacing [no longer] align with the other toolbars." His
- * own fix is this function: decouple the two concerns entirely. The cluster
- * keeps the SAME flush `CORNER_INSET` position it would use if there were no
- * watermark at all — reliable, and consistent with the rest of the chrome —
- * and a separate, purely cosmetic patch (`SystemSketchChrome` below) is
- * painted over wherever the watermark actually measures, independent of
- * where the cluster itself sits. The two no longer have to agree on a
- * position for either to work.
- *
- * This is pure geometry, not layout policy — `MARGIN` pads a couple of
- * pixels past the watermark's own measured edges so a sub-pixel rounding
- * difference between `getBoundingClientRect` calls can never leave a
- * hairline gap. Returns container-relative CSS offsets (the same `right`/
- * `bottom` convention `CornerPlacement` already uses), not viewport
- * coordinates, so the result drops straight into inline `style`.
- */
-export interface WatermarkCoverRect {
-  right: number;
-  bottom: number;
-  width: number;
-  height: number;
-}
-
-const WATERMARK_COVER_MARGIN = 2;
-
-export function watermarkCoverRect(container: CornerRect, watermark: CornerRect): WatermarkCoverRect {
-  return {
-    right: Math.max(0, container.right - watermark.right - WATERMARK_COVER_MARGIN),
-    bottom: Math.max(0, container.bottom - watermark.bottom - WATERMARK_COVER_MARGIN),
-    width: watermark.right - watermark.left + WATERMARK_COVER_MARGIN * 2,
-    height: watermark.bottom - watermark.top + WATERMARK_COVER_MARGIN * 2,
-  };
-}
+// The pure half lives in `./cornerClusterForm` so the node unit project can
+// load it without tldraw; re-exported here because `corner.smoke.test.tsx`
+// imports it from this path.
+export {
+  CORNER_INSET,
+  cornerClusterForm,
+  placeCornerCluster,
+  watermarkCoverRect,
+  type CornerClusterForm,
+  type CornerPlacement,
+  type CornerPlacementKind,
+  type CornerRect,
+  type WatermarkCoverRect,
+} from "./cornerClusterForm";
 
 /** tldraw's own class for it (LicenseManager.mjs:351) — read, never styled. */
 const LICENCE_WATERMARK = ".tl-watermark_SEE-LICENSE";
@@ -191,6 +67,31 @@ function rectOf(el: Element): CornerRect {
   return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
 }
 
+/**
+ * The stacked form of the strip: one `[data-slot="status-strip"]`, two rows —
+ * the leading launchers (grid · frames · problems) over the readout and the
+ * trailing launchers (zoom · dev · help). Cells stay 36x40; nothing is hidden
+ * and nothing leaves the strip. Active only while the wrapper carries
+ * `data-corner-form="stacked"` (`cornerClusterForm`).
+ *
+ * WHY the selectors read the trunk's own `data-slot`s and `role`, never its
+ * class names, and why this lives here and not in the trunk: the stacked form
+ * is app-side styling of a trunk part, not a trunk prop. The column count is
+ * `--ss-strip-columns`, set by `statusStrip.tsx` from the `items` array it
+ * already builds, so the 3 | readout | 2 split follows one array and a new item
+ * updates one place. The separator that sits before the readout is hidden
+ * because the readout starts row 2 (`col-start-1`), where that hairline would
+ * otherwise dangle at the end of row 1.
+ */
+const STACKED_STRIP_CLASS = [
+  "[&[data-corner-form=stacked]_[data-slot=status-strip]]:grid",
+  "[&[data-corner-form=stacked]_[data-slot=status-strip]]:[grid-template-columns:repeat(var(--ss-strip-columns),auto)]",
+  "[&[data-corner-form=stacked]_[data-slot=status-strip]]:justify-items-center",
+  "[&[data-corner-form=stacked]_[data-slot=status-strip]]:items-center",
+  "[&[data-corner-form=stacked]_[data-slot=status-strip]>[role=separator]:has(+[data-slot=status-strip-readout])]:hidden",
+  "[&[data-corner-form=stacked]_[data-slot=status-strip]>[data-slot=status-strip-readout]]:col-start-1",
+].join(" ");
+
 /** What `useCornerPlacement` hands back: the cluster's own position, and,
  *  only when the forced opt-in AND a watermark are both live, the separate
  *  patch that covers it — see `watermarkCoverRect`'s header for why these
@@ -198,14 +99,18 @@ function rectOf(el: Element): CornerRect {
 export interface CornerPlacementState {
   placement: CornerPlacement;
   watermarkCover: WatermarkCoverRect | null;
+  /** The form the cluster is RENDERED in (`cornerClusterForm`). */
+  form: CornerClusterForm;
 }
 
 const INITIAL_CORNER_PLACEMENT: CornerPlacementState = {
   placement: { right: CORNER_INSET, bottom: CORNER_INSET, placement: "corner" },
   watermarkCover: null,
+  form: "row",
 };
 
 function sameCornerPlacementState(a: CornerPlacementState, b: CornerPlacementState): boolean {
+  if (a.form !== b.form) return false;
   if (a.placement.right !== b.placement.right || a.placement.bottom !== b.placement.bottom || a.placement.placement !== b.placement.placement) {
     return false;
   }
@@ -248,6 +153,12 @@ function useCornerPlacement(cluster: RefObject<HTMLDivElement | null>): CornerPl
   // consistent with the rest of the chrome (see `watermarkCoverRect`'s
   // header for why full coverage is a SEPARATE concern from this).
   const forceCorner = useForceCornerPlacement();
+  // The form actually on screen (set in a layout effect below, after the DOM
+  // has it), the single-row size cached while the row was rendered, and the
+  // live `measure` so the form effect can run it once a new form has painted.
+  const renderedForm = useRef<CornerClusterForm>("row");
+  const rowSize = useRef<{ width: number; height: number } | null>(null);
+  const measureRef = useRef<() => void>(() => {});
 
   useLayoutEffect(() => {
     const container = editor.getContainer();
@@ -258,19 +169,37 @@ function useCornerPlacement(cluster: RefObject<HTMLDivElement | null>): CornerPl
       const el = cluster.current;
       if (!el) return;
       const containerRect = rectOf(container);
-      const placement = placeCornerCluster({
-        container: containerRect,
-        cluster: { width: el.offsetWidth, height: el.offsetHeight },
-        watermark: forceCorner ? null : watermark ? rectOf(watermark) : null,
-        obstacles: dock ? [rectOf(dock)] : [],
-      });
+      const size = { width: el.offsetWidth, height: el.offsetHeight };
+      const watermarkRect = forceCorner ? null : watermark ? rectOf(watermark) : null;
+      const obstacles = dock ? [rectOf(dock)] : [];
+      // The row's size is only ever read while the ROW is what is rendered.
+      // The stacked box always fits, so deciding the form from it would flip
+      // back to `row`, re-measure the row, flip to `stacked`... forever.
+      if (renderedForm.current === "row") rowSize.current = size;
+      const wanted = cornerClusterForm({ container: containerRect, row: rowSize.current ?? size, watermark: watermarkRect, obstacles });
+      if (wanted !== renderedForm.current) {
+        // WHY only the FORM is committed here, and the placement is kept: the
+        // placement below is computed from the box that is on screen, and the
+        // box on screen is still the OLD form. `data-corner-placement` must
+        // never publish a placement computed for the form it is not
+        // rendering. At 720 a row lifted over the dock ALSO reports
+        // "above-licence" (28px above the licence text), which is exactly the
+        // value `corner.smoke` waits for before it measures once — a lifted
+        // row that is ever committed turns into a flaky 28. The placement is
+        // computed in the measure that the layout effect below runs once the
+        // new form has rendered.
+        setState((current) => (current.form === wanted ? current : { ...current, form: wanted }));
+        return;
+      }
+      const placement = placeCornerCluster({ container: containerRect, cluster: size, watermark: watermarkRect, obstacles });
       // The cover patch only exists to hide the watermark when the cluster's
       // OWN placement above has stopped avoiding it — so it never renders
       // for the default (watermark-avoidance) path, only the forced one.
       const watermarkCover = forceCorner && watermark ? watermarkCoverRect(containerRect, rectOf(watermark)) : null;
-      const next: CornerPlacementState = { placement, watermarkCover };
+      const next: CornerPlacementState = { placement, watermarkCover, form: wanted };
       setState((current) => (sameCornerPlacementState(current, next) ? current : next));
     };
+    measureRef.current = measure;
 
     const sizes = new ResizeObserver(measure);
     const watermarkAttributes = new MutationObserver(measure);
@@ -310,6 +239,14 @@ function useCornerPlacement(cluster: RefObject<HTMLDivElement | null>): CornerPl
       watermarkAttributes.disconnect();
     };
   }, [editor, cluster, forceCorner]);
+
+  // Place once the new form has RENDERED. Declared after the observer effect
+  // so `measureRef` is live; a change of form changes the cluster's box, which
+  // the ResizeObserver also reports, and by then `renderedForm` is current.
+  useLayoutEffect(() => {
+    renderedForm.current = state.form;
+    measureRef.current();
+  }, [state.form]);
 
   return state;
 }
@@ -387,7 +324,7 @@ function SystemSketchChrome() {
   usePassThroughWheelEvents(chrome);
 
   const corner = useRef<HTMLDivElement>(null);
-  const { placement, watermarkCover } = useCornerPlacement(corner);
+  const { placement, watermarkCover, form } = useCornerPlacement(corner);
 
   // A click on an inspectable object opens the Inspector; deselecting closes
   // it again only when that click is what opened it. The policy and its WHYs
@@ -538,9 +475,10 @@ function SystemSketchChrome() {
       )}
       <div
         ref={corner}
-        className="pointer-events-auto absolute flex items-end gap-2"
+        className={`pointer-events-auto absolute flex items-end gap-2 ${STACKED_STRIP_CLASS}`}
         style={{ right: placement.right, bottom: placement.bottom }}
         data-corner-placement={placement.placement}
+        data-corner-form={form}
       >
         {/* WHY the temporary variant switch rides INSIDE the measured corner
             row: its own acceptance pins it to the status strip's row, and the
