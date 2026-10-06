@@ -80,14 +80,27 @@ describe("ss-code's origin prop — the schema the saved board is guarded by", (
     expect(() => validator.validate({ uri: "a.py", anchor: "f" })).toThrow();
   });
 
-  it("no migration is needed: origin shipped in version 0, so the sequence is empty", () => {
+  it("no migration is needed FOR ORIGIN: it shipped in version 0, so the one step ss-code has never touches it", () => {
     // The lane brief allowed ONE `AddOrigin` migration "only if a version
     // without `origin` already shipped". It did not — the app's first
     // `ss-code` schema (L1) already carried the prop — so the honest answer
     // is no migration at all. Asserted rather than asserted-in-prose: a
     // future hand that adds a sequence entry has to come back here and say
     // why.
-    expect(CodeShapeUtil.migrations.sequence).toEqual([]);
+    //
+    // AMENDED 2026-10-06 by B-SCHEMA's acceptance author (docs/lanes/
+    // finish-B-SCHEMA.md) — this is that hand, saying why. Schema v2 gives
+    // `ss-code` its FIRST step, `/1`, for P-127's `lineNumbers` and
+    // `fontSizePx`. The claim this case was written to protect still holds,
+    // and is now asserted directly instead of through an empty list: the
+    // sequence is exactly that one step, and running it over a saved cell
+    // that carries an origin leaves the origin byte-identical.
+    expect(CodeShapeUtil.migrations.sequence.map((step) => (step as { id?: string }).id)).toEqual(["com.tldraw.shape.ss-code/1"]);
+    const step = CodeShapeUtil.migrations.sequence[0] as unknown as { up(props: Record<string, unknown>): Record<string, unknown> | void };
+    const saved = { w: 320, h: 120, code: "x = 1\n", language: "python", origin: origin() };
+    const props: Record<string, unknown> = structuredClone(saved);
+    const answered = step.up(props);
+    expect((answered ?? props).origin).toEqual(saved.origin);
   });
 });
 
