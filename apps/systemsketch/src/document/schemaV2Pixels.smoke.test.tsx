@@ -298,12 +298,39 @@ function intersects(a: Rect, b: Rect): boolean {
  * status). Measured, never assumed — every element of the app that is not the
  * canvas, its shapes or tldraw's own layers is checked against the clip.
  */
+/**
+ * The shell's three LAYOUT layers (`apps/storybook-basics/src/shell/BboxShell.tsx`):
+ * full-viewport boxes the windows are seated in, not chrome. B-SHELL-P1 mounted
+ * them in tldraw's `InFrontOfTheCanvas` after this gate was written, so they
+ * cover every clip by construction; each window inside them carries its own
+ * `data-slot` and is still checked below. Merge repair at the B-SHELL-P1 merge
+ * (integrator, LEDGER.md): skipped only after proving each one paints nothing
+ * itself — so a layer that ever grew a fill or its own text would fail here.
+ */
+const SHELL_LAYER_SLOTS = new Set(["bbox-shell", "bbox-shell-canvas", "bbox-shell-windows"]);
+
+function expectPaintsNothingItself(element: HTMLElement): void {
+  const style = getComputedStyle(element);
+  const ownText = Array.from(element.childNodes).some((node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? "").trim() !== "");
+  // Border WIDTHS, not style: Tailwind's preflight gives every element
+  // `border: 0 solid`, so the style reads "solid" on a box that draws no line.
+  const border = [style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth, style.borderLeftWidth];
+  expect(
+    { background: style.backgroundColor, image: style.backgroundImage, border, outline: style.outlineStyle, shadow: style.boxShadow, ownText },
+    `shell layer ${element.getAttribute("data-slot")} paints nothing itself`,
+  ).toEqual({ background: "rgba(0, 0, 0, 0)", image: "none", border: ["0px", "0px", "0px", "0px"], outline: "none", shadow: "none", ownText: false });
+}
+
 function expectChromeOutside(root: HTMLElement, clip: HTMLElement): void {
   const clipRect = clip.getBoundingClientRect();
   const canvas = root.querySelector(".tl-canvas");
   const offenders: string[] = [];
   for (const element of Array.from(root.querySelectorAll<HTMLElement>("[data-slot]"))) {
     if (canvas?.contains(element)) continue;
+    if (SHELL_LAYER_SLOTS.has(element.getAttribute("data-slot") ?? "")) {
+      expectPaintsNothingItself(element);
+      continue;
+    }
     const rect = element.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) continue;
     if (getComputedStyle(element).visibility === "hidden") continue;
