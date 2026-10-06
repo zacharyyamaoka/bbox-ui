@@ -77,17 +77,49 @@ describe("L4 — editor menus through tldraw's component seams", () => {
     await waitFor(() => app!.editor.getShape(id) === undefined, { what: "Ctrl+Z undid it" });
   });
 
-  it("the burger is File first, then Settings, Edit, View, Export, Preferences, Keyboard shortcuts, Compare, and the old-app switch — grouped like the old app", async () => {
+  it("the burger is File first, then Settings, Edit, View, Export, Preferences, Keyboard shortcuts, Compare, the doors out (bbox-ui.com, Storybook), and the old-app switch — grouped like the old app", async () => {
     app = await mountApp();
     const root = await openBurger(app);
+    // A row's NAME: its own text nodes, minus the two columns the trunk renders
+    // beside the label as separate elements (`BurgerMenuEntry`,
+    // apps/storybook-basics/src/editor/chromeBar.tsx:284 and :298) — the
+    // shortcut (`dropdown-menu-shortcut`) and a `MenuAction.badge`
+    // (`menu-action-badge`). Removed by NODE, never by subtracting text: see
+    // ./testing/menus.ts:27-48 for the "DeleteDel" → "eteDel" bug that rule
+    // exists for. Walker shape copied from ./sites.smoke.test.tsx:95-104,
+    // which reads the same rows the same way.
+    const nameOf = (row: HTMLElement): string => {
+      const columns = Array.from(row.querySelectorAll('[data-slot="dropdown-menu-shortcut"], [data-slot="menu-action-badge"]'));
+      const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+      let text = "";
+      for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+        if (columns.some((column) => column.contains(node))) continue;
+        text += node.nodeValue ?? "";
+      }
+      return text.trim();
+    };
     // WHY the two Compare rows sit here and this list grew: ruling 10 ("we want
     // to support the Compare view") put Compare on the burger, and `useCompareView`
-    // hands its group to `buildAppMenu`'s `extra` (chrome/TitleBar/chromeBar.tsx:81,
-    // :108). This assertion is the app's whole menu, so ADDING a feature to the
+    // hands its group to `buildAppMenu`'s `extra` (chrome/TitleBar/chromeBar.tsx:82,
+    // :128). This assertion is the app's whole menu, so ADDING a feature to the
     // menu is supposed to change it — a stale list here means the test was
     // asserting the absence of a feature, which is what it was doing before
-    // 2026-09-21. Updated rather than loosened: it still pins the exact order.
-    expect(rowsOf(root).map((row) => row.label)).toEqual([
+    // 2026-09-21, and again from 2026-09-22 until lane G-STALE (2026-10-06).
+    // Updated rather than loosened: it still pins the exact order.
+    //
+    // WHY "Open bbox-ui.com" / "Open Storybook" joined, and why by NAME: they
+    // are the doors out Zach asked for on 2026-09-21 ("give the option to open
+    // the bbox-ui.com site and the storybook site", chrome/sites.ts:4-9), in
+    // their own group before the old-app switch (chromeBar.tsx:107-128). Each
+    // carries a LIVE channel badge (chrome/siteStatus.ts:133-153) that says
+    // what is answering right now — measured on this tree as "(remote)" and
+    // "(not running)", and on 2026-09-30 as "(preview · main · 705847c ·
+    // +uncommitted) · different from this board" when a peer's Storybook held
+    // :5421. Pinning the badge would make the burger order depend on what
+    // else runs on the box and on probe timing. The name never carries it
+    // (chrome/sites.ts:114-123), and sites.smoke.test.tsx:314 pins the badge
+    // text itself against a stubbed `/api/health`.
+    expect(rowsOf(root).map((row) => nameOf(row.element))).toEqual([
       "File",
       "Settings",
       "Edit",
@@ -97,10 +129,12 @@ describe("L4 — editor menus through tldraw's component seams", () => {
       "Keyboard shortcuts",
       "Compare changes…",
       "Set compare baseline to this board",
+      "Open bbox-ui.com",
+      "Open Storybook",
       "Switch to old SystemSketch",
     ]);
-    // File | Settings | Edit View Export | Preferences Keyboard shortcuts | Compare ×2 | old app.
-    expect(separatorsOf(root)).toBe(5);
+    // File | Settings | Edit View Export | Preferences Keyboard shortcuts | Compare ×2 | bbox-ui.com Storybook | old app.
+    expect(separatorsOf(root)).toBe(6);
 
     const file = await openSubmenu(root, "File");
     expect(rowsOf(file).map((row) => [row.label, row.shortcut])).toEqual([
