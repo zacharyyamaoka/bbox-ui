@@ -1,12 +1,13 @@
 // src/shell/BboxShell.tsx — the shell: every window around a canvas, with the
 // canvas as a swappable background.
 //
-// P0 SCOPE, deliberately: the container, the port plumbing and the
-// capability-resolved affordance set. NO WINDOWS YET — that is interpretation
-// I3 of docs/WORK-ORDER-HOST-LESS-SHELL.md, and it is not laziness: five
-// lanes are still rewriting `apps/systemsketch/src/chrome/`, and building the
-// windows before that gate opens would fork wiring those lanes are editing.
-// P1 lifts them in behind the hooks below.
+// P0 built the container, the port plumbing and the capability-resolved
+// affordance set (interpretation I3 of docs/WORK-ORDER-HOST-LESS-SHELL.md: no
+// windows yet). P1 (B-SHELL-P1, docs/lanes/finish-B-SHELL-P1.md) lifted the
+// windows in behind the hooks below: `shellChromeBar.tsx`, `shellToolDock.tsx`,
+// `shellStatusStrip.tsx`, `shellPanelRail.tsx`, `shellSelectionPill.tsx` —
+// each a window a host mounts as a child of `BboxShell` (or, for a window a
+// host must seat in its own engine slot, inside a `HostPortScope`).
 //
 // WHY the shell owns its own container (constraint 6): the tldraw chrome
 // reaches `editor.getContainer()` at `apps/systemsketch/src/chrome/overlay.tsx:158`
@@ -28,8 +29,12 @@ export interface BboxShellProps {
   /** `null` means "no canvas yet" — a real state the no-host runner starts
    *  in, not an error. Every window hides rather than throwing. */
   port: HostPort | null;
-  /** The whiteboard, or nothing. Painted behind every window. */
-  background?: ReactNode;
+  /** The whiteboard, painted behind every window. `undefined` paints the
+   *  honest empty state. `null` paints NOTHING: the host's engine already
+   *  draws its own canvas behind the shell — tldraw mounts the shell in its
+   *  `InFrontOfTheCanvas` slot, over a canvas it owns — and the empty-state
+   *  text would sit over the board (B-SHELL-P1 brief, "Traps"). */
+  background?: ReactNode | null;
   /** P1 mounts the windows here. Kept as a slot so the shell's container and
    *  its contents can land in separate commits behind separate gates. */
   children?: ReactNode;
@@ -42,6 +47,24 @@ interface ShellContextValue {
 }
 
 const ShellContext = createContext<ShellContextValue>({ port: null, affordances: new Set() });
+
+/**
+ * The port's context WITHOUT the shell's container — for a window a host must
+ * seat inside one of its engine's own slots rather than in the shell's
+ * windows layer.
+ *
+ * WHY it exists: tldraw lays its toolbar out in `components.Toolbar`, inside
+ * its own `.tlui-layout`, and the studio's dock keeps that box (the corner
+ * placement and the interface-scale zoom both measure it there —
+ * `corner.smoke`, `chromeSize.smoke`). The dock is still the SHELL's window
+ * (`shellToolDock.tsx`); only its seat is the host's. One provider, the same
+ * affordance set `BboxShell` computes, so a window cannot tell which it is in.
+ */
+export function HostPortScope({ port, children }: { port: HostPort | null; children?: ReactNode }) {
+  const affordances = useMemo(() => affordancesForMaybe(port), [port]);
+  const value = useMemo<ShellContextValue>(() => ({ port, affordances }), [port, affordances]);
+  return <ShellContext.Provider value={value}>{children}</ShellContext.Provider>;
+}
 
 /** The port, or `null`. Windows that need one return `null` themselves. */
 export function useHostPort(): HostPort | null {
@@ -130,13 +153,22 @@ export function BboxShell({ port, background, children, className }: BboxShellPr
         data-slot="bbox-shell"
         data-has-canvas={port ? "true" : "false"}
         className={className}
-        style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}
+        // WHY `pointer-events: none` on the ROOT too, not only on the windows
+        // layer: on a host whose canvas is painted BEHIND the shell (tldraw's
+        // `InFrontOfTheCanvas`), this box covers the whole board, and a root
+        // that hit-tests swallows every press on it. A1.4's pass-through is
+        // measured in `apps/systemsketch/src/shellLift.smoke.test.tsx`. A
+        // `background` the shell paints itself opts back in below.
+        style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", pointerEvents: "none" }}
       >
         {/* The canvas, painted behind everything. `inset: 0` rather than a
             flex child so a window can sit over any part of it, which is what
             "the whiteboard is the background" means. */}
-        <div data-slot="bbox-shell-canvas" style={{ position: "absolute", inset: 0 }}>
-          {background ?? <EmptyCanvas hasPort={port !== null} />}
+        <div
+          data-slot="bbox-shell-canvas"
+          style={{ position: "absolute", inset: 0, pointerEvents: background ? "auto" : "none" }}
+        >
+          {background === undefined ? <EmptyCanvas hasPort={port !== null} /> : background}
         </div>
         {/* Windows. `pointer-events: none` on the layer and `auto` on each
             window is what lets a press fall THROUGH to the canvas anywhere a

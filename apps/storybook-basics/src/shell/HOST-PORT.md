@@ -246,3 +246,25 @@ So `tldrawHostPort`'s suite in P1 seeds a scratch board first — never Zach's,
 per the repo rule — and the React Flow suite in P3 does the same. The factory
 is called fresh per check, so seeding is cheap and one check's writes can never
 leak into the next.
+
+## P1 — the windows, lifted (B-SHELL-P1, 2026-10-06)
+
+The chrome's windows now live here, each over the port and nothing else:
+`shellChromeBar.tsx`, `shellToolDock.tsx`, `shellStatusStrip.tsx`,
+`shellPanelRail.tsx` (+ `useShellPanel`), `shellSelectionPill.tsx`, and
+`documentFiles.ts` (File ▸ Open…/Save for a host with no file session). The
+tldraw host is `apps/systemsketch/src/chrome/tldrawHostPort.ts`; the fake host
+mounts the same windows in `apps/bbox-no-host/src/windows.tsx`. Three
+decisions the lift had to make, each reversible:
+
+- **`BboxShell`'s root does not hit-test**, and `background={null}` paints no
+  canvas layer at all: on tldraw the shell sits in `InFrontOfTheCanvas`, over
+  a canvas the engine paints, so a press anywhere no window is must reach it
+  (A1.4, `shellLift.smoke.test.tsx` "pass-through").
+- **`HostPortScope`** provides the port without the container, for a window a
+  host must seat in its own engine slot — the studio's dock stays in tldraw's
+  `Toolbar` slot, where its box is measured.
+- **The dock is handed `tools().active` as its tool id.** The port already
+  resolved tool + variant into one id, so a host's `FamilyDeclaration.isMember`
+  / `variantOf` answer for variant ids (`ellipse`, `arrow-curve`) directly.
+  `ToolDescriptor.family` stays what it says: the dock face an id sits under.

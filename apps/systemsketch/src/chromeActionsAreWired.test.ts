@@ -36,10 +36,14 @@
 // ("Copy Absolute Path copies the open board's path") and, for the host half,
 // `scripts/tests/test_systemsketch_files_http.py`.
 //
-// SCOPE: this app's own `src/`, deliberately not the trunk. A trunk component
-// takes its callbacks as props and a `() => {}` there is a story's default,
-// not a dead control — it is THIS app's wiring that decides what Zach can
-// actually click.
+// SCOPE: this app's own `src/` and the trunk's `shell/` — deliberately not
+// the rest of the trunk. A trunk component takes its callbacks as props and a
+// `() => {}` there is a story's default, not a dead control — it is the
+// WIRING that decides what Zach can actually click. `shell/` is the one
+// exception because it IS that wiring: B-SHELL-P1 lifted the chrome's wiring
+// out of this app into the engine-free shell (`apps/storybook-basics/src/
+// shell/`), so a scan that stopped at `src/` would lose the depth arrows the
+// moment they moved. Shell files are keyed `@trunk/shell/<path>`.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 
@@ -59,8 +63,8 @@ const QUARANTINE: Record<string, string> = {
   // make Back mean something different here than in the surface they were
   // ported from; wiring them to undo/redo would make two controls that look
   // like navigation do document surgery.
-  "chrome/TitleBar/chromeBar.tsx :: onBack": "needs a depth model (drill-in); honestly disabled until there is a level to go back to",
-  "chrome/TitleBar/chromeBar.tsx :: onForward": "needs a depth model (drill-in); honestly disabled until there is a level to go back to",
+  "@trunk/shell/shellChromeBar.tsx :: onBack": "needs a depth model (drill-in); honestly disabled until there is a level to go back to",
+  "@trunk/shell/shellChromeBar.tsx :: onForward": "needs a depth model (drill-in); honestly disabled until there is a level to go back to",
   // These three are the depth BADGE, and unlike the arrows it is not honestly
   // disabled — it renders as an ordinary enabled control reading "0" and
   // opens a menu. `atRoot` in the trunk is `crumbs.length === 0`
@@ -68,14 +72,14 @@ const QUARANTINE: Record<string, string> = {
   // permanently `disabled`: a live-looking control whose popup can never say
   // anything. It is the one entry here Zach should decide about rather than
   // inherit — see the handoff.
-  "chrome/TitleBar/chromeBar.tsx :: onJumpToLevel": "needs a depth model; no crumb can be clicked while crumbs is empty",
-  "chrome/TitleBar/chromeBar.tsx :: crumbs": "needs a depth model; empty makes the trunk's atRoot always true",
-  "chrome/TitleBar/chromeBar.tsx :: depth": "needs a depth model; the badge reads 0 forever",
+  "@trunk/shell/shellChromeBar.tsx :: onJumpToLevel": "needs a depth model; no crumb can be clicked while crumbs is empty",
+  "@trunk/shell/shellChromeBar.tsx :: crumbs": "needs a depth model; empty makes the trunk's atRoot always true",
+  "@trunk/shell/shellChromeBar.tsx :: depth": "needs a depth model; the badge reads 0 forever",
   // The dock's library cell. Honest about itself in words, which is why it is
   // quarantined rather than treated as the rename-class bug: it says "Coming
   // soon" on the cell and "Nothing here yet" inside.
-  "chrome/Toolbar/dock.tsx :: Coming soon": "needs a saved-shape/component library surface to open",
-  "chrome/Toolbar/dock.tsx :: Nothing here yet": "needs a saved-shape/component library surface to open",
+  "@trunk/shell/shellToolDock.tsx :: Coming soon": "needs a saved-shape/component library surface to open",
+  "@trunk/shell/shellToolDock.tsx :: Nothing here yet": "needs a saved-shape/component library surface to open",
 };
 
 /** Block comments first, then line comments — prose is not evidence. */
@@ -116,10 +120,16 @@ function sourceFiles(root: string): string[] {
   return out;
 }
 
-const FILES = sourceFiles(HERE).map((file) => ({
-  file: path.relative(HERE, file),
-  raw: readFileSync(file, "utf8"),
-  code: codeOnly(readFileSync(file, "utf8")),
+/** The engine-free shell the chrome was lifted into (B-SHELL-P1). */
+const SHELL = path.resolve(HERE, "../../storybook-basics/src/shell");
+
+const FILES = [
+  ...sourceFiles(HERE).map((file) => ({ file: path.relative(HERE, file), path: file })),
+  ...sourceFiles(SHELL).map((file) => ({ file: `@trunk/shell/${path.relative(SHELL, file)}`, path: file })),
+].map(({ file, path: full }) => ({
+  file,
+  raw: readFileSync(full, "utf8"),
+  code: codeOnly(readFileSync(full, "utf8")),
 }));
 
 /** Every inert control the scan can see, as `<file> :: <name>`. */
@@ -158,9 +168,12 @@ describe("every chrome control this app renders is wired, or quarantined with a 
     // Without this, a wrong root turns the whole file vacuous: zero files
     // means zero findings means nothing to quarantine and a green run.
     expect(FILES.length, "source files scanned").toBeGreaterThan(40);
-    expect(FILES.map((entry) => entry.file)).toContain("chrome/TitleBar/chromeBar.tsx");
+    expect(FILES.map((entry) => entry.file)).toContain("App.tsx");
     // And the scan really can find something — the arrows are the fixture.
-    expect(found).toContain("chrome/TitleBar/chromeBar.tsx :: onBack");
+    // WHERE they are found is not this case's business any more: B-SHELL-P1
+    // lifts the bar into TRUNK/shell, so the path is pinned by the B-SHELL-P1
+    // block below (acceptance author, B-SHELL-P1 acceptance commit).
+    expect(found.some((key) => key.endsWith(" :: onBack"))).toBe(true);
   });
 
   it("strips comments before scanning, so the repo's own prose about a dead control is not read as the control", () => {
@@ -177,5 +190,60 @@ describe("every chrome control this app renders is wired, or quarantined with a 
     expect(stripped).not.toMatch(NO_OP_HANDLER);
     expect(stripped).not.toMatch(PLACEHOLDER_COPY);
     expect(stripped).toContain("onBack: goBack");
+  });
+});
+
+/**
+ * B-SHELL-P1 (SHELL-P1/guard-scan) — added by the lane's acceptance author,
+ * committed RED before the builder existed; the builder may not edit this
+ * block or the corpus case above (docs/lanes/finish-B-SHELL-P1.md).
+ *
+ * The lift moves the chrome's wiring into the engine-free shell kit,
+ * `apps/storybook-basics/src/shell/`. This guard's SCOPE comment ("this app's
+ * own `src/`, deliberately not the trunk") was written when the trunk only
+ * held prop-taking components; the shell is different — it IS the wiring that
+ * decides what Zach can click, lifted out of this app. A scan that stopped at
+ * `src/` would lose the depth arrows the moment they moved, and the quarantine
+ * would report them "came alive" when they had only left the room
+ * (completeness-critic.md #4; lanes.json `rules.guards`).
+ *
+ * The builder changes ONLY what is scanned and how a file is keyed: shell
+ * files are keyed `@trunk/shell/<path relative to shell/>`, and a moved
+ * control's QUARANTINE entry is re-homed to that key with its excuse
+ * unchanged. Nothing is wired and nothing is deleted in P1 (its stop rule: no
+ * behaviour change).
+ */
+const SHELL_KEY_PREFIX = "@trunk/shell/";
+
+/** The depth bar's controls, which the lift moves with the chrome bar
+ *  (§4.2 `chromeBar.tsx` → shell; L-NAV's write set then names
+ *  "TRUNK/shell/** (title bar crumbs, arrows …)" as their post-lift home). */
+const MOVED_WITH_THE_BAR = ["onBack", "onForward", "onJumpToLevel", "crumbs", "depth"];
+
+describe("B-SHELL-P1 — the guard follows the chrome into TRUNK/shell", () => {
+  const found = inertControls();
+
+  it("SHELL-P1/guard-scan: TRUNK/shell is scanned, keyed @trunk/shell/<path>, and holds the lifted chrome, not only the P0 skeleton", () => {
+    const shell = FILES.filter((entry) => entry.file.startsWith(SHELL_KEY_PREFIX)).map((entry) => entry.file);
+    expect(shell, "TRUNK/shell is not in this guard's corpus").toContain(`${SHELL_KEY_PREFIX}BboxShell.tsx`);
+    // P0 left four source files there (BboxShell, hostPort, hostContract,
+    // fakeHost). A scan that reaches only those proves nothing about the
+    // windows the lift adds.
+    expect(shell.length, `only ${shell.length} shell files scanned: ${shell.join(", ")}`).toBeGreaterThan(4);
+  });
+
+  it("SHELL-P1/guard-scan: the depth bar's inert controls are found under @trunk/shell/, and every one still quarantined is re-homed there", () => {
+    for (const name of MOVED_WITH_THE_BAR) {
+      // A later lane that WIRES one deletes its entry — this guard's own rule
+      // (L-NAV, W4). While an entry exists, it must name where the lift put it.
+      for (const key of Object.keys(QUARANTINE).filter((entry) => entry.endsWith(` :: ${name}`))) {
+        expect(key.startsWith(SHELL_KEY_PREFIX), `${key} still names the app's copy of the bar`).toBe(true);
+        expect(found, `${key} is quarantined but the scan does not find it`).toContain(key);
+      }
+    }
+    // Deleting an entry instead of re-homing it is caught by the ratchet
+    // above, not here: once TRUNK/shell is scanned (previous case), an inert
+    // arrow found there with no entry fails "is quarantined with what it
+    // would take". The dispatcher also diffs the QUARANTINE names at merge.
   });
 });
