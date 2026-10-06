@@ -45,7 +45,7 @@ import {
   type BlockViewSizes,
   type PortTextLayout,
   type TextSize,
-} from "@bbox-ui/core";
+} from "./core";
 
 /**
  * A port stored on the shape record. Note the state validator below admits

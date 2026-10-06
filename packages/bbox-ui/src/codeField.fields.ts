@@ -26,7 +26,7 @@
  * offer. Only the fields below are things a person choosing how this field
  * LOOKS would reach for; the rest stay props for a host to drive.
  */
-import type { FieldSpec } from "@bbox-ui/schema";
+import type { FieldSpec } from "./schema";
 
 export const CODE_FIELD_FIELDS: FieldSpec[] = [
   {

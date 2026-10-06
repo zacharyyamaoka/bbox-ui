@@ -1,5 +1,5 @@
 import type { ComponentProps, ReactNode } from "react";
-import { resolveField } from "@bbox-ui/schema";
+import { resolveField } from "./schema";
 
 import { cn } from "./lib/utils";
 import type { AppearanceState } from "./appearance";

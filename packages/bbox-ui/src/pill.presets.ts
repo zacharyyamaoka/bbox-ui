@@ -18,7 +18,7 @@
  * lane has standing to resolve — kept exactly as pinned; see the lane
  * report for the flag.
  */
-import type { PresetSpec } from "@bbox-ui/schema";
+import type { PresetSpec } from "./schema";
 import { APPEARANCE_STATE_LABELS, APPEARANCE_STATES, type AppearanceState } from "./appearance";
 
 const GOVERNS = ["lineStyle", "lineColor", "fillStyle", "fillColor"];

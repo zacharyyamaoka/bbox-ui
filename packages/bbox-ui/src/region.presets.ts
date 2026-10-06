@@ -10,6 +10,6 @@
  * generic story generator / product inspector can always `.map()` over
  * `<NAME>_PRESETS` without a null check.
  */
-import type { PresetSpec } from "@bbox-ui/schema";
+import type { PresetSpec } from "./schema";
 
 export const REGION_PRESETS: PresetSpec[] = [];

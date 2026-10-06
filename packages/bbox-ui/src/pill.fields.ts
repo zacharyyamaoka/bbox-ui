@@ -15,7 +15,7 @@
  * Pill's paint fields instead select from bbox-ui's own curated TOKEN
  * NAMES, not an arbitrary hex.
  */
-import type { FieldOption, FieldSpec } from "@bbox-ui/schema";
+import type { FieldOption, FieldSpec } from "./schema";
 import { APPEARANCE_FIELDS } from "./appearance.fields";
 
 /** The token names ANY paint field in this spec may select from — the

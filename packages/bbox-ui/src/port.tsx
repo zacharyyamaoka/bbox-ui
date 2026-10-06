@@ -1,7 +1,7 @@
 "use client";
 
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
-import { resolveField } from "@bbox-ui/schema";
+import { resolveField } from "./schema";
 
 import { cn } from "./lib/utils";
 import { SketchOutline } from "./sketchOutline";
