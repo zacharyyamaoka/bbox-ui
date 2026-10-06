@@ -51,8 +51,10 @@
 //      local `formatPx`, cited at its own definition below.
 //   7. `CustomColorCell`/`CustomColorPicker` do not port — out of scope by
 //      design (task brief). `ControlPanel` (`controlPanel.tsx`) takes a
-//      `customColorSlot` prop where the picker lands later; `ControlStrip`
-//      never reaches for it, and never knows the slot exists.
+//      `customColorSlot` prop where the picker lands later. `ControlStrip`
+//      FORWARDS it (see its own prop below) but never interprets it — the
+//      earlier wording said it "never knows the slot exists", which was
+//      true when written and false once the slot was threaded.
 //
 // Everything else — the "no popup engine picked per surface" shape, the
 // value/icon-trigger mixed-state dimming, the A-badge guard, the Font size
@@ -95,6 +97,47 @@ export interface ControlStripProps<K extends string = string> {
       `editor.markEventAsHandled`, or nothing for a host with no such
       concept) — wired onto every panel's own pointer-down-capture. */
   onPanelPointerDownCapture?: PointerEventHandler;
+  /**
+   * The host's colour picker, rendered into the 22nd cell of any `swatches`
+   * control that declares `custom` — screenshot 01's rainbow well.
+   *
+   * WHY this had to exist here and not only on `ControlPanel`: the panel
+   * already accepted `customColorSlot`, but `ControlStrip` — the component
+   * every host actually renders, and the only thing that constructs the
+   * panels — never exposed or forwarded it. So the well was unreachable in
+   * practice: an independent judge opened the fill popover and found the
+   * rainbow cell was an `aria-hidden` span with no interaction behind it,
+   * with the only real buttons being preset swatches. A slot nothing can
+   * fill is indistinguishable from a decoration, which is exactly what it
+   * had become.
+   *
+   * Still omittable: with no slot the cell stays the placeholder it is
+   * today, because the picker itself is deliberately a separate port (kit
+   * omission list) and shipping a half-picker would be worse than shipping
+   * the seam for one.
+   */
+  customColorSlot?: ReactNode;
+  /**
+   * Render as a GROUP inside a toolbar the caller already established,
+   * instead of as a toolbar root of its own. Default false.
+   *
+   * WHY this is a prop the caller sets rather than something the component
+   * works out: two nested Base UI `Toolbar.Root`s own two separate
+   * roving-focus groups, so a strip composed inside `FloatingToolbar`
+   * alongside sibling buttons split arrow-key navigation in half. The first
+   * repair detected nesting from React context — which is UNSOUND, because
+   * context crosses portals and the DOM does not, so a host calling
+   * `createPortal` got a strip rendering as a group with no toolbar ancestor
+   * and leaking focus out of its own popup. That was a REGRESSION against
+   * behaviour which had been correct, and patching the kit's own portal
+   * wrappers could never cover a portal the kit does not own.
+   *
+   * There is no sound way to infer this, so it is declared. The caller knows
+   * what it composed; the component cannot. Defaulting to false means the
+   * standalone case — including any host portal — behaves exactly as it did
+   * before any of this existed.
+   */
+  nested?: boolean;
   testIdPrefix?: string;
   /** Not in the design doc's props sketch, added here because this
       component wraps `Toolbar` (`toolbar.tsx`), which — like every Base UI
@@ -102,6 +145,22 @@ export interface ControlStripProps<K extends string = string> {
       surface with the same shape (`ChromeBar`, `ToolDock`) takes its own
       `"aria-label"`; this one was simply the first to be built. */
   "aria-label"?: string;
+  /** The host's skin for every panel this strip opens.
+   *
+   * WHY a prop and not the host's problem: a panel portals OUT of the strip,
+   * so a wrapper's classes cannot reach it and the panel lands in the app's
+   * page theme rather than the bar's. The trunk already exports `PILL_POPOVER`
+   * (`floatingToolbar.tsx`) for exactly this; this is where a host passes it. */
+  panelClassName?: string;
+  /** The host's skin for every TRIGGER in this strip.
+   *
+   * Same seam as `panelClassName`, one level up. The kit's `ToolbarButton`
+   * offers `sm`/`default`/`lg` (h-7/h-8/h-9, `rounded-lg`), and a host whose
+   * bar is traced from another product may need a cell no size value can
+   * reach — this app's is 40x5, measured off FigJam. Without this the four
+   * kit triggers rendered 32px tall with a 10px radius beside the app's own
+   * 40/5 cells, on one bar. */
+  triggerClassName?: string;
 }
 
 /** One renderer for every registered control, regardless of target surface
@@ -112,11 +171,16 @@ export function ControlStrip<K extends string>({
   container,
   autoFocus,
   onPanelPointerDownCapture,
+  customColorSlot,
+  nested = false,
   testIdPrefix = "bbox",
+  panelClassName,
+  triggerClassName,
   "aria-label": ariaLabel,
 }: ControlStripProps<K>) {
+  const Root = nested ? ToolbarGroup : Toolbar;
   return (
-    <Toolbar
+    <Root
       aria-label={ariaLabel}
       data-slot="control-strip"
       // WHY two names on the same value: MENU-KIT-DESIGN.md §3.3 names the
@@ -147,13 +211,16 @@ export function ControlStrip<K extends string>({
                 container={container}
                 autoFocus={autoFocus}
                 onPanelPointerDownCapture={onPanelPointerDownCapture}
+                customColorSlot={customColorSlot}
                 testIdPrefix={testIdPrefix}
+                panelClassName={panelClassName}
+                triggerClassName={triggerClassName}
               />
             ))}
           </ToolbarGroup>
         </Fragment>
       ))}
-    </Toolbar>
+    </Root>
   );
 }
 
@@ -163,7 +230,33 @@ interface TriggerShapeProps<K extends string> {
   container?: HTMLElement | null;
   autoFocus?: boolean;
   onPanelPointerDownCapture?: PointerEventHandler;
+  /** Forwarded unchanged from `ControlStripProps.customColorSlot` — only the
+      panel of a `custom` swatches control ever renders it. */
+  customColorSlot?: ReactNode;
+  /**
+   * Render as a GROUP inside a toolbar the caller already established,
+   * instead of as a toolbar root of its own. Default false.
+   *
+   * WHY this is a prop the caller sets rather than something the component
+   * works out: two nested Base UI `Toolbar.Root`s own two separate
+   * roving-focus groups, so a strip composed inside `FloatingToolbar`
+   * alongside sibling buttons split arrow-key navigation in half. The first
+   * repair detected nesting from React context — which is UNSOUND, because
+   * context crosses portals and the DOM does not, so a host calling
+   * `createPortal` got a strip rendering as a group with no toolbar ancestor
+   * and leaking focus out of its own popup. That was a REGRESSION against
+   * behaviour which had been correct, and patching the kit's own portal
+   * wrappers could never cover a portal the kit does not own.
+   *
+   * There is no sound way to infer this, so it is declared. The caller knows
+   * what it composed; the component cannot. Defaulting to false means the
+   * standalone case — including any host portal — behaves exactly as it did
+   * before any of this existed.
+   */
+  nested?: boolean;
   testIdPrefix: string;
+  panelClassName?: string;
+  triggerClassName?: string;
 }
 
 /**
@@ -231,7 +324,10 @@ function PopoverTriggerShape<K extends string>({
   container,
   autoFocus,
   onPanelPointerDownCapture,
+  customColorSlot,
   testIdPrefix,
+  panelClassName,
+  triggerClassName,
 }: TriggerShapeProps<K>) {
   const current = selectedControlOption(control);
   return (
@@ -251,6 +347,8 @@ function PopoverTriggerShape<K extends string>({
           // matching FigJam's own 144px trigger (figjamTokens.ts's
           // `TEXT_TRIGGER_WIDTH`) rather than the icon triggers' snug fit.
           control.trigger === "text" && "w-36 justify-between px-2.5",
+          // Last, so a host's traced cell wins over the kit's defaults.
+          triggerClassName,
         )}
         render={<PopoverTrigger />}
       >
@@ -262,7 +360,7 @@ function PopoverTriggerShape<K extends string>({
         align="center"
         container={container}
         autoFocus={autoFocus}
-        className="w-auto"
+        className={cn("w-auto", panelClassName)}
         // WHY no close-on-select handler: `closeOnSelect={false}` is
         // `ControlPanel`'s explicit documented default (MENU-KIT-DESIGN.md
         // §3.3 — "align-then-distribute is the normal two-step; staying
@@ -274,7 +372,12 @@ function PopoverTriggerShape<K extends string>({
         // WHY warns against.
         onPointerDownCapture={onPanelPointerDownCapture}
       >
-        <ControlPanel control={control} glyphs={glyphs} testIdPrefix={testIdPrefix} />
+        <ControlPanel
+          control={control}
+          glyphs={glyphs}
+          customColorSlot={customColorSlot}
+          testIdPrefix={testIdPrefix}
+        />
       </PopoverContent>
     </Popover>
   );
@@ -322,7 +425,13 @@ function TriggerFace<K extends string>({
         control.trigger === "value" && !current && "opacity-40",
       )}
     >
-      {control.glyph ? glyphs[control.glyph]?.(control.trigger === "value" ? current?.value : undefined) : null}
+      {/* `triggerGlyph` wins here and ONLY here — an option cell always draws
+          with `glyph`, so a trigger can show something the options are not. */}
+      {(() => {
+        const family = control.triggerGlyph ?? control.glyph;
+        if (!family) return null;
+        return glyphs[family]?.(control.trigger === "value" ? current?.value : undefined);
+      })()}
     </span>
   );
 }
@@ -339,7 +448,12 @@ function RungPxReadout<K extends string>({ control, value }: { control: BoundCon
   return (
     <span
       data-testid="control-trigger-rung-px"
-      className="text-muted-foreground shrink-0 pr-0.5 text-xs tabular-nums"
+      // The trigger's ink at 60%, not `text-muted-foreground` — the same rule
+      // as `controlPanel.tsx`'s change 4, one level up: the trigger sits on
+      // the host's skinned bar, and a page token on a fixed surface is right
+      // in one colour scheme and wrong in the other. The donor mutes this
+      // exact readout the same way (appearance.css:73, 55% of the pill ink).
+      className="shrink-0 pr-0.5 text-xs text-current/60 tabular-nums"
     >
       {formatPx(px)}
     </span>

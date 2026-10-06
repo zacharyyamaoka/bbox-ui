@@ -1,5 +1,5 @@
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
-import { resolveField } from "@bbox-ui/schema";
+import { resolveField } from "./schema";
 
 import type { AppearanceState, Lens, Tone } from "./appearance";
 import { paintVar, toneOverride } from "./appearance";

@@ -19,7 +19,13 @@
  *   2. the left-wall port dot's CENTRE is within ±1px of the frame's left x
  *      ("I want the port to be right on the edge"), and the dot is not cut
  *      off: a hit-test at its outboard half lands on the dot, not on
- *      whatever the frame's clip would otherwise expose;
+ *      whatever the frame's clip would otherwise expose. Updated for the
+ *      2026-09-22 branch/match split (`region.branch.ts`): a branch's
+ *      corner card carries NO left wall any more — its condition moved onto
+ *      the arm that owns it — so for `br`/`inner` this item measures the
+ *      `if` arm's own test dot instead, and the corner card is separately
+ *      asserted to carry no left rail at all. The loop is unaffected: its
+ *      head port never moved;
  *   3. every arm header is exactly the variant's declared height
  *      (`REGION_VARIANTS[v].arms.headerPx`), so the TS spec and the paint
  *      cannot drift;
@@ -207,7 +213,24 @@ function Bench() {
 /* ------------------------------------------------------------------ */
 
 const REGIONS_ON_THE_BOARD = ["br", "inner", "loop"] as const;
-const LEFT_WALL_PORT: Record<(typeof REGIONS_ON_THE_BOARD)[number], string> = { br: "mode", inner: "gain", loop: "Iterable" };
+
+/**
+ * Where item 2's left-wall dot lives, per region on the board. The split
+ * (`region.branch.ts`, 2026-09-22) moved a branch's condition off the
+ * corner card and onto the arm that owns it — `br`'s and `inner`'s dot is
+ * now the `if` arm's own `test`, not a head port. `loop` is untouched: a
+ * loop's `Iterable` is still the corner card's own interface.
+ */
+type LeftEdgePort = { on: "corner"; portId: string } | { on: "arm"; armId: string; portId: string };
+const LEFT_EDGE_PORT: Record<(typeof REGIONS_ON_THE_BOARD)[number], LeftEdgePort> = {
+  br: { on: "arm", armId: "if", portId: "if" },
+  // `BRANCH_NESTED`'s inner branch re-parents its arm ids (`inner-if`,
+  // `inner-else`) but leaves the TEST id alone (`region.branch.fixtures.ts`'s
+  // own WHY: a port id only has to be unique within the node that carries
+  // it) — so the dot to find is `inner-if`'s own `"if"`.
+  inner: { on: "arm", armId: "inner-if", portId: "if" },
+  loop: { on: "corner", portId: "Iterable" },
+};
 
 function regionOf(root: ParentNode, id: string): HTMLElement {
   return required<HTMLElement>(root, `[data-slot="region"][data-region-id="${id}"]`, `region \`${id}\``);
@@ -234,12 +257,17 @@ function expectCornerFlush(region: HTMLElement, id: string): void {
 }
 
 /** Item 2 — the left-wall port dot is ON the frame's left edge and not
- *  cut off by it. */
-function expectPortOnTheEdge(region: HTMLElement, id: string, portId: string): void {
+ *  cut off by it. `location` says whose dot: the corner card's own wall
+ *  (`loop`), or an arm's own test (`br`/`inner`, post-split). */
+function expectPortOnTheEdge(region: HTMLElement, id: string, location: LeftEdgePort): void {
+  const scopeSelector =
+    location.on === "corner"
+      ? `[data-slot="region-corner"] [data-block-id="${id}"]`
+      : `[data-slot="region-arm"][data-arm-id="${location.armId}"] [data-block-id="${location.armId}"]`;
   const dot = required<HTMLElement>(
     region,
-    `[data-slot="region-corner"] [data-block-id="${id}"] [data-slot="block-port-rail"][data-edge="left"] [data-port-id="${portId}"] [data-slot="port-dot"]`,
-    `${id}'s ${portId} dot`,
+    `${scopeSelector} [data-slot="block-port-rail"][data-edge="left"] [data-port-id="${location.portId}"] [data-slot="port-dot"]`,
+    `${id}'s ${location.portId} dot`,
   );
   // `elementFromPoint` answers only for points inside the VIEWPORT (it
   // returns null off-screen — a tall gallery would read as "clipped"), so
@@ -248,13 +276,28 @@ function expectPortOnTheEdge(region: HTMLElement, id: string, portId: string): v
   const frame = frameOf(region).getBoundingClientRect();
   const rect = dot.getBoundingClientRect();
   const c = centre(rect);
-  expect(Math.abs(c.x - frame.left), `${id}/${portId}: dot centre x vs frame left x`).toBeLessThanOrEqual(1);
+  expect(Math.abs(c.x - frame.left), `${id}/${location.portId}: dot centre x vs frame left x`).toBeLessThanOrEqual(1);
   // Straddles: half the dot hangs OUTSIDE the frame …
-  expect(rect.left, `${id}/${portId}: the dot's outboard half is outside the frame`).toBeLessThan(frame.left - 1);
+  expect(rect.left, `${id}/${location.portId}: the dot's outboard half is outside the frame`).toBeLessThan(frame.left - 1);
   // … and that half is really painted and hit-testable, i.e. nothing clips
   // it off at the frame's edge (`115050`'s cut-off `input 1` is the failure).
   const hit = document.elementFromPoint(rect.left + 1, c.y);
-  expect(hit && dot.contains(hit), `${id}/${portId}: a hit at the dot's outboard edge lands on the dot`).toBe(true);
+  expect(hit && dot.contains(hit), `${id}/${location.portId}: a hit at the dot's outboard edge lands on the dot`).toBe(true);
+}
+
+/**
+ * The other half of item 2, positive: a branch's corner card carries NO
+ * left wall at all any more — asserted directly, not merely implied by
+ * `expectPortOnTheEdge` looking somewhere else. `region.branch.ts`'s split:
+ * an `if`/`elif` ladder decides on nothing AS A WHOLE, so the corner never
+ * gets a `left` port back.
+ */
+function expectCornerHasNoLeftWall(region: HTMLElement, id: string): void {
+  const corner = required<HTMLElement>(region, `[data-slot="region-corner"] [data-block-id="${id}"]`, `${id}'s corner block`);
+  expect(
+    corner.querySelector('[data-slot="block-port-rail"][data-edge="left"]'),
+    `${id}: the corner card carries no left wall — the condition lives on the arm now`,
+  ).toBeNull();
 }
 
 /** Item 3 — every arm header is the variant's declared height. */
@@ -425,8 +468,13 @@ async function expectRegionVariant(root: ParentNode, variant: RegionVariantId): 
     for (const id of REGIONS_ON_THE_BOARD) {
       const region = regionOf(root, id);
       expectCornerFlush(region, id);
-      expectPortOnTheEdge(region, id, LEFT_WALL_PORT[id]);
+      expectPortOnTheEdge(region, id, LEFT_EDGE_PORT[id]);
     }
+    // The split's other half, positive rather than merely implied by where
+    // item 2 above went looking: neither branch corner card grew its left
+    // wall back.
+    expectCornerHasNoLeftWall(regionOf(root, "br"), "br");
+    expectCornerHasNoLeftWall(regionOf(root, "inner"), "inner");
     expectArmHeaderHeights(regionOf(root, "br"), variant);
     expectArmHeaderHeights(regionOf(root, "inner"), variant);
     expectVariantPaint(root, variant);

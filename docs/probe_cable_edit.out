@@ -1,0 +1,50 @@
+marimo 0.24.2 · libcst 1.9.0 · nothing is executed
+
+THE CELL A HUMAN WROTE
+----------------------
+# the distribution is the whole point of this board
+hist = df.hist( bins = 30 )   # 30 is deliberate, do not tidy this
+get(source) -> inlets ['df'], outlets ['hist']
+
+GESTURE 1 · REBIND — drag the `norm` cable onto the `df` inlet
+--------------------------------------------------------------
+# the distribution is the whole point of this board
+hist = norm.hist( bins = 30 )   # 30 is deliberate, do not tidy this
+get(put(source, norm)) -> inlets ['norm']
+  round-trip law, get(put(w)) == w : True
+  comment above survived           : True
+  trailing comment survived        : True
+  the spacing nobody would choose  : True
+  the outlet was NOT touched       : True
+
+THE UNDOABILITY TEST (Lechtenboerger, PODS 2003)
+------------------------------------------------
+  drag `df` back onto the inlet -> byte-identical to the original? True
+  => REBIND is undoable from inside the view, so it is a legal silent drag.
+
+GESTURE 2 · RENAME a port
+-------------------------
+  producer : norm = df / df.max()   # normalised, see the memo
+  rebind('norm'->'scaled') on the producer leaves the BINDING alone:
+             norm = df / df.max()   # normalised, see the memo
+  => a rename is two edits, not one: rebind every consumer, then re-bind the
+     producer. marimo's single-definition rule is what makes it exact — one
+     producer, N consumers, all statically known, so it is a correct global
+     refactor rather than a search-and-replace.
+
+GESTURE 3 · CUT — deleting a cable is not an edit at all
+--------------------------------------------------------
+  hist = df.hist(bins=30)    remove the `df` reference and you are left with
+  hist = .hist(bins=30)      which is not Python. There is no name to put there.
+  Undoable from inside the view? NO — the undo needs the expression you deleted,
+  and the wire never carried it.
+  Same for CONNECT into a block that references nothing: there is no inlet to
+  land on, so the tool must ask WHERE, and a drag cannot ask.
+
+THE BAND, STATED ONCE
+---------------------
+  legal as a silent drag : REBIND an existing inlet · RENAME a port
+  named command, preview : CONNECT a new reference · CUT · anything abstracting
+  never under a drag     : an LLM. Too slow, nondeterministic and untestable at
+                           interaction speed; it proposes a diff, it is not the
+                           edit engine. (Round Tripping note, Rule 6.)

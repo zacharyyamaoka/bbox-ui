@@ -34,6 +34,83 @@
  */
 import type { CSSProperties } from "react";
 
+import type { Diagnostic } from "./highlighter";
+import type { PortState } from "./port";
+import type { BlockSide } from "./port.layout";
+
+/* ------------------------------------------------------------------ */
+/* PortEdgeItem — moved here (W1, 2026-09-18) from portEdge.tsx so the   */
+/* anchor registry below can name it in `PortLayoutFn`'s own signature   */
+/* without portEdge.layout.ts importing BACK from portEdge.tsx (that     */
+/* file already imports FROM this one — the reverse would be circular). */
+/* portEdge.tsx re-exports this under the same name, so every existing   */
+/* `import { PortEdgeItem } from "./portEdge"` call site is unaffected.  */
+/* ------------------------------------------------------------------ */
+
+/** One draggable unit on an edge. `state` defaults to `"empty"` when a
+ *  caller's story never bothers to set it. */
+export interface PortEdgeItem {
+  id: string;
+  label: string;
+  state?: PortState;
+  /**
+   * The diagnostic axis (docs/INVALID-STATES-PLAN.md §5's PortEdge row):
+   * "nothing on the rail itself" — forwarded straight to the `LabeledPort`
+   * the default render draws for this item; the PORT is the subject, the
+   * rail is furniture. A host's own `renderItem` override is responsible
+   * for forwarding this itself if it wants the mark.
+   */
+  diagnostics?: Diagnostic[];
+  /** Forwarded straight to the `LabeledPort` the default render draws for
+   *  this item — same "nothing on the rail itself, the PORT is the
+   *  subject" rule `diagnostics` follows, one row up. See
+   *  `PortDotPaintInput.availability`'s own doc
+   *  (docs/INVALID-STATES-PLAN.md D5, ruling 5). */
+  availability?: "available" | "unavailable";
+  /**
+   * The port's TYPE — drawn by the default `LabeledPort` as the muted
+   * secondary run after the name (lane `ports`, 2026-09-19: "label small
+   * inside the row, type secondary"), and the source of the by-type
+   * variants' colour. Optional: a port with no type renders the name alone.
+   */
+  type?: string;
+  /** An explicit CSS colour for the type, winning over the palette. */
+  typeColor?: string;
+  /**
+   * How many cables meet this port — the fan-in/fan-out count the
+   * `producers-count` lane computes from the scene and the port renders
+   * as a count circle riding the dot (Zach, 2026-09-19: one attach point
+   * in the centre, plus "the producer circle that has the number").
+   * Forwarded to the default `LabeledPort`; a host `renderItem` forwards
+   * it itself, same rule as `diagnostics`.
+   */
+  producers?: number;
+  /** Host-set selection, forwarded to the default `LabeledPort`. */
+  selected?: boolean;
+  /**
+   * P-056. The line this port contributes to the MULTI-LINE LANE, when that
+   * is not the same string as `label`. Omit — the normal case, and every
+   * story on this file — and the lane shows `label`, exactly as before.
+   *
+   * WHY the two can differ at all, which is not obvious from inside this
+   * component: a host may paint a port's line in two places with two
+   * different amounts of room. SystemSketch's block rail paints only the NAME
+   * HALF of `gain_x: float`, and that is a measured ruling rather than a
+   * shortcut — two annotated labels flowing inward from opposite walls of a
+   * 160px card overlap by 73px of unreadable text
+   * (`apps/systemsketch/src/shapes/block/BlockFace.tsx`'s `labelOf`). The
+   * lane is an overlay beside the rail and has the room, so it is the one
+   * surface that can show — and therefore edit — the whole declaration. With
+   * one field for both, typing `gain_y: int` into the lane would splice a
+   * colon into a name and produce `gain_y: int: float`.
+   *
+   * `formatPortLane`/`reconcilePortLane` (./portLane.ts) are the only readers,
+   * and they write an edited line back into whichever of the two fields the
+   * item actually declared — see `withPortLaneLine` there.
+   */
+  laneLine?: string;
+}
+
 /* ------------------------------------------------------------------ */
 /* Spacing — demos/dndkit-lab/src/types.ts + layout.ts                 */
 /* ------------------------------------------------------------------ */
@@ -76,12 +153,52 @@ export interface AlignConfig {
   edgePadding: number;
 }
 
+/**
+ * The caller places each port itself, at a main-axis offset it supplies per
+ * port id. No spacing rule at all — the edge stops deciding where its dots go
+ * and simply honours a number. Ported from claude/notebook-lab-work-order-472c22
+ * `27b4314` (2026-09-19, "A camera for the board, and every port on the row
+ * that owns it").
+ *
+ * WHY this exists as a third mode rather than another spacing scheme: the two
+ * above answer "how do N ports share this rail's length", and there are hosts
+ * for which that question is the wrong one. A notebook block is one of them —
+ * a port's job there is to say WHICH ROW of code binds the name, so its
+ * position is information the host already has and the rail must not
+ * recompute. Under `distribute`, growing a block by Δ moves port `i` by
+ * `i·Δ/(n−1)`: every port but the first, for a reason that has nothing to do
+ * with the code. That makes position noise.
+ *
+ * `offsets` is keyed by SLOT id (a port's own id when it is ungrouped, the
+ * group's id when it is not) and measured in px from the rail's CONTENT box
+ * along its main axis, to the slot box's LEADING edge — the same origin and
+ * the same units `mainAxisPositions` returns, so a host can compute one from
+ * the other. A slot with no entry sits at 0.
+ *
+ * Its geometry is the registered `"anchored"` `PortLayoutFn` below — one
+ * entry in the same registry every other mode resolves through, not a
+ * parallel positioning path. Distinct from `mode: "custom"`, which also
+ * positions absolutely: that one is a DRAG affordance (every card becomes a
+ * `useDraggable`), and a host whose port positions are derived from its own
+ * data wants the geometry without handing the human a way to shove a dot
+ * off its row — and without dnd-kit listeners sitting on a dot a cable may
+ * later need to drag from (`portEdge.tsx`'s `AnchorSlotCard` renders it
+ * `fixed`). Distinct from `PortEdgeProps.anchorLayout` too: that names a
+ * whole registered 2-D arrangement and keeps every card draggable; this is
+ * a per-port NUMBER the host's own data already holds.
+ */
+export interface AnchoredConfig {
+  mode: "anchored";
+  offsets: Record<string, number>;
+}
+
 /** How a PortEdge lays its cards out along its main axis. `distribute` is
  *  the three space-* schemes (spreads across the whole container).
  *  `aligned` packs cards from one end with an explicit gap instead — the
  *  mode a real port edge needs, since "space-between" reflows every port's
- *  position the instant a sibling edge's count changes. */
-export type Distribution = DistributeConfig | AlignConfig;
+ *  position the instant a sibling edge's count changes. `anchored` hands
+ *  placement back to the caller entirely. */
+export type Distribution = DistributeConfig | AlignConfig | AnchoredConfig;
 
 export const DEFAULT_ALIGN_GAP = 18;
 
@@ -202,6 +319,11 @@ export function clamp(value: number, min: number, max: number): number {
  * anchor side.
  */
 export function distributionStyle(axis: "row" | "column", distribution: Distribution): CSSProperties {
+  // `anchored` places every slot absolutely, so the track has no flow left to
+  // justify. Returning `{}` rather than throwing keeps this total over the
+  // union — a caller that reads the style before checking the mode gets the
+  // no-op, which is the truthful answer.
+  if (distribution.mode === "anchored") return {};
   if (distribution.mode === "distribute") {
     return { justifyContent: distribution.scheme };
   }
@@ -255,6 +377,144 @@ export function distributionStyle(axis: "row" | "column", distribution: Distribu
 export function offsetPaddingFor(count: number, slotMainPx: number, gap: number): number {
   return Math.max(0, count) * (slotMainPx + gap);
 }
+
+/* ------------------------------------------------------------------ */
+/* Anchor registry (W1, 2026-09-18) — a PortLayoutFn maps the items on   */
+/* one rail to the points they sit at; a host asks for one by name       */
+/* instead of switching on a closed union of arrangement kinds. Named    */
+/* `Anchor`, not `PortAnchor` (docs/WORK-ORDER-2026-09-18.md, W1's own    */
+/* "Naming" section): scoped to ports here, but the same idea             */
+/* `blockMembers`' free/stack modes and `traceBadge`'s `{t,o}` drag        */
+/* already reimplement — a name that doesn't paint itself into a ports-   */
+/* only corner is what keeps a later unification cheap.                  */
+/*                                                                        */
+/* WHY `x`/`y` are plain numbers, not yet centred on a card (2026-09-18): */
+/* a `PortLayoutFn` only ever learns `rail.mainSize`/`cardMain` along ONE */
+/* axis — it has no idea how tall/wide the perpendicular axis is, so it   */
+/* cannot itself compute where "centred" falls there. `axisAnchor` below  */
+/* reports the plain leading-edge position (`mainAxisPositions`'s own     */
+/* convention) on the rail's axis and `0` on the other; `portEdge.tsx`,   */
+/* the one caller that actually knows the box's full size, is what turns  */
+/* that into a real on-screen point (see its own `railAnchor` doc) — the  */
+/* split that keeps a `PortLayoutFn` a pure function of a 1-D rail rather  */
+/* than requiring every registrant to re-derive a 2-D box it was never    */
+/* given enough information to reason about.                             */
+/* ------------------------------------------------------------------ */
+
+/** A point a layout places one member at. `side`/`angle` are not read by
+ *  `PortEdge` itself — they exist for a LATER consumer of this same
+ *  registry (a Block's members, a trace badge's `{t, o}` drag) that needs
+ *  more than a bare point; a `PortLayoutFn` may set either, and a caller
+ *  that doesn't care is free to ignore them. */
+export interface Anchor {
+  x: number;
+  y: number;
+  side?: BlockSide;
+  angle?: number;
+}
+
+/** What a `PortLayoutFn` is told about the rail it's placing members on:
+ *  its length along its own axis (`mainSize`), the fixed footprint every
+ *  member occupies (`cardMain` — PortEdge's slots are square, so this is
+ *  both dimensions of one member), which screen axis that length runs
+ *  along, and the pixel gap the caller wants between members (only
+ *  consulted by a layout that packs from an anchor rather than
+ *  distributing across the full `mainSize`). */
+export interface PortLayoutRail {
+  mainSize: number;
+  cardMain: number;
+  axis: "row" | "column";
+  gap: number;
+}
+
+/** `items` in, `Anchor[]` out, one per item, same order and length as
+ *  `items`. `args` is deliberately untyped: a registrant defines its own
+ *  shape (the built-ins below read an `AlignConfig` or nothing) and a
+ *  caller that doesn't know a given layout's `args` shape simply omits
+ *  it — this file cannot enumerate every layout that will ever register
+ *  here, so it does not try to type their configs. */
+export type PortLayoutFn = (items: readonly PortEdgeItem[], rail: PortLayoutRail, args?: unknown) => Anchor[];
+
+const portLayoutRegistry = new Map<string, PortLayoutFn>();
+
+/** Registers (or replaces) a named layout. A story or host component calls
+ *  this once, at module scope, before any `<PortEdge>` asks for it by
+ *  name — the same "register before use" contract a router or a command
+ *  palette uses, chosen over a closed union so a NEW layout (an ellipse,
+ *  an arc — see `PortEdge.AnchorLayouts.stories.tsx`) never has to touch
+ *  this file to exist. */
+export function registerPortLayout(name: string, fn: PortLayoutFn): void {
+  portLayoutRegistry.set(name, fn);
+}
+
+/** Looks a layout up by name; `undefined` if nothing registered it. */
+export function portLayout(name: string): PortLayoutFn | undefined {
+  return portLayoutRegistry.get(name);
+}
+
+/** The plain leading-edge-on-this-axis, zero-on-the-other anchor every
+ *  built-in linear layout below returns — see this section's own WHY for
+ *  why the cross coordinate can't be anything more specific than `0` from
+ *  inside a `PortLayoutFn`. */
+function axisAnchor(rail: PortLayoutRail, mainPos: number): Anchor {
+  return rail.axis === "row" ? { x: mainPos, y: 0 } : { x: 0, y: mainPos };
+}
+
+/** Wraps `mainAxisPositions` for one fixed `SpacingScheme` — registered
+ *  three times below (once per scheme) so a caller asks for
+ *  `portLayout("space-around")` etc. by the same name `SPACING_SCHEMES`
+ *  already uses, rather than one layout plus a second scheme parameter a
+ *  caller would have to remember to pass. */
+function distributeLayout(scheme: SpacingScheme): PortLayoutFn {
+  return (items, rail) => mainAxisPositions(items.length, rail.mainSize, rail.cardMain, scheme).map((pos) => axisAnchor(rail, pos));
+}
+
+for (const { value } of SPACING_SCHEMES) {
+  registerPortLayout(value, distributeLayout(value));
+}
+
+/**
+ * The `aligned` config as a layout: packs from `anchor` with `gap`
+ * (`rail.gap`) between members, `edgePadding` pushing the WHOLE run in
+ * from that same edge — arithmetic equivalent to what
+ * `distributionStyle`'s `justifyContent: flex-start|flex-end` + CSS `gap`
+ * + the extra `padding*` it adds already produced, restated as pixel
+ * positions instead of CSS a browser resolves for us (this component no
+ * longer lays these cards out as flex children — see portEdge.tsx's own
+ * `PortEdgeBody`/`AnchorSlotCard` doc for why owning the pixels here is
+ * what let `neutralizeScale`/comment B1 be deleted). `args` is expected
+ * to be the `AlignConfig` half of the edge's own `Distribution`; a caller
+ * that omits it gets the same defaults `distributionStyle` already
+ * assumed (`anchor: "start"`, `DEFAULT_ALIGN_GAP`, no edge padding).
+ */
+registerPortLayout("aligned", (items, rail, args) => {
+  const cfg = (args as AlignConfig | undefined) ?? { mode: "aligned", anchor: "start", gap: DEFAULT_ALIGN_GAP, edgePadding: 0 };
+  const gap = cfg.gap;
+  const pitch = rail.cardMain + gap;
+  const n = items.length;
+  return Array.from({ length: n }, (_, i) => {
+    const mainPos =
+      cfg.anchor === "start"
+        ? cfg.edgePadding + i * pitch
+        : rail.mainSize - cfg.edgePadding - rail.cardMain - (n - 1 - i) * pitch;
+    return axisAnchor(rail, mainPos);
+  });
+});
+
+/**
+ * The `anchored` config (`AnchoredConfig`) as a layout: every slot sits at
+ * the leading-edge offset the host supplied for its id, 0 when it supplied
+ * none. `args` is the edge's own `AnchoredConfig`. Registered here — not
+ * branched on inside `portEdge.tsx` — so there is ONE geometry path for
+ * every mode (W1's registry) and the tentative-order preview, the grouped
+ * path and the resting render all read the same answer. `rail.cardMain` is
+ * never consulted, which is why a real (wider) group can come through here
+ * too: the offset IS the slot's leading edge, whatever its span.
+ */
+registerPortLayout("anchored", (items, rail, args) => {
+  const offsets = (args as AnchoredConfig | undefined)?.offsets ?? {};
+  return items.map((item) => axisAnchor(rail, offsets[item.id] ?? 0));
+});
 
 /* ------------------------------------------------------------------ */
 /* Grouping — demos/dndkit-lab/src/grouping.ts, generalized off the     */
@@ -383,6 +643,12 @@ export function splitByMaxVisible(slots: Slot[], maxVisible: number | undefined)
  * between an ungrouped port and a group's near edge, and inside the group.
  */
 export function interSlotGapPx(distribution: Distribution, containerMainPx: number, slotCount: number, slotMainPx: number): number {
+  // An anchored edge has no pitch: consecutive slots are wherever the caller
+  // put them, and the distance between two of them is not a property of the
+  // edge. 0 is the honest answer — and it is the number a GROUPED anchored
+  // slot lays its own members out at, which is right, because one slot is one
+  // anchor point.
+  if (distribution.mode === "anchored") return 0;
   if (distribution.mode === "aligned") return distribution.gap;
   if (slotCount <= 1) return 0;
   const free = Math.max(containerMainPx - slotCount * slotMainPx, 0);
@@ -492,4 +758,102 @@ export function groupingSetFromText(text: string, knownIds: string[]): { set: Gr
     set: { id: "text", label: "Text groups", description: "Typed on the edge itself.", assignments },
     unknownIds,
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* portConstraintOf — the ELK rung a PortEdge's own props already imply  */
+/* (W1, docs/WORK-ORDER-2026-09-18.md, "Also in this lane").             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Maps `PortEdge`'s existing `mode`/`freeOffsets` pair onto the one
+ * distinction ELK's layout actually needs — is this rail's ORDER pinned,
+ * or is each member's absolute POSITION pinned. `mode: "custom"` fixes a
+ * real x/y (`freeOffsets`), and so does an `anchored` distribution (the
+ * host's own `offsets`, `AnchoredConfig`); every other `"auto"` scheme
+ * only ever fixes the sequence a registered `PortLayoutFn` then lays out,
+ * never a literal position — so the mapping looks at `distribution` only
+ * to tell `anchored` apart.
+ *
+ * WHY no `FREE` / `FIXED_SIDE` / `FIXED_RATIO` (do not add them):
+ * bbox-ui has no representation for "ELK may put this anywhere", "pinned
+ * to a side but free along it", or "pinned to a fraction of the rail" —
+ * this component only ever expresses "order is fixed" or "position is
+ * fixed". Reporting a rung this component cannot actually honour would
+ * be a lying adapter; a coarser, TRUE rung is worth more than a precise,
+ * false one.
+ */
+export function portConstraintOf(props: { mode?: "auto" | "custom"; distribution?: Distribution }): "FIXED_ORDER" | "FIXED_POS" {
+  // An `anchored` distribution (`AnchoredConfig`) pins each port's position
+  // as literally as Custom's `freeOffsets` do — the host supplied the
+  // number — so it reports the same rung.
+  return props.mode === "custom" || props.distribution?.mode === "anchored" ? "FIXED_POS" : "FIXED_ORDER";
+}
+
+/* ------------------------------------------------------------------ */
+/* Variable-width slot packing (W1) — a real, not-collapsed GROUP is     */
+/* WIDER than a single slot (`GroupSlotBody`'s own flex row: k member    */
+/* boxes plus (k-1) of its own internal gap). The registry above cannot  */
+/* express that: a `PortLayoutFn` only ever learns ONE uniform           */
+/* `cardMain`, because `PortEdgeItem` carries no member count for it to  */
+/* read one from. `portEdge.tsx` is the one caller that DOES know each   */
+/* slot's real span, so it calls this — not the registry — whenever a    */
+/* real group is present.                                                */
+/* ------------------------------------------------------------------ */
+
+/** A slot's real main-axis footprint: `cardMain` for an ordinary
+ *  (singleton or collapsed) slot, or a real group's own row/column of
+ *  `memberCount` boxes at `cardMain` plus `(memberCount - 1)` of the
+ *  SAME `gap` `GroupSlotBody` lays its members out at. */
+export function slotMainSpan(memberCount: number, cardMain: number, gap: number): number {
+  return memberCount <= 1 ? cardMain : memberCount * cardMain + (memberCount - 1) * gap;
+}
+
+/**
+ * Generalizes `mainAxisPositions`' own per-scheme leading-offset
+ * convention (space-between: flush at 0; space-evenly/around: a leading
+ * gap) and `aligned`'s pack-from-an-edge convention to variable spans,
+ * walking slot-by-slot rather than dividing one uniform free space.
+ * `gap` is the FIXED per-port pitch this file's `interSlotGapPx` already
+ * derives (using the real PORT count, not the slot count) — using that
+ * same fixed gap between every pair of REAL (possibly wider) slot boxes
+ * is the self-consistency argument `interSlotGapPx`'s own doc proves:
+ * it is the value that keeps a grouped edge's port-to-port pitch equal
+ * to its own ungrouped pitch (A5's actual requirement), not merely
+ * internally uniform.
+ *
+ * Not claimed byte-identical for a single (`spans.length <= 1`) real
+ * group under a `distribute` scheme — `mainAxisPositions`' own
+ * `count === 1` branch centres in the free space rather than applying a
+ * leading offset, and no shipped story exercises that combination (a
+ * lone real group IS a single slot, but `GroupedSpacing`, the story that
+ * exercises real groups at all, always has ungrouped siblings beside
+ * it) — flagged rather than silently assumed correct.
+ */
+export function packVariableSlotSpans(spans: number[], distribution: Exclude<Distribution, AnchoredConfig>, gap: number, mainSize: number): number[] {
+  const n = spans.length;
+  const positions = new Array<number>(n);
+  if (distribution.mode === "aligned" && distribution.anchor === "end") {
+    let cursor = mainSize - distribution.edgePadding;
+    for (let i = n - 1; i >= 0; i -= 1) {
+      cursor -= spans[i];
+      positions[i] = cursor;
+      cursor -= gap;
+    }
+    return positions;
+  }
+  const leadingOffset =
+    distribution.mode === "aligned"
+      ? distribution.edgePadding
+      : distribution.scheme === "space-between"
+        ? 0
+        : distribution.scheme === "space-evenly"
+          ? gap
+          : gap / 2; // space-around
+  let cursor = leadingOffset;
+  for (let i = 0; i < n; i += 1) {
+    positions[i] = cursor;
+    cursor += spans[i] + gap;
+  }
+  return positions;
 }

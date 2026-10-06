@@ -10,11 +10,37 @@
 // of a button. A pill full of controls that are wired to nothing would pass a
 // DOM-presence suite completely, and that is the exact failure this round is
 // most likely to ship: the controls are the easy half, the wiring is not.
-import { createShapeId, DefaultColorStyle, type TLShapeId } from "tldraw";
+//
+// THE SELECTORS MOVED, 2026-09-24, and only the selectors. The six
+// per-tldraw-style rows (`ss-style-<style>` / `ss-style-<style>-panel` /
+// `ss-style-<style>-<value>`) are gone; the bar is now four triggers — shape ·
+// inside · edge · text — plus the app's diff, rendered by the trunk's
+// `ControlStrip` over the vocabulary in `chrome/ContextualPopupMenu/
+// appearanceModel.ts`. The DOM contract is that component's, with
+// `testIdPrefix="ss"`:
+//
+//   trigger   [data-testid="ss-control-<id>"], id ∈ geo|inside|edge|text|diff
+//   panel     [data-testid="ss-control-panel-<id>"]   (portalled out of the bar)
+//   option    [data-control="<id>"][data-value="<value>"]  — it has NO testid
+//   opacity   [data-testid="control-continuous-input"], inside the inside AND
+//             edge panels, with an <output> sibling carrying the percentage
+//
+// Every claim below is the one that was here before; each says where its
+// selector moved.
+import {
+  createShapeId,
+  DefaultColorStyle,
+  DefaultDashStyle,
+  DefaultFillStyle,
+  DefaultSizeStyle,
+  GeoShapeGeoStyle,
+  type StyleProp,
+  type TLShapeId,
+} from "tldraw";
 import { userEvent } from "vitest/browser";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { activeStyleRows } from "./chrome/ContextualPopupMenu";
+import { DiffMarkStyle } from "./shapes/shared/diffMark";
 import { BLOCK_SHAPE_TYPE } from "./shapes/types";
 import { mountApp, waitFor, type MountedApp } from "./testing/harness";
 
@@ -61,6 +87,27 @@ async function openPanel(triggerTestId: string, panelTestId: string): Promise<HT
 
 function xOf(id: TLShapeId): number {
   return app!.editor.getShape(id)!.x;
+}
+
+/**
+ * The appearance bar's trigger ids, in the order it draws them.
+ *
+ * WHY `[data-control]` rather than a `[data-testid^="ss-control-"]` prefix
+ * match: `ss-control-panel-<id>` shares that prefix, so the old
+ * filter-by-regex dance (`/^ss-style-[a-z]+$/`, to exclude `-face` and
+ * `-panel`) would have to be re-invented. A trigger is the only thing inside
+ * the BAR carrying `data-control`; the option buttons carry it too, but their
+ * panel portals to `document.body`, so scoping the query to the cluster leaves
+ * exactly the triggers with no filtering at all.
+ */
+async function appearanceTriggers(): Promise<string[]> {
+  const bar = await pill();
+  const cluster = await waitFor(() => bar.querySelector<HTMLElement>('[data-testid="ss-selection-appearance"]'), {
+    what: "the appearance cluster",
+  });
+  return [...cluster.querySelectorAll<HTMLElement>("[data-control]")].map(
+    (element) => element.getAttribute("data-control")!,
+  );
 }
 
 describe("the selection pill — Arrange", () => {
@@ -137,28 +184,45 @@ describe("the selection pill — Arrange", () => {
 });
 
 describe("the selection pill — opacity", () => {
+  // SELECTOR MOVED: the opacity readout was `ss-selection-opacity-value`, a
+  // cell sitting loose on the bar. Zach, 2026-09-24: "I also don't like the
+  // opacity slider on the tool bar ... that is something that relates to the
+  // fill and stroke." So it is now a `ContinuousRow` INSIDE both paint panels
+  // (`control-continuous-input` plus its `<output>`), and the test opens the
+  // Inside panel first. The claim itself is untouched.
+  //
+  // AMENDED: the shape is a geo, not an `ss-block`. The panel that carries
+  // opacity is bound only when the selection shares a colour AND a fill, which
+  // an `ss-block` does not — `appearanceModel.ts` drops a control with no
+  // candidate rather than drawing an empty one. That is the same rule this file
+  // asserts two describes below, so the fixture follows it instead of fighting
+  // it.
   it("reads the selection's real opacity and writes it back to the shape", async () => {
     app = await mountApp();
-    const id = placeBlock("fade", 300, 300);
+    const id = placeGeo(300, 300);
     app.editor.select(id);
-    const bar = await pill();
 
-    const readout = await waitFor(() => bar.querySelector<HTMLElement>('[data-testid="ss-selection-opacity-value"]'), {
-      what: "the opacity readout",
-    });
-    expect(readout.textContent, "a fresh shape is fully opaque").toBe("100%");
+    const panel = await openPanel("ss-control-inside", "ss-control-panel-inside");
+    const readoutText = () =>
+      panel.querySelector<HTMLElement>('[data-slot="control-continuous"] output')?.textContent ?? null;
+    await waitFor(() => (readoutText() !== null ? true : null), { what: "the opacity readout in the Inside panel" });
+    expect(readoutText(), "a fresh shape is fully opaque").toBe("100%");
 
     // Drive the EDITOR and prove the pill follows, which is the direction that
-    // catches a readout wired to local state instead of the store.
+    // catches a readout wired to local state instead of the store. It is the
+    // whole point of the case, and the new renderer makes it MORE worth
+    // asserting, not less: `ContinuousRow` keeps a local `draft` for the drag,
+    // so "follows the editor" now means that draft re-syncs rather than
+    // shadowing the store.
     app.editor.setOpacityForSelectedShapes(0.5);
-    await waitFor(() => (readout.textContent === "50%" ? true : null), {
-      what: `the readout to follow the editor (reads ${readout.textContent})`,
+    await waitFor(() => (readoutText() === "50%" ? true : null), {
+      what: `the readout to follow the editor (reads ${readoutText()})`,
     });
     expect(app.editor.getShape(id)!.opacity).toBeCloseTo(0.5, 2);
   });
 });
 
-describe("the selection pill — the tldraw style bar", () => {
+describe("the selection pill — the appearance bar", () => {
   // AMENDED BY P-035, and the amendment SHARPENS the claim rather than
   // relaxing it.
   //
@@ -177,42 +241,52 @@ describe("the selection pill — the tldraw style bar", () => {
   // Diff row must never reach a geo. Measured before the amendment, at the
   // commit that added the prop: the old cluster-level line timed out at 10s
   // with the pill showing the Diff trigger beside the block-view toggle.
-  it("gives a geo tldraw's OWN rows and none of the app's, and an ss- block the app's row and none of tldraw's", async () => {
+  //
+  // SELECTOR MOVED, 2026-09-24: a "row" used to be its own `ss-style-<style>`
+  // trigger on the bar. The bar is now four triggers and a row is either one of
+  // them or a section stacked inside one's panel, so the assertion reads
+  // `data-control` off the appearance cluster. What that costs and what it does
+  // not: `dash` and `fill` are no longer trigger ids, so "never a dash on one of
+  // ours" is now carried by the absence of the Edge and Inside triggers, which
+  // are the ONLY places a dash or a fill can be reached from. An `ss-` block
+  // whose bar is exactly `["diff"]` has no path to either — the claim is intact,
+  // and the selector is the one the renderer actually emits.
+  it("gives a geo tldraw's OWN controls and none of the app's, and an ss- block the app's control and none of tldraw's", async () => {
     app = await mountApp();
 
-    const rowsOnPill = async (): Promise<string[]> => {
-      const bar = await pill();
-      await waitFor(() => bar.querySelector('[data-testid="ss-selection-style"]'), { what: "the style bar" });
-      return [...bar.querySelectorAll<HTMLElement>('[data-testid^="ss-style-"]')]
-        .map((element) => element.getAttribute("data-testid")!)
-        .filter((id) => /^ss-style-[a-z]+$/.test(id))
-        .map((id) => id.replace("ss-style-", ""));
-    };
-
     app.editor.select(placeGeo(300, 300));
-    const onGeo = await rowsOnPill();
-    expect(onGeo, "a geo carries tldraw's colour row").toContain("color");
+    const onGeo = await appearanceTriggers();
+    expect(onGeo, "a geo carries tldraw's paint controls").toContain("inside");
+    expect(onGeo, "…and its edge, which is where dash lives").toContain("edge");
     expect(onGeo, "a geo must NEVER be offered the app's diff mark").not.toContain("diff");
 
     app.editor.selectNone();
     app.editor.select(placeBlock("mine", 700, 300));
-    const onBlock = await rowsOnPill();
+    const onBlock = await appearanceTriggers();
     // The whole point of the original case, kept verbatim in force: no `dash`,
-    // no `fill`, no `font` on one of ours.
-    expect(onBlock, "an ss- block gets ONLY its own row — never a dash or a fill").toEqual(["diff"]);
+    // no `fill`, no `font` on one of ours — and now, mechanically, no trigger
+    // from which any of the three could be opened.
+    expect(onBlock, "an ss- block gets ONLY its own control — never a dash or a fill").toEqual(["diff"]);
   });
 
+  // SELECTOR MOVED: the colour swatches used to be `ss-style-color-<value>`
+  // inside `ss-style-color-panel`. They are now the Inside panel's own option
+  // buttons, which carry no test id at all — `[data-control][data-value]` is
+  // the kit's contract (`controlPanel.tsx`'s `ControlOptionButton`).
   it("picking a colour writes tldraw's own style onto the shape", async () => {
     app = await mountApp();
     const id = placeGeo(300, 300);
     app.editor.select(id);
 
-    const panel = await openPanel("ss-style-color", "ss-style-color-panel");
-    const blue = await waitFor(() => panel.querySelector<HTMLElement>('[data-testid="ss-style-color-blue"]'), {
-      what: "the blue swatch",
+    const panel = await openPanel("ss-control-inside", "ss-control-panel-inside");
+    const blue = await waitFor(() => panel.querySelector<HTMLElement>('[data-control="inside"][data-value="blue"]'), {
+      what: "the blue swatch in the Inside panel",
     });
     await userEvent.click(blue);
 
+    // Still read back through tldraw's OWN style map, not through the app's
+    // `applyFillColor`: the claim is that the press reaches `DefaultColorStyle`,
+    // and asking the thing that wrote it would prove nothing.
     await waitFor(
       () => {
         const shared = app!.editor.getSharedStyles().get(DefaultColorStyle);
@@ -222,44 +296,92 @@ describe("the selection pill — the tldraw style bar", () => {
     );
   });
 
+  // SELECTOR AND MECHANISM MOVED: the face was a `<span>` with a
+  // `backgroundColor`, at `ss-style-color-face`. It is now an inline
+  // `<svg class="bbox-control-glyph">` inside the Inside trigger, and the
+  // colour lives on a painted `<rect>`'s `fill` — so the read is
+  // `getComputedStyle(rect).fill`. The ORACLE is unchanged and is the point of
+  // the case: tldraw's own theme, read independently of the component.
   it("the swatch face paints tldraw's REAL hex for the value, not a guessed colour", async () => {
     app = await mountApp();
     const id = placeGeo(300, 300);
     app.editor.select(id);
+    // WHY the fill treatment is set too, and why it is a precondition rather
+    // than a second claim: `PaintFace` deliberately draws NO body for
+    // `fill: "none"` (the keyline alone — an empty face, which is the honest
+    // picture of an unfilled shape), and a stock geo is born unfilled. Without
+    // this line the test would be asserting a hex on a rect that correctly does
+    // not exist.
+    app.editor.setStyleForSelectedShapes(DefaultFillStyle, "solid");
     app.editor.setStyleForSelectedShapes(DefaultColorStyle, "blue");
 
     const bar = await pill();
-    const face = await waitFor(() => bar.querySelector<HTMLElement>('[data-testid="ss-style-color-face"]'), {
-      what: "the colour face",
+    const trigger = await waitFor(() => bar.querySelector<HTMLElement>('[data-testid="ss-control-inside"]'), {
+      what: "the Inside trigger",
     });
+    // The painted rect is the one that is not the keyline; the keyline is
+    // `fill="none"` by construction and carries no `data-role` to key off, so
+    // the computed fill IS the discriminator.
+    const paintedRect = () =>
+      [...trigger.querySelectorAll<SVGRectElement>("svg.bbox-control-glyph rect")].find(
+        (rect) => getComputedStyle(rect).fill !== "none",
+      ) ?? null;
+
     // The oracle is tldraw's own theme, read independently of the component.
     const theme = app.editor.getTheme("default")!;
     const palette = theme.colors[app.editor.user.getIsDarkMode() ? "dark" : "light"] as unknown as Record<string, { solid: string }>;
     const expected = palette.blue!.solid;
-    await waitFor(
-      () => {
-        const painted = getComputedStyle(face).backgroundColor;
-        return painted && painted !== "rgba(0, 0, 0, 0)" ? painted : null;
-      },
-      { what: "the face to paint a colour" },
-    );
+    const face = await waitFor(paintedRect, { what: "the face to paint a colour" });
+
     // Compare through the browser's own parser so #4465e9 and rgb(68,101,233)
-    // are the same answer.
-    const probe = document.createElement("span");
-    probe.style.backgroundColor = expected;
-    document.body.appendChild(probe);
-    const expectedRgb = getComputedStyle(probe).backgroundColor;
-    probe.remove();
-    expect(getComputedStyle(face).backgroundColor, `the face should paint tldraw's blue (${expected})`).toBe(expectedRgb);
+    // are the same answer. The probe is a real SVG rect rather than the old
+    // `<span>`: `fill` is an SVG presentation property, and resolving it on the
+    // element type that actually carries it is what keeps the two sides of this
+    // comparison the same computation.
+    const probeSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    const probe = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    probeSvg.appendChild(probe);
+    document.body.appendChild(probeSvg);
+    probe.style.fill = expected;
+    const expectedFill = getComputedStyle(probe).fill;
+    probeSvg.remove();
+    expect(getComputedStyle(face).fill, `the face should paint tldraw's blue (${expected})`).toBe(expectedFill);
   });
 
-  it("renders exactly the rows getSharedStyles reports — the oracle is tldraw, not a shape-type switch in our code", async () => {
-    // WHY this compares against `activeStyleRows` rather than asserting "an
-    // arrow has no Fill": the first draft of this test DID assert that, and it
-    // was simply wrong — a tldraw v5 arrow does carry a fill style. Guessing a
-    // shape's style set is the exact mistake the implementation avoids by
-    // asking the editor, so the test asks the editor too. A hand-written
-    // expectation here would just be the shape-type switch again, in the test.
+  it("renders exactly the triggers getSharedStyles supports — the oracle is tldraw, not a shape-type switch in our code", async () => {
+    // WHY this is a map from trigger to REQUIRED STYLES rather than a
+    // hand-written list of triggers per shape kind: the first draft of the old
+    // version of this case asserted "an arrow has no Fill", and it was simply
+    // wrong — a tldraw v5 arrow does carry a fill style. Guessing a shape's
+    // style set is the exact mistake the implementation avoids by asking the
+    // editor, so the test asks the editor too. A hand-written expectation here
+    // would just be the shape-type switch again, in the test.
+    //
+    // AMENDED, and this is the honest shape of it: the old case compared the
+    // rendered rows against `activeStyleRows(getSharedStyles())` — one of our
+    // own functions — so the assertion was really "the bar renders what that
+    // function says", and the tldraw-is-the-oracle part came along for free
+    // because the function was a thin pass over the map. `appearanceModel.ts`
+    // is not thin: four triggers over eleven styles, some of them stacked
+    // sections. So the two halves are separated deliberately:
+    //
+    //   THE MAP BELOW IS THE SPEC — a declaration of which styles each trigger
+    //   requires, written once, here, where a reviewer can read it.
+    //   THE SHARED-NESS COMES FROM `editor.getSharedStyles()` — never from a
+    //   list of shape kinds, and never from `appearanceModel.ts` itself, which
+    //   is the code under test.
+    //
+    // A regression that made a trigger appear for a shape that cannot carry its
+    // style still fails here, which is the thing the original was protecting.
+    const TRIGGER_STYLES: ReadonlyArray<readonly [string, readonly StyleProp<string>[]]> = [
+      ["geo", [GeoShapeGeoStyle as unknown as StyleProp<string>]],
+      // Inside paints a fill TREATMENT in the colour, so it needs both.
+      ["inside", [DefaultColorStyle, DefaultFillStyle]],
+      ["edge", [DefaultDashStyle]],
+      ["text", [DefaultSizeStyle]],
+      ["diff", [DiffMarkStyle as unknown as StyleProp<string>]],
+    ];
+
     app = await mountApp();
     for (const make of [() => placeGeo(300, 300), () => {
       const id = createShapeId();
@@ -268,17 +390,13 @@ describe("the selection pill — the tldraw style bar", () => {
     }]) {
       app.editor.selectNone();
       app.editor.select(make());
-      const bar = await pill();
-      const expected = activeStyleRows(app.editor.getSharedStyles()).map((row) => row.id);
-      expect(expected.length, "the shape shares at least one style").toBeGreaterThan(0);
-      await waitFor(() => bar.querySelector('[data-testid="ss-selection-style"]'), { what: "the style bar" });
-      // Only the ROW TRIGGERS, not their `-face` spans or `-panel` popovers:
-      // `ss-style-color` yes, `ss-style-color-face` no.
-      const rendered = [...bar.querySelectorAll<HTMLElement>('[data-testid^="ss-style-"]')]
-        .map((el) => el.getAttribute("data-testid")!)
-        .filter((id) => /^ss-style-[a-z]+$/.test(id))
-        .map((id) => id.replace("ss-style-", ""));
-      expect(rendered, "the pill renders tldraw's own answer, in order").toEqual(expected);
+      const shared = app.editor.getSharedStyles();
+      const expected = TRIGGER_STYLES.filter(([, styles]) => styles.every((style) => shared.get(style) !== undefined)).map(
+        ([id]) => id,
+      );
+      expect(expected.length, "the shape shares at least one control's styles").toBeGreaterThan(0);
+      const rendered = await appearanceTriggers();
+      expect(rendered, "the pill renders tldraw's own answer, in the recipe's order").toEqual(expected);
     }
   });
 });

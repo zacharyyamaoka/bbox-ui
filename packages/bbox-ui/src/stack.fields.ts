@@ -15,7 +15,7 @@
  * every generic consumer (the story generator, the product inspector) can
  * `.map()` over it without a null check, per docs/T1-SPEC.md §0.
  */
-import type { FieldOption, FieldSpec, PresetSpec } from "@bbox-ui/schema";
+import type { FieldOption, FieldSpec, PresetSpec } from "./schema";
 
 import { STACK_INSET_BACKGROUNDS, STACK_MEMBER_WIDTHS } from "./stack";
 

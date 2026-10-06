@@ -86,6 +86,105 @@
   zoom: var(--ss-interface-scale);
 }
 
+/* ------------------------------------------------------------------ */
+/* Viewport-bound frames — the trunk's own opt-out                     */
+/* ------------------------------------------------------------------ */
+
+/*
+ * `[data-viewport-frame]` is a TRUNK component saying: my own box is sized
+ * against the real window (a `vh`/`vw` length, or `min(...)` of one), so hold
+ * it in real pixels and scale my INTERIOR instead.
+ *
+ * WHY it is an attribute the component sets rather than another hand-listed
+ * `data-slot` down here: this file already carried a bespoke pair of rules for
+ * `[data-slot="settings-view"]` (below, in spirit — those two rules are now
+ * these two), and the file navigator turned out to be the SECOND instance of
+ * exactly the same trap, found the same way and fixed the same way. A list
+ * maintained here can only ever name the frames someone already caught; an
+ * attribute travels with the component that has the problem, and a new trunk
+ * dialog gets the fix by writing its own contract rather than by someone
+ * remembering to edit this host. The trunk stays engine-free either way — the
+ * attribute means nothing to a host that does not scale its chrome, and
+ * `apps/storybook-basics` renders it unstyled.
+ *
+ * WHAT it prevents, measured in real Chromium at 1280x800 with
+ * `max-h-[85vh]` on the navigator's frame:
+ *   100% -> 768x680 at y=60, fully on screen;
+ *   125% -> 960x850 at y=-25;
+ *   160% -> 1228.8x1088 at y=-144, and `document.elementFromPoint` at the
+ *           centre of both Cancel and Open returned null.
+ * That is this file's own header WHY ("a length written INSIDE a zoomed layer
+ * paints at length x scale") landing on a dialog frame: `85vh` resolves
+ * against the UNZOOMED 800px viewport and then paints 1.6x, so 680 becomes
+ * 1088 on a window that is still 800 tall.
+ *
+ * The frame stays at zoom 1 by construction and its DIRECT CHILDREN carry the
+ * scale, so chrome, text and controls inside still grow — which is the whole
+ * reason the setting exists — inside a box that never leaves the window. The
+ * frame's own `overflow-hidden` is the backstop when the scaled interior is
+ * bigger than the frame, the same role it plays un-scaled.
+ */
+/*
+ * THE REST OF THE SWEEP, 2026-09-22 — every viewport-relative length in
+ * `apps/storybook-basics/src/editor` and `.../components` and `apps/systemsketch/src`,
+ * classified by whether it actually renders inside a zoomed layer. Two are
+ * fixed, four are KNOWN-WRONG-AND-LEFT, five are correct as written. Recorded
+ * here rather than in a chat message because this file is what the next person
+ * to hit the trap will read.
+ *
+ * Inside a zoomed layer, FIXED — both carry `data-viewport-frame`:
+ *   editor/fileNavigator.tsx:478      the frame (was `max-h-[85vh]`)
+ *   editor/settingsView.tsx:284,286   `POPUP_DIALOG` / `POPUP_PAGE`
+ *
+ * Inside a zoomed layer, LEFT ALONE — all four are the dev-tools recording
+ * surfaces and the focus lens, reachable but not the reported defect, and
+ * none can be verified end-to-end without a real recording. Listed so the
+ * next lane does not have to re-derive them:
+ *   editor/recordingViewer.tsx:254   `max-h-[92vh] w-[min(80rem,calc(100vw-2rem))]`
+ *                                    on a `data-slot="dialog-content"` — the
+ *                                    SAME defect as the file navigator's, and
+ *                                    `data-viewport-frame` fixes it the same way.
+ *   editor/recordingViewer.tsx:294   `calc(46vh * ratio)` (inline width)
+ *   editor/recordingViewer.tsx:336   `max-h-[46vh]` (the log pane)
+ *                                    ^ NOTE these two are INTERIOR, and
+ *                                      `data-viewport-frame` would NOT fix
+ *                                      them: the rule zooms the frame's DIRECT
+ *                                      CHILDREN, so a `vh` deeper in still
+ *                                      resolves against the unzoomed viewport
+ *                                      and still paints scaled. They need the
+ *                                      lengths rewritten, not an attribute.
+ *   editor/recordingControl.tsx:228  `w-[min(26rem,calc(100vw-2rem))]` on a
+ *                                    `data-slot="popover-content"`. Width axis
+ *                                    only, and Floating UI's shift keeps the
+ *                                    popover on screen, so it distorts rather
+ *                                    than escapes.
+ *   editor/focusControls.tsx:134,169 `w-[clamp(96px,10vw,150px)]` inside
+ *                                    `.ss-chrome`. The clamp bounds the damage
+ *                                    to 96-150 local px: cosmetic, never an
+ *                                    overflow.
+ *
+ * NOT inside a zoomed layer — correct as written, and each also means the
+ * surface does not scale with the setting at all, which is a different
+ * question from this file's:
+ *   editor/compareDialog.tsx:285     `data-slot="compare-dialog"`, portaled;
+ *                                    no rule above matches that slot.
+ *   editor/glyphPicker/glyphPicker.css:41  `data-slot="glyph-picker-panel"`,
+ *                                    portaled; likewise unmatched.
+ *   editor/edgeDropMenu.tsx:325      `kit.Overlay` is rendered as a SIBLING of
+ *                                    the `.ss-chrome` div, not inside it
+ *                                    (`chrome/overlay.tsx:23-29` vs `:423`),
+ *                                    so it never inherits the zoom.
+ *   review/boardParam.ts:132         a banner appended to `document.body`.
+ *   testing/harness.tsx:54           test-only host element.
+ */
+[data-viewport-frame] {
+  zoom: 1;
+}
+
+[data-viewport-frame] > * {
+  zoom: var(--ss-interface-scale);
+}
+
 /*
  * Settings is its own popup — `settingsView.tsx:490` renders the stock
  * Dialog POPUP with `data-slot="settings-view"` instead of `dialog-content`,
@@ -128,14 +227,14 @@
  * exists) inside that fixed frame; `overflow-hidden` on it (`POPUP_BASE`) is
  * the backstop if the zoomed interior is taller or wider than the frame —
  * the same role it already plays for the un-zoomed case, where a category's
- * content can be taller than the pane. */
-[data-slot="settings-view"] {
-  zoom: 1;
-}
-
-[data-slot="settings-view"] > * {
-  zoom: var(--ss-interface-scale);
-}
+ * content can be taller than the pane.
+ *
+ * SINCE 2026-09-22 those two rules are the `[data-viewport-frame]` pair above,
+ * and `settingsView.tsx` carries the attribute rather than being named here by
+ * its slot. Nothing about the behaviour changed — the selector did. The file
+ * navigator hit this same trap independently (see that block's measurements),
+ * which is what turned "settings needs a special case" into "a frame sized
+ * against the window says so, and this host answers all of them". */
 
 /* ------------------------------------------------------------------ */
 /* Exemptions — surfaces positioned from a SCREEN measurement          */

@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, type ComponentProps, type ReactNode } from "react";
-import { decodeGlyphContent } from "@bbox-ui/glyph-content";
+import { decodeGlyphContent } from "./glyph.content";
 
 import { cn } from "../lib/utils";
 import { BAR_SIZE_TO_GLYPH_PRESET, useBarSize } from "./barSize";

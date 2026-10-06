@@ -1,41 +1,65 @@
 /*
- * src/skin/skin.css — ported by value from packages/bbox-ui/src/skin.css
- * (frozen v1, read-only donor), revision `c83c8b2` in this repo. The three
- * skin blocks and every WHY comment travel unchanged except where migration
- * M8 removed a token below; this file's own imports/wiring at the bottom of
- * globals.css is new (the donor is a standalone package export, this app
- * inlines it as a sibling stylesheet).
+ * src/skin/skin.css — the ten skins.
  *
- * WHAT CHANGED in the port:
- *   1. Variable names are UNCHANGED (`--foreground`, `--card`, etc.) — this
- *      app's src/globals.css defines the same shadcn variable names the
- *      donor's theme.css does, confirmed by grep before porting, so every
- *      `var(--foreground)` etc. below resolves exactly as it did there.
- *   2. The donor's "ONE TOKEN BELOW IS A TRAP" note (stroke-width vs.
- *      `BLOCK_BORDER_PX`/`REGION_BORDER_PX`) is dropped — this app's
- *      port.layout.ts explicitly does not carry wall-anchor geometry (its
- *      own header: "this app has no `anchored` mode"), so there is no
- *      inset math reading `--bbox-skin-stroke-width` as a length to warn
- *      about here. If that geometry is ever added back, re-add the trap
- *      note as-is — the invariant it protects is still true.
- *   3. `--bbox-skin-crisp` and `--bbox-skin-outline` are GONE from all
- *      three blocks below — the one deliberate divergence from "travels
- *      unchanged" above (docs/peps/0001-sketch-skin-at-the-boundary.md
+ * LINEAGE. Originally ported by value from packages/bbox-ui/src/skin.css
+ * (frozen v1, read-only donor), revision `c83c8b2` in this repo, with
+ * three skins: `default` / `plain` / `sketch`. Zach, 2026-09-17, renamed
+ * and grew the set:
+ *
+ *   "Lets call it Sketch, Unstyled, Shadcn, and then we can have a couple
+ *    different styles … Ok so we can support like 3 other orthongal
+ *    variants … Lets list them in story book in order:
+ *      2. Unstyled  3. Sketch  4. Shadcn  5. No. 1 … 9. No. 5"
+ *
+ * Grown twice since, same rules each time: "Please add a Notion inspired
+ * one" -> rung 10, No. 6 · Notion (2026-09-17); "Please add another style
+ * for obsidan inspired" -> rung 11, No. 7 · Obsidian (2026-09-18).
+ *
+ * His list starts at 2 because rung 1 is the toolbar's "No skin (today)" —
+ * no attribute at all. So the array order in skin.ts IS the picker order,
+ * and this file declares its blocks in that same order.
+ *
+ * WHAT CHANGED FROM THE DONOR, exhaustively:
+ *   1. `default` -> `shadcn`. Same block, renamed: it was always "the
+ *      shadcn/ui look", and calling it `default` hid that behind a word
+ *      that means "whatever is currently on".
+ *   2. `plain` -> REMOVED here (it survives untouched in the frozen
+ *      packages/bbox-ui, which this file does not edit). Its austere
+ *      square-cornered wireframe sat between `unstyled` and `shadcn`
+ *      without being either, and Zach's list has no rung for it. If it
+ *      comes back it is twelve lines.
+ *   3. `unstyled` — NEW, and the point of the rename. Every decoration
+ *      off: no fill, no shadow, no corner, and the browser's own default
+ *      font — but NOT no line: it draws the UA's own `ButtonBorder` (see
+ *      its block for the bug that taught this). Zach: "I like actually
+ *      just seeing things in the unstyled way then its good.. clears away
+ *      the distortions."
+ *   4. Five numbered styles — NEW (see their own headers below).
+ *   5. The donor's "ONE TOKEN BELOW IS A TRAP" note (stroke-width vs.
+ *      `BLOCK_BORDER_PX`/`REGION_BORDER_PX`) stays dropped: this app's
+ *      port.layout.ts carries no wall-anchor geometry ("this app has no
+ *      `anchored` mode"), so there is no inset math reading
+ *      `--bbox-skin-stroke-width` as a length here. Re-add it verbatim if
+ *      that geometry ever lands — the invariant it protects is still true,
+ *      and is still tested (see the bottom of skin.test.ts).
+ *   6. `--bbox-skin-crisp` and `--bbox-skin-outline` are GONE from every
+ *      block below (docs/peps/0001-sketch-skin-at-the-boundary.md,
  *      migration M8; see skin.ts's own header for the full reasoning).
  *      Both existed to switch between a core-rendered crisp element and a
  *      core-rendered hand-drawn twin; this app's core renders no twin any
- *      more, so there is nothing left for either to switch. The three
- *      crisp-suppression rules at the bottom of this file replace them,
- *      keyed on attributes `SketchAtEdge.tsx` sets rather than on a
- *      per-skin token.
+ *      more, so there is nothing left for either to switch. The rules at
+ *      the bottom of this file replace them, keyed on attributes
+ *      `SketchAtEdge.tsx` sets rather than on a per-skin token. The seven
+ *      new skins were written on a branch that predated M8 and were ported
+ *      onto it on 2026-09-30 with those two declarations dropped — nothing
+ *      else in them changed.
  *
  * Import AFTER src/globals.css's own `:root` block (globals.css does this
- * with `@import "./skin/skin.css";` near the top, after the shadcn theme
- * tokens are declared and before the trace-march keyframes). Then stamp
- * one attribute on any ancestor:
+ * with `@import "./skin/skin.css";`). Then stamp one attribute on any
+ * ancestor:
  *
- *   <html data-bbox-skin="sketch">        a whole app
- *   <div  data-bbox-skin="plain">…</div>  one board, one card, one story row
+ *   <html data-bbox-skin="sketch">          a whole app
+ *   <div  data-bbox-skin="blueprint">…</div> one board, one card, one row
  *
  * WHY this file contains ONLY custom-property declarations, and not a
  * single rule that reaches into a component's internals: the components
@@ -45,66 +69,128 @@
  * does never has to win a specificity fight against a Tailwind utility or
  * a caller's own `className`.
  *
- * Skin is ORTHOGONAL to theme. Nothing below names a colour literal —
- * every one resolves through globals.css's own tokens, so all three skins
- * follow light/dark, and `data-theme="dark" data-bbox-skin="sketch"` is an
- * ordinary combination rather than a fourth thing to define.
+ * TWO RULES EVERY BLOCK BELOW KEEPS, both machine-checked in skin.test.ts:
+ *
+ *   • `--bbox-skin-stroke-width` is 2px in every skin, without exception.
+ *     Border WIDTH is geometry, not paint — it moves the content box, and
+ *     `block.tsx`'s `BLOCK_BORDER_PX` / `port.tsx`'s ring sizing are
+ *     literals that a drawn sketch outline lands on exactly. A skin paints;
+ *     it never moves anything. This is the one expressive lever the skin
+ *     layer deliberately does not hand you, and the honest answer to "how
+ *     much room is there inside shadcn's token vocabulary" has to include
+ *     it: hairline-vs-heavy is off the table, everything else below is not.
+ *
+ *   • A suppression token (`--bbox-skin-line-override`,
+ *     `--bbox-skin-dot-rings`) never names a colour. Those two exist so a
+ *     skin can say "do not paint the CSS line"; the colour belongs to the
+ *     component's own state cascade (a Port's ring, a Badge's outline
+ *     variant). Skin and state are different axes and may not both own a
+ *     field.
+ *
+ * ON THE FONT STACKS, and their second tail. Every stack below names the
+ * families it WANTS first (Nunito, Archivo Black, IBM Plex Sans
+ * Condensed…) and then a second tail of families that are actually
+ * installed on Zach's Linux box — URW Gothic for the rounded rung,
+ * Liberation Sans Narrow for the condensed one, Lato Black for the heavy
+ * one, JetBrains Mono ahead of `ui-monospace` (which would otherwise win
+ * and resolve to the plain system mono). Without that tail the letterform
+ * axis is dead on the machine the styles are being JUDGED on: measured
+ * with `fc-match`, then in the browser — five of the eight rungs rendered
+ * in the same Noto Sans. This package still ships no webfont; the tail is
+ * ordinary fallback, and a reader on macOS or Windows reaches the
+ * first-choice families exactly as written.
+ *
+ * ON `color-mix(in oklab, …)`, and why never `in oklch`. Mixing INTO an
+ * achromatic theme colour is the whole technique below, and oklch is the
+ * wrong space for it: oklch interpolates the HUE ANGLE, and globals.css
+ * authors `--card` as `oklch(1 0 0)` — an EXPLICIT hue of 0. Mixing that
+ * 86/14 toward blue (hue 248) takes the short arc backwards and resolves,
+ * measured in a real browser, to `oklch(0.93 0.0168 344.32)`: magenta. The
+ * green mix landed on hue 18, khaki. That is not reasoning, it is what the
+ * first capture of this file rendered.
+ *
+ * The trap inside the trap, also measured: the same mix written against the
+ * KEYWORD `white` gives the correct hue 248, because sRGB white converts
+ * with a powerless hue that CSS Color 4 carries over from the other colour.
+ * So "it works when I test it with white" is not evidence — the bug only
+ * exists because the theme spells its white in oklch, which is exactly the
+ * case every mix below is in. oklab is rectangular (L, a, b), has no hue
+ * angle to travel along, and is correct in both spellings.
+ *
+ * ON COLOUR, and where this file extends the donor's rule. The donor's
+ * three skins named no colour literal at all — every value resolved
+ * through globals.css's tokens, so all three followed light/dark for
+ * free. `unstyled`, `sketch`, `shadcn` and `porcelain` still hold that
+ * line exactly. The four remaining numbered styles each pin ONE hue and
+ * reach it only through `color-mix()` against the theme's own `--card` /
+ * `--foreground`, never as a flat literal — so a blueprint block is a
+ * tint of whatever the theme's card is, and still inverts correctly in
+ * dark mode. That is the minimum colour a "completely different look and
+ * feel" needs (Zach: "I do think you can create completely different
+ * looks and feels based on the styles"), bought without giving up the
+ * theme axis.
  */
 
+/* ==================================================================== */
+/* 2. Unstyled — every paint token off.                                 */
+/* ==================================================================== */
 /*
- * `default` is spelled out even though it is also every token's built-in
- * fallback. WHY: without it there is no way to switch BACK. A host with a
- * skin picker sets the attribute to one of three values; "unset the
- * attribute" is a fourth, different operation that a <select> cannot
- * express, and every host would hand-roll the same special case.
+ * The debugging lens. No line, no fill, no shadow, no corner, and the
+ * browser's own default font — so nothing on screen is a decision this
+ * repo made, and a layout bug has nowhere to hide behind a nice card.
+ *
+ * WHY there IS a line, when "every paint token off" would say otherwise
+ * (Zach, 2026-09-17: "BUG unstyled doesn't even show an outline which is
+ * bad! unstyled should look like the BASE UI primatives"): a transparent
+ * border was the literal reading of "unstyled" and it was the wrong one.
+ * Base UI's own unstyled demos are not INVISIBLE — they are undecorated
+ * but still legible, because the browser still draws the chrome it draws
+ * on its own. A lens you cannot see through is not a lens.
+ *
+ * `ButtonBorder` is a CSS Color 4 SYSTEM colour — the UA's own border
+ * paint, the one it uses on a `<button>` nobody styled. It is the only
+ * honest value here: not a colour this repo picked, not a theme token this
+ * repo defined, and it follows light/dark on its own because the platform
+ * flips it. Everything else stays off.
+ *
+ * WHY Ports and Traces still show: their paint belongs to the `state`
+ * axis, not to the skin, and `--bbox-skin-dot-rings` stays `initial` so
+ * the skin never touches it. An unstyled board is the clearest proof the
+ * two axes really are separate — the boxes vanish and the wiring does not.
+ *
+ * WHY `serif` and not `initial`: on a custom property the CSS-wide keyword
+ * `initial` is the guaranteed-invalid value, so `var(--bbox-skin-font,
+ * inherit)` would fall through to `inherit` and quietly keep the body
+ * font. Naming the generic family is the only way to actually reach the
+ * UA default, and Times is the unmistakable "no stylesheet ran" signal.
  */
-[data-bbox-skin="default"] {
-  --bbox-skin-radius: var(--radius-lg);
-  --bbox-skin-radius-pill: 9999px;
-  --bbox-skin-stroke-width: 2px;
-  --bbox-skin-stroke: var(--border);
-  --bbox-skin-surface: var(--card);
-  --bbox-skin-shadow: var(--shadow-sm, 0 1px 2px 0 rgb(0 0 0 / 0.05));
-  --bbox-skin-font: inherit;
-  --bbox-skin-ink: var(--foreground);
-  --bbox-skin-fg: var(--card-foreground);
-  /* `initial` is the INERT value, and the only one that works. On a custom
-     property it is the guaranteed-invalid value, so `var(--x, <the real
-     paint>)` falls straight through to the component's own resolved
-     colour. Ported verbatim from skin.css's own WHY: a first pass used
-     `currentColor` here reasoning that it "names the real thing" — it
-     does not, it names the TEXT colour. */
-  --bbox-skin-line-override: initial;
-  --bbox-skin-font-sans: initial;
-  --bbox-skin-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  --bbox-skin-dot-rings: initial;
-}
-
-/*
- * Plain — square corners, one weight of line, no shadow. The austere
- * reading: a schematic.
- */
-[data-bbox-skin="plain"] {
+[data-bbox-skin="unstyled"] {
   --bbox-skin-radius: 0px;
   --bbox-skin-radius-pill: 0px;
   --bbox-skin-stroke-width: 2px;
-  --bbox-skin-stroke: var(--foreground);
-  /* Ported verbatim (Zach, 2026-09-17, via the donor's own note): "For
-     default, you can actually have a background... Its only for plain and
-     sketch I don't want a background." `default` keeps its card; these two
-     are the line-only pair. */
+  --bbox-skin-stroke: ButtonBorder;
   --bbox-skin-surface: transparent;
   --bbox-skin-shadow: none;
-  --bbox-skin-font: inherit;
+  --bbox-skin-font: serif;
   --bbox-skin-ink: var(--foreground);
-  /* With no fill, text has to read against the canvas rather than a card. */
+  /* With no fill there is no card to read against — text takes the
+     canvas's own foreground. */
   --bbox-skin-fg: var(--foreground);
-  --bbox-skin-line-override: initial;
-  --bbox-skin-font-sans: initial;
-  --bbox-skin-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* `currentColor`, not `transparent`: the outline-variant primitives
+     (Badge, Button, Toggle) keep a real line, drawn in their own text
+     colour the way an unstyled `<button>` is. Blanking it was the other
+     half of the same bug — it left a row of floating words where Base UI
+     would show bordered controls. Still not a colour the skin CHOSE,
+     which is what keeps it on the right side of the axis boundary. */
+  --bbox-skin-line-override: currentColor;
+  --bbox-skin-font-sans: serif;
+  --bbox-skin-font-mono: monospace;
   --bbox-skin-dot-rings: initial;
 }
 
+/* ==================================================================== */
+/* 3. Sketch — hand-drawn. Donor block, at M8.                          */
+/* ==================================================================== */
 /*
  * Sketch — hand-drawn. See src/skin/sketchAtEdge.ts and
  * docs/peps/0001-sketch-skin-at-the-boundary.md for why a drawn SVG path
@@ -156,6 +242,340 @@
   --bbox-skin-dot-rings: initial;
 }
 
+/* ==================================================================== */
+/* 4. Shadcn — the stock look, named for what it actually is.           */
+/* ==================================================================== */
+/*
+ * Was `default` in the donor. Every value resolves through globals.css's
+ * own shadcn variables, so this rung is "the design system, unmodified".
+ *
+ * WHY it is spelled out at all, when it is also every token's built-in
+ * fallback: without it there is no way to switch BACK. A picker sets the
+ * attribute to one of eight values; "unset the attribute" is a ninth,
+ * different operation that a <select> cannot express, and every host would
+ * hand-roll the same special case. (The toolbar's rung 1, "No skin
+ * (today)", is exactly that ninth state, and it is NOT identical to this
+ * one: with no attribute Block falls back to its own pre-skin 1px border,
+ * where any active skin — this one included — is 2px. That 1px is the
+ * price of the geometry invariant above, and it is the only difference.)
+ */
+[data-bbox-skin="shadcn"] {
+  --bbox-skin-radius: var(--radius-lg);
+  --bbox-skin-radius-pill: 9999px;
+  --bbox-skin-stroke-width: 2px;
+  --bbox-skin-stroke: var(--border);
+  --bbox-skin-surface: var(--card);
+  /* Tailwind v4's own `shadow-sm`, the utility Block wore before the skin
+     seam existed — spelled out because `--shadow-sm` is a theme variable
+     the utility inlines rather than references at runtime. */
+  --bbox-skin-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --bbox-skin-font: inherit;
+  --bbox-skin-ink: var(--foreground);
+  --bbox-skin-fg: var(--card-foreground);
+  /* `initial` is the INERT value, and the only one that works. On a custom
+     property it is the guaranteed-invalid value, so `var(--x, <the real
+     paint>)` falls straight through to the component's own resolved
+     colour. Ported verbatim from the donor's own WHY: a first pass used
+     `currentColor` here reasoning that it "names the real thing" — it
+     does not, it names the TEXT colour. */
+  --bbox-skin-line-override: initial;
+  --bbox-skin-font-sans: initial;
+  --bbox-skin-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --bbox-skin-dot-rings: initial;
+}
+
+/* ==================================================================== */
+/* 5. No. 1 · Vellum — soft, warm, friendly.                            */
+/* ==================================================================== */
+/*
+ * The reference is Zach's own: a node editor whose blocks read as friendly
+ * rather than technical ("Make it look more freidnly like this... that is
+ * actually just token change"). Everything here is exactly that — a big
+ * corner, a rounded letterform, a warm paper tint, and a line soft enough
+ * to stop shouting.
+ *
+ * The one hue is a warm tan, reached only by mixing INTO `--card`, so in
+ * dark mode the same 8% turns the card warm-dark instead of cream and the
+ * skin still follows the theme.
+ *
+ * The rounded font is a STACK with no webfont — `ui-rounded` is real on
+ * Apple platforms, and the named families are picked up if the reader
+ * happens to have them. It degrades to the system sans, never to serif.
+ */
+[data-bbox-skin="vellum"] {
+  --bbox-skin-radius: 14px;
+  --bbox-skin-radius-pill: 9999px;
+  --bbox-skin-stroke-width: 2px;
+  --bbox-skin-stroke: color-mix(in oklab, var(--foreground) 12%, transparent);
+  --bbox-skin-surface: color-mix(in oklab, var(--card) 92%, oklch(0.84 0.1 82));
+  --bbox-skin-shadow: 0 1px 2px color-mix(in oklab, var(--foreground) 8%, transparent),
+    0 8px 20px -10px color-mix(in oklab, var(--foreground) 30%, transparent);
+  --bbox-skin-font: "Nunito", "Quicksand", "Varela Round", ui-rounded,
+    "SF Pro Rounded", "URW Gothic", "Century Gothic", system-ui, sans-serif;
+  --bbox-skin-ink: color-mix(in oklab, var(--foreground) 72%, transparent);
+  --bbox-skin-fg: var(--card-foreground);
+  --bbox-skin-line-override: initial;
+  --bbox-skin-font-sans: "Nunito", "Quicksand", "Varela Round", ui-rounded,
+    "SF Pro Rounded", "URW Gothic", "Century Gothic", system-ui, sans-serif;
+  --bbox-skin-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --bbox-skin-dot-rings: initial;
+}
+
+/* ==================================================================== */
+/* 6. No. 2 · Blueprint — drafting paper.                               */
+/* ==================================================================== */
+/*
+ * Square everything (pills included — a drafting sheet has no lozenges),
+ * a cyan line, a blue-washed sheet, no depth at all, and a condensed
+ * technical face. The furthest this set goes from "app chrome" while
+ * still being a UI.
+ *
+ * `--bbox-skin-radius-pill: 0px` is the aggressive bit: it collapses
+ * Badge's pill shape into a tag. That is a genuine look-and-feel change
+ * made entirely of tokens, which is the thesis this rung exists to test.
+ */
+[data-bbox-skin="blueprint"] {
+  --bbox-skin-radius: 0px;
+  --bbox-skin-radius-pill: 0px;
+  --bbox-skin-stroke-width: 2px;
+  --bbox-skin-stroke: color-mix(in oklab, var(--foreground) 18%, oklch(0.62 0.13 242));
+  --bbox-skin-surface: color-mix(in oklab, var(--card) 86%, oklch(0.5 0.12 248));
+  --bbox-skin-shadow: none;
+  --bbox-skin-font: "IBM Plex Sans Condensed", "Roboto Condensed",
+    "Archivo Narrow", "Liberation Sans Narrow", "Nimbus Sans Narrow",
+    "DejaVu Sans Condensed", ui-sans-serif, system-ui, sans-serif;
+  --bbox-skin-ink: color-mix(in oklab, var(--foreground) 18%, oklch(0.62 0.13 242));
+  --bbox-skin-fg: color-mix(in oklab, var(--card-foreground) 78%, oklch(0.62 0.13 242));
+  --bbox-skin-line-override: initial;
+  --bbox-skin-font-sans: "IBM Plex Sans Condensed", "Roboto Condensed",
+    "Archivo Narrow", "Liberation Sans Narrow", "Nimbus Sans Narrow",
+    "DejaVu Sans Condensed", ui-sans-serif, system-ui, sans-serif;
+  --bbox-skin-font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo,
+    Consolas, monospace;
+  --bbox-skin-dot-rings: initial;
+}
+
+/* ==================================================================== */
+/* 7. No. 3 · Brutal — neo-brutalist.                                   */
+/* ==================================================================== */
+/*
+ * Square corners, a full-strength foreground line, and a HARD offset
+ * shadow with zero blur — the one move in this set that changes the
+ * silhouette of every box without touching its geometry, because a
+ * box-shadow paints outside the border box and lays out nothing.
+ *
+ * The heavy face is deliberate and is the loudest thing here: `Arial
+ * Black` is present on effectively every desktop, so this rung looks the
+ * same for Zach as it does in CI. If it reads as too much at 12px, the
+ * fix is one stack.
+ */
+[data-bbox-skin="brutal"] {
+  --bbox-skin-radius: 0px;
+  --bbox-skin-radius-pill: 0px;
+  --bbox-skin-stroke-width: 2px;
+  --bbox-skin-stroke: var(--foreground);
+  --bbox-skin-surface: var(--card);
+  --bbox-skin-shadow: 5px 5px 0 0 var(--foreground);
+  --bbox-skin-font: "Archivo Black", "Arial Black", "Lato Black",
+    "Helvetica Neue", Impact, ui-sans-serif, sans-serif;
+  --bbox-skin-ink: var(--foreground);
+  --bbox-skin-fg: var(--card-foreground);
+  --bbox-skin-line-override: initial;
+  --bbox-skin-font-sans: "Archivo Black", "Arial Black", "Lato Black",
+    "Helvetica Neue", Impact, ui-sans-serif, sans-serif;
+  --bbox-skin-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --bbox-skin-dot-rings: initial;
+}
+
+/* ==================================================================== */
+/* 8. No. 4 · Terminal — a modern terminal, not a CRT.                  */
+/* ==================================================================== */
+/*
+ * Was green phosphor with a glow. Zach, 2026-09-17: "The terminal mode is
+ * cool, can you make it feel like a bit more of a modern terminal, kinda
+ * like an IDE. or like claude code cli." So: a warm charcoal panel, a
+ * small 6px window corner, a quiet amber-leaning hairline, and a real
+ * drop shadow — a floating terminal window over a desktop, rather than a
+ * tube glowing in the dark.
+ *
+ * WHY the accent lives in `--bbox-skin-stroke` and not in `--bbox-skin-fg`:
+ * a Claude-Code-ish amber is an ACCENT, and an accent applied to every
+ * glyph stops being one. Text stays near the card's own foreground (a
+ * terminal's default text is not orange); the amber shows up on the
+ * panel edge, which is the one place the eye reads "this is a terminal
+ * window" without being shouted at. `--bbox-skin-ink` carries the same
+ * amber so a sketch-drawn twin would agree with the CSS line.
+ *
+ * Monospace everywhere, including the slots that ask for `sans` — the
+ * total commitment is the point, and `--bbox-skin-font-sans` exists
+ * precisely so a skin can override a rung that is set inline and would
+ * otherwise beat inheritance.
+ */
+[data-bbox-skin="terminal"] {
+  --bbox-skin-radius: 6px;
+  --bbox-skin-radius-pill: 6px;
+  --bbox-skin-stroke-width: 2px;
+  --bbox-skin-stroke: color-mix(in oklab, var(--foreground) 42%, oklch(0.72 0.14 66));
+  --bbox-skin-surface: color-mix(in oklab, var(--card) 90%, oklch(0.36 0.02 66));
+  --bbox-skin-shadow: 0 1px 2px color-mix(in oklab, var(--foreground) 12%, transparent),
+    0 14px 34px -18px color-mix(in oklab, var(--foreground) 62%, transparent);
+  --bbox-skin-font: "JetBrains Mono", ui-monospace, "SF Mono", Menlo,
+    Consolas, monospace;
+  --bbox-skin-ink: color-mix(in oklab, var(--foreground) 42%, oklch(0.72 0.14 66));
+  --bbox-skin-fg: color-mix(in oklab, var(--card-foreground) 92%, oklch(0.72 0.14 66));
+  --bbox-skin-line-override: initial;
+  --bbox-skin-font-sans: "JetBrains Mono", ui-monospace, "SF Mono", Menlo,
+    Consolas, monospace;
+  --bbox-skin-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo,
+    Consolas, monospace;
+  --bbox-skin-dot-rings: initial;
+}
+
+/* ==================================================================== */
+/* 9. No. 5 · Porcelain — soft depth, almost no line.                   */
+/* ==================================================================== */
+/*
+ * The modern-app reading, and the closest thing here to the settings
+ * panel Zach pasted: a translucent surface, a line you can barely see,
+ * and two stacked shadows doing the work the border used to do. Nothing
+ * in it names a hue, so — like `unstyled`, `sketch` and `shadcn` — it
+ * follows light/dark and any base-colour swap for free.
+ *
+ * WHY the surface is a translucent `--muted` and not a translucent
+ * `--card`: in shadcn's neutral theme `--card` and `--background` are the
+ * SAME colour, so a see-through card over the canvas is literally
+ * invisible — measured, not reasoned: the first pass rendered this rung
+ * indistinguishable from `shadcn` in light mode. Mixing the muted step
+ * with transparent keeps the "floating above something" reading and gives
+ * the panel an actual edge to find, out of a token set that has neither
+ * blur nor gradient. The Port dot's own surface ring stays an opaque
+ * `var(--card)` (port.tsx), so a wall-mounted dot still punches through
+ * cleanly over a see-through block.
+ */
+[data-bbox-skin="porcelain"] {
+  --bbox-skin-radius: 12px;
+  --bbox-skin-radius-pill: 9999px;
+  --bbox-skin-stroke-width: 2px;
+  --bbox-skin-stroke: color-mix(in oklab, var(--foreground) 8%, transparent);
+  --bbox-skin-surface: color-mix(in oklab, var(--muted) 82%, transparent);
+  --bbox-skin-shadow: 0 1px 1px color-mix(in oklab, var(--foreground) 7%, transparent),
+    0 14px 32px -12px color-mix(in oklab, var(--foreground) 45%, transparent);
+  --bbox-skin-font: "Lato", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --bbox-skin-ink: color-mix(in oklab, var(--foreground) 55%, transparent);
+  --bbox-skin-fg: var(--card-foreground);
+  --bbox-skin-line-override: initial;
+  --bbox-skin-font-sans: "Lato", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --bbox-skin-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --bbox-skin-dot-rings: initial;
+}
+
+/* ==================================================================== */
+/* 10. No. 6 · Notion — the document, not the app.                      */
+/* ==================================================================== */
+/*
+ * Zach, 2026-09-17: "Please add a Notion inspired one."
+ *
+ * Notion's whole trick is that its blocks barely exist: a 4px corner, a
+ * fill one step off the page, a line you have to look for, and NO depth
+ * at all — a callout is flat against the document, not floating above it.
+ * The warmth matters more than it sounds: Notion's greys and its near-
+ * black text are both warm, which is most of why it reads as paper rather
+ * than as chrome. Both are reached by mixing a warm hue into the theme's
+ * own `--card` / `--card-foreground`, so the rung inverts in dark mode
+ * instead of needing a second definition.
+ *
+ * The pill radius is 3px, not 9999px — Notion's inline tags are rounded
+ * RECTANGLES. That one token is most of the difference between "a
+ * document" and "an app", and it is the same lever Blueprint uses in the
+ * opposite direction.
+ *
+ * Nearest neighbour is Porcelain, deliberately: both are quiet. They
+ * separate on depth (Porcelain floats, Notion is flat), on corner (12px
+ * vs 4px), on the pill, and on warmth (Porcelain names no hue at all).
+ */
+[data-bbox-skin="notion"] {
+  --bbox-skin-radius: 4px;
+  --bbox-skin-radius-pill: 3px;
+  --bbox-skin-stroke-width: 2px;
+  --bbox-skin-stroke: color-mix(in oklab, var(--foreground) 10%, transparent);
+  --bbox-skin-surface: color-mix(in oklab, var(--card) 95%, oklch(0.55 0.018 78));
+  --bbox-skin-shadow: none;
+  /* `Liberation Sans` ahead of the generics for the same reason JetBrains
+     Mono is in Terminal: `ui-sans-serif` always resolves, so a generic
+     placed before an installed family wins and the letterform axis goes
+     dead. Inter is the real first choice; Liberation Sans is the closest
+     neutral grotesque actually present on this box. */
+  --bbox-skin-font: "Inter", "SF Pro Text", -apple-system,
+    "Segoe UI Variable Text", "Liberation Sans", Helvetica, ui-sans-serif,
+    system-ui, sans-serif;
+  --bbox-skin-ink: color-mix(in oklab, var(--foreground) 55%, transparent);
+  --bbox-skin-fg: color-mix(in oklab, var(--card-foreground) 92%, oklch(0.45 0.02 75));
+  --bbox-skin-line-override: initial;
+  --bbox-skin-font-sans: "Inter", "SF Pro Text", -apple-system,
+    "Segoe UI Variable Text", "Liberation Sans", Helvetica, ui-sans-serif,
+    system-ui, sans-serif;
+  --bbox-skin-font-mono: "SFMono-Regular", Menlo, Consolas, "PT Mono",
+    "Liberation Mono", Courier, monospace;
+  --bbox-skin-dot-rings: initial;
+}
+
+/* ==================================================================== */
+/* 11. No. 7 · Obsidian — the vault.                                    */
+/* ==================================================================== */
+/*
+ * Zach, 2026-09-18: "Please add another style for obsidan inspired."
+ *
+ * Obsidian's signature is one colour on an almost-neutral ground: the
+ * violet accent against a near-grey panel, an 8px corner (its own
+ * `--radius-m`), and elevation done with a soft LAYERED shadow rather
+ * than a line. The ratios below are its `--shadow-s` — three stops at
+ * 1px / 3px / 15px, each fainter than the last — re-expressed against
+ * `--foreground` so they invert instead of being three black rgba
+ * literals that only work on a light page.
+ *
+ * WHY the pill is 4px and not 9999px: an Obsidian `#tag` is a small
+ * rounded RECTANGLE (`--tag-radius`, its `--radius-s`), and the tag is
+ * the most recognisable small thing in the app. Notion's rung makes the
+ * same move at 3px; between them and Blueprint's 0px, that one token is
+ * doing more identity work than any other in this set.
+ *
+ * WHY the violet sits in `--bbox-skin-stroke` and not in the surface:
+ * Obsidian's backgrounds are nearly neutral (#1e1e1e in its own dark
+ * theme) and the accent shows up on edges, handles and active states. A
+ * violet PANEL would be a theme nobody ships; a violet edge is the app.
+ * The surface carries an 8% cast of the same hue so the two agree, which
+ * is also what keeps the rung from reading as Shadcn with a purple line.
+ */
+[data-bbox-skin="obsidian"] {
+  --bbox-skin-radius: 8px;
+  --bbox-skin-radius-pill: 4px;
+  --bbox-skin-stroke-width: 2px;
+  --bbox-skin-stroke: color-mix(in oklab, var(--foreground) 30%, oklch(0.62 0.18 295));
+  --bbox-skin-surface: color-mix(in oklab, var(--card) 92%, oklch(0.44 0.07 293));
+  --bbox-skin-shadow: 0 1px 2px color-mix(in oklab, var(--foreground) 7%, transparent),
+    0 3px 7px color-mix(in oklab, var(--foreground) 11%, transparent),
+    0 15px 30px -10px color-mix(in oklab, var(--foreground) 20%, transparent);
+  /* Inter is Obsidian's own default UI font. `DejaVu Sans` is the tail
+     that actually resolves on this box — a wider humanist grotesque, and
+     the one neutral sans here that Notion, Porcelain and Shadcn have not
+     already taken. Generics come last, as always, or they win. */
+  --bbox-skin-font: "Inter", "Inter Variable", -apple-system,
+    "Segoe UI Variable Text", "DejaVu Sans", ui-sans-serif, system-ui,
+    sans-serif;
+  --bbox-skin-ink: color-mix(in oklab, var(--foreground) 30%, oklch(0.62 0.18 295));
+  --bbox-skin-fg: color-mix(in oklab, var(--card-foreground) 94%, oklch(0.62 0.18 295));
+  --bbox-skin-line-override: initial;
+  --bbox-skin-font-sans: "Inter", "Inter Variable", -apple-system,
+    "Segoe UI Variable Text", "DejaVu Sans", ui-sans-serif, system-ui,
+    sans-serif;
+  /* Source Code Pro is Obsidian's own monospace default; DejaVu Sans Mono
+     is the tail that resolves here, and is not the face Terminal or
+     Notion already use. */
+  --bbox-skin-font-mono: "Source Code Pro", "DejaVu Sans Mono", ui-monospace,
+    Menlo, Consolas, monospace;
+  --bbox-skin-dot-rings: initial;
+}
+
 /*
  * The boundary pass's own rules (migration M8,
  * docs/peps/0001-sketch-skin-at-the-boundary.md) — moved in permanently
@@ -163,7 +583,7 @@
  * exports the identical string (and is still what `SketchAtEdge.tsx` and
  * `sketchAtEdge.test.ts` reference) so the two cannot silently drift.
  * Keyed on attributes `SketchAtEdge.tsx` sets at runtime, not on
- * `data-bbox-skin` — this is orthogonal to which of the three skins above
+ * `data-bbox-skin` — this is orthogonal to which of the ten skins above
  * is active; only the sketch skin ever turns the pass on, but the CSS
  * itself does not know that.
  */

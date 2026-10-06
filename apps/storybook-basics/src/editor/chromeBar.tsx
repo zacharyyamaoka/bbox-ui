@@ -183,15 +183,38 @@ export interface ChromeBarProps {
    *  this bar only reserves the seat GitHub reserves beside the repo name. */
   draftChip?: ReactNode;
   /** Portal target inside the host's token scope (host-contract §4).
-   *  Forwarded to the context menu and to nested `draftChip` popovers that
-   *  accept it; `dropdown-menu.tsx`'s own `Positioner` does not yet expose a
-   *  `container` Pick (only `anchor` was widened for this build — see its
-   *  header) so the burger/file/ellipsis/depth dropdowns still portal to
-   *  `document.body` until that file grows the same Pick context-menu.tsx
-   *  already has. Not this lane's file to edit. */
+   *  Forwarded to every popup this bar OWNS — the burger menu and its
+   *  submenus, the file actions, the breadcrumb ellipsis, the depth badge,
+   *  the context menu, and the back/forward/home/burger tooltips.
+   *
+   *  It does NOT reach `draftChip`, and cannot: that prop is an opaque
+   *  ReactNode the host constructs, so this component has nothing to thread
+   *  through without reaching inside someone else's element. A host wanting
+   *  its BranchChip scoped passes the same container to the chip directly —
+   *  `BranchChip` takes one. The previous wording said "and any draftChip
+   *  that accepts one", which read as automatic and is not (judge fixture,
+   *  2026-09-18, opening a chip popup outside the supplied scope).
+   *
+   *  This comment used to say the dropdowns could not honour it because
+   *  `dropdown-menu.tsx` exposed no `container`, and that "not this lane's
+   *  file to edit" — true when written, stale the moment that Pick was
+   *  widened. An independent judge caught the gap by giving ChromeBar a
+   *  scoped container and watching the burger menu land outside it anyway
+   *  (2026-09-18). A documented limitation outlives its cause unless
+   *  something re-checks it, which is the actual lesson here. */
   container?: HTMLElement | null;
   /** Host CSS on the rendered popup's own `[data-slot=…]` — stacking/
-   *  z-order. The kit ships zero z-index (host-contract §4). */
+   *  z-order.
+   *
+   *  This used to claim "the kit ships zero z-index". It does not, and
+   *  saying so was the kind of comment that makes a reader stop checking:
+   *  every portaled popup's positioner carries `z-50`, and `isolation:
+   *  isolate` contains a stacking context for an element's DESCENDANTS, not
+   *  for the element's OWN z-index. So a popup does participate in whatever
+   *  stack its portal container belongs to. A host that must paint above one
+   *  raises its overlay past 50, or supplies a `container` it controls the
+   *  stacking of. Corrected after a judge measured the computed styles
+   *  (2026-09-18). */
   popupClassName?: string;
   testIdPrefix?: string;
 }
@@ -326,9 +349,9 @@ function BurgerMenu({
         >
           <MenuIcon aria-hidden="true" />
         </TooltipTrigger>
-        <TooltipContent>{menu.label}</TooltipContent>
+        <TooltipContent container={container}>{menu.label}</TooltipContent>
       </Tooltip>
-      <DropdownMenuContent className={cn("w-64", popupClassName)} align="start">
+      <DropdownMenuContent className={cn("w-64", popupClassName)} align="start" container={container}>
         <BurgerMenuGroups groups={menu.groups} />
       </DropdownMenuContent>
     </DropdownMenu>
@@ -446,7 +469,7 @@ function FileCrumb({
           >
             <Home aria-hidden="true" />
           </TooltipTrigger>
-          <TooltipContent>Board root</TooltipContent>
+          <TooltipContent container={container}>Board root</TooltipContent>
         </Tooltip>
       )}
       {rename.active ? (
@@ -497,6 +520,7 @@ function FileCrumb({
                 <StatusDot tone={identity.statusTone} label={identity.statusLabel} />
               </DropdownMenuTrigger>
               <DropdownMenuContent
+              container={container}
                 className={cn("w-64", popupClassName)}
                 data-testid={testIdPrefix ? `${testIdPrefix}-file-menu` : undefined}
               >
@@ -506,6 +530,14 @@ function FileCrumb({
                     <DropdownMenuItem
                       key={action.id}
                       disabled={action.disabled}
+                      // WHY the row forwards `title` (the prop was already on
+                      // `MenuAction`, and this surface was the one dropping
+                      // it): a DISABLED row has to be able to say why. A
+                      // greyed row with no reason reads as the capability
+                      // having silently vanished — the exact complaint Zach
+                      // made on 2026-09-23 about the native-mode rows. The
+                      // burger already renders this; the file title did not.
+                      title={action.title}
                       variant={action.destructive ? "destructive" : "default"}
                       onClick={action.run}
                     >
@@ -529,6 +561,9 @@ function FileCrumb({
                 <ContextMenuItem
                   key={action.id}
                   disabled={action.disabled}
+                  /* Same list, same rows (MENU-KIT-DESIGN §5, §9) — so the
+                     right-click menu must explain a disabled row too. */
+                  title={action.title}
                   variant={action.destructive ? "destructive" : "default"}
                   onClick={action.run}
                 >
@@ -618,7 +653,7 @@ export function ChromeBar({
           >
             <ArrowLeft aria-hidden="true" />
           </TooltipTrigger>
-          <TooltipContent>Back to previous view</TooltipContent>
+          <TooltipContent container={container}>Back to previous view</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger
@@ -635,7 +670,7 @@ export function ChromeBar({
           >
             <ArrowRight aria-hidden="true" />
           </TooltipTrigger>
-          <TooltipContent>Forward to next view</TooltipContent>
+          <TooltipContent container={container}>Forward to next view</TooltipContent>
         </Tooltip>
       </ButtonGroup>
       <ToolbarSeparator orientation="vertical" />
@@ -674,6 +709,7 @@ export function ChromeBar({
                       <BreadcrumbEllipsis className="size-4" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
+              container={container}
                       className={cn("w-64", popupClassName)}
                       data-testid={testIdPrefix ? `${testIdPrefix}-hidden-levels` : undefined}
                     >
@@ -754,6 +790,7 @@ export function ChromeBar({
           {depth}
         </DropdownMenuTrigger>
         <DropdownMenuContent
+              container={container}
           className={cn("w-72", popupClassName)}
           align="end"
           data-testid={testIdPrefix ? `${testIdPrefix}-path` : undefined}

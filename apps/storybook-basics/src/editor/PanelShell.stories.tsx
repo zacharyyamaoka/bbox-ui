@@ -124,19 +124,26 @@ export const LongTitleTruncates: Story = {
 
 /** Close button fires `onClose` exactly once. */
 export const CloseFires: Story = {
-  render: function Render() {
-    const onClose = fn();
+  // WHY the spy comes from `args` and not a `const` inside `render`: it used
+  // to be created in the render closure, where the play function cannot
+  // reach it — so this story clicked Close and asserted NOTHING. Disconnect
+  // the callback entirely and it still passed, which makes a story named
+  // "CloseFires" a test that cannot fail (judge sweep of all 254 play
+  // functions, 2026-09-18).
+  args: { onClose: fn() },
+  render: function Render(args) {
     return (
       <Frame>
-        <PanelShell eyebrow="RIGHT PANEL" title="Frames" onClose={onClose}>
+        <PanelShell eyebrow="RIGHT PANEL" title="Frames" onClose={args.onClose}>
           <p style={{ padding: 14, fontSize: 13 }}>Body.</p>
         </PanelShell>
       </Frame>
     );
   },
-  play: async ({ canvasElement }) => {
+  play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole("button", { name: /close frames/i }));
+    await expect(args.onClose).toHaveBeenCalledTimes(1);
   },
 };
 

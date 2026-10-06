@@ -535,7 +535,50 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
     return () => host.removeEventListener("wheel", handleWheel);
   }, []);
 
-  useLayoutEffect(() => () => gesture.commit(), [gesture]);
+  /**
+   * The gesture's third boundary: the host tore the field down while it was
+   * still being edited. `codeEditorGesture.ts`'s own doc explains why this
+   * cannot be left to `blur` — no `blur` fires for a focused element removed
+   * from the DOM, so a commit-on-blur field silently loses the last edit.
+   *
+   * DEFERRED BY A FRAME, AND CANCELLED IF THE EFFECT COMES BACK — which is a
+   * fix for a real, reproducible bug, not defensive noise.
+   *
+   * React StrictMode (development) mounts every effect, cleans it up, and
+   * mounts it again. The element is never removed from the document; only the
+   * effects are replayed. A synchronous `gesture.commit()` in that cleanup
+   * therefore fires `onEditEnd` a millisecond after the editor appears — and
+   * `LabeledPort` uses `onEditEnd` to LEAVE edit mode, so clicking a port's
+   * label opened an editor that closed itself on the next tick. Measured in
+   * the notebook lab (now /home/bam/marimo-canvas; ported from
+   * claude/notebook-lab-work-order-472c22 `23ab20e`): `data-editing` flipped
+   * true at t and false at t+2ms, and dropping `<StrictMode>` alone made the
+   * feature work. It was invisible because nothing wrapped a `CodeEditor`
+   * story in StrictMode, and because "does the editor open" reads identically
+   * to "does it stay open" in any assertion that does not wait.
+   *
+   * Deferring to the next frame distinguishes the two cases without guessing:
+   * a StrictMode remount re-runs this effect immediately and cancels the
+   * pending commit, while a genuine unmount has nothing to cancel it and the
+   * commit lands one frame later — on callbacks held in a ref, so a late call
+   * is exactly as valid as the synchronous one was. `gesture` is created once
+   * per mount (`gestureRef`), so the only re-run this effect ever sees is the
+   * StrictMode replay, never a swap that would cancel a different gesture's
+   * commit.
+   */
+  const pendingCommit = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (pendingCommit.current !== null) {
+      cancelAnimationFrame(pendingCommit.current);
+      pendingCommit.current = null;
+    }
+    return () => {
+      pendingCommit.current = requestAnimationFrame(() => {
+        pendingCommit.current = null;
+        gesture.commit();
+      });
+    };
+  }, [gesture]);
 
   const width = wrap ? undefined : codeEditorWidthPx(columns, fontSizePx, lineNumbers, PADDING_X, PADDING_X);
   // §5's own words: "whole-field error also sets the existing

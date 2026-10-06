@@ -1,0 +1,57 @@
+{
+ "sha": "f1f0f45",
+ "rounds": [
+  {
+   "n": 1,
+   "headline": "InlineRename destroyed authored text; the tool dock could not draw its own screenshot; the floating pill split keyboard focus in two.",
+   "mine": "The custom colour well was decoration \u2014 ControlStrip never forwarded the slot."
+  },
+  {
+   "n": 2,
+   "headline": "FramesPanel's view menu CRASHED \u2014 Base UI's GroupLabel outside a Group \u2014 and had shipped that way because no story ever opened it.",
+   "mine": "My round-1 toolbar fix regressed the portal case: React context crosses portals, the DOM does not."
+  },
+  {
+   "n": 3,
+   "headline": "Round 2's answer to a data-loss bug was a comment. The person losing the data never reads the source.",
+   "mine": "I broke the registry: the ToolbarBoundary import gave four items a ./toolbar dependency without shipping toolbar.tsx. My own --check said STALE and I had not run it."
+  },
+  {
+   "n": 4,
+   "headline": "Overlay never overlaid \u2014 the port carried the donor's opacity rule and dropped its layout rule.",
+   "mine": "The published payloads were serving pre-fix bytes: eight items, including the version that silently ate line breaks."
+  },
+  {
+   "n": 5,
+   "headline": "Something WAS worse than base: a host calling createPortal got a broken strip. I deleted the mechanism rather than patch it a third time.",
+   "mine": "The property it bought never existed \u2014 a raw range input cannot join a Base UI composite."
+  },
+  {
+   "n": 6,
+   "headline": "Base/HEAD fixtures came back identical. The regression was genuinely gone.",
+   "mine": "Three assertions were weaker than their own prose; writing the strong one showed my expected order was wrong and the code right."
+  },
+  {
+   "n": 7,
+   "headline": "A mutation sweep of all 254 play functions found five tests that could not fail \u2014 most in stories I never touched.",
+   "mine": "My capture script exited 0 after capturing nothing, leaving stale PNGs as apparent evidence."
+  },
+  {
+   "n": 8,
+   "headline": "The drag handle was aria-hidden AND focusable, and no KeyboardSensor was registered at all.",
+   "mine": "process.env.NODE_ENV in copied source broke a DOM-only host where base worked."
+  },
+  {
+   "n": 9,
+   "headline": "My checker was a re-derivation of a format I do not own. It now delegates to shadcn's own registryItemSchema.",
+   "mine": "Object.hasOwn is ES2022 \u2014 the second time the kit inherited its own build assumptions into source we hand to strangers."
+  },
+  {
+   "n": 10,
+   "headline": "No regression against base across 34 items and 89 copied files. A completed keyboard reorder DOES work.",
+   "mine": "Two more assertions passed with the behaviour broken; registry metadata drift went unchecked."
+  }
+ ],
+ "tests": "78 files / 622 tests",
+ "commits": 11
+}

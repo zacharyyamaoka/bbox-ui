@@ -19,7 +19,7 @@
  * the sole override escape hatch, exactly Pill's real mechanism minus the
  * preset layer neither has a motivated use for here.
  */
-import type { FieldOption, FieldSpec } from "@bbox-ui/schema";
+import type { FieldOption, FieldSpec } from "./schema";
 import { LENS_FIELD, TONE_FIELD } from "./appearance.fields";
 import { PAINT_TOKENS } from "./pill.fields";
 import {

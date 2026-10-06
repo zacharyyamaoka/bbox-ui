@@ -738,7 +738,13 @@ async function captureItem4(browser) {
  *  frame in each view. */
 async function captureBracketCrops(browser, port, prefix) {
   const context = await browser.newContext({ viewport: { width: 1100, height: 760 }, deviceScaleFactor: 2, colorScheme: "light" });
-  const page = await openStory(context, port, "components-blocks-blockregion-views--with-members-and-ports", { ready: '[data-slot="region"]', globals: "regionVariant:v4;skin:default" });
+  // WHY `skin:shadcn` and not the `skin:default` this was captured with: the
+  // trunk's `default` skin was renamed `shadcn` (same block bar its shadow,
+  // and this capture measures borders only) when the
+  // ten-skin set landed (2026-09-30 port of claude/orthogonal-design-styles).
+  // `default` is no longer a skin, so re-running with it would stamp an
+  // attribute no CSS block matches and silently measure the no-skin look.
+  const page = await openStory(context, port, "components-blocks-blockregion-views--with-members-and-ports", { ready: '[data-slot="region"]', globals: "regionVariant:v4;skin:shadcn" });
   await pickSelect(page, '[aria-label="View"]', "Expanded");
   const before = await regionFacts(page);
   // The bottom-LEFT corner: v4's 1 px left line runs down and stops with

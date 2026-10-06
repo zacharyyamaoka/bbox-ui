@@ -6,7 +6,7 @@
  * than a second paint table, the presets are Pill's own, narrowed to the
  * two line fields — one ladder, two components, no drift.
  */
-import type { FieldSpec, PresetSpec } from "@bbox-ui/schema";
+import type { FieldSpec, PresetSpec } from "./schema";
 
 import { PILL_PAINT_FIELDS } from "./pill.fields";
 import { PILL_PRESETS } from "./pill.presets";

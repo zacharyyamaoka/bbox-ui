@@ -105,7 +105,12 @@ function inkGapPx(point: DOMPoint, capPx: number, dot: Dot): number {
 }
 
 const ENDS: Record<string, [[string, string], [string, string]]> = {
-  "e-cond": [["src", "fast"], ["br", "fast"]],
+  // The condition now lands on the `if` ARM's own test dot, not on the
+  // region's corner card (region.branch.ts's split, 2026-09-22 grammar
+  // change) — `ifElifElseArms` names the first arm's id and its test's
+  // port id both `"if"`, and `blockRegion.tsx` stamps `data-block-id={arm.id}`
+  // on the arm header, so the dot resolves under `[data-block-id="if"]`.
+  "e-cond": [["src", "fast"], ["if", "if"]],
   "e-frame1": [["src", "frame"], ["estimate", "frame"]],
   "e-frame2": [["src", "frame"], ["fallback", "frame"]],
   "e-gain": [["src", "gain"], ["estimate", "gain"]],

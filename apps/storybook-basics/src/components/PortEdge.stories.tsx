@@ -107,6 +107,16 @@ function DistributionControl({ value, onChange }: { value: Distribution; onChang
       />
       {value.mode === "distribute" ? (
         <Segmented options={SPACING_SCHEMES.map((s) => ({ value: s.value, label: s.label }))} value={value.scheme} onChange={(scheme) => onChange({ mode: "distribute", scheme })} />
+      ) : value.mode === "anchored" ? (
+        // The third arm has nothing for a control to offer: an `anchored`
+        // edge's positions come from the host, one number per port id (see
+        // `AnchoredConfig`). Saying so beats a control that silently does
+        // nothing — and this branch exists at all so the switch stays total
+        // over `Distribution` rather than falling through to the aligned
+        // fields and reading `.gap` off a config that has none.
+        <div style={{ fontSize: 11, color: "var(--muted-foreground)" }}>
+          Anchored — one offset per port id, supplied by the host. Nothing for this panel to set.
+        </div>
       ) : (
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <Segmented

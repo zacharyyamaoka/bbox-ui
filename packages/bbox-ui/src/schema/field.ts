@@ -1,0 +1,226 @@
+// PROVENANCE: verbatim copy of packages/schema/src/field.ts at 61e26e6 (bbox-ui,
+// lane L-REG, 2026-10-06). WHY a copy and not the package: `@bbox-ui/schema` is
+// `private: true` and unpublished, and `shadcn add` copies source verbatim, so
+// the v1 `port` / `block` items 404'd on npm before writing a file — CLAUDE.md:
+// "copy the package's ~110 lines as a sibling". FROZEN WITH V1: `packages/bbox-ui`
+// is frozen v1, so this copy is deliberately NOT parity-pinned to the package (a
+// pin would force frozen v1 to follow packages/schema as later lanes evolve it).
+/**
+ * @bbox-ui/schema — packages/schema/src/field.ts
+ *
+ * Zero dependencies. No React, no host engine, no tldraw, no Storybook.
+ * A FieldSpec is the DECLARATION half of a controllable prop: everything a
+ * panel needs to know to draw a control, before any subject (a component
+ * instance, a shape, a selection) exists to read a value from.
+ *
+ * WHY split from the value: component-proposal Section 4, Option E — the
+ * declaration is portable and static (exactly the shape Storybook's
+ * `argTypes` wants); the value is per-subject and can disagree across a
+ * multi-selection (`MIXED`). Conflating them is what made
+ * `packages/inspector`'s `FieldSpec` (SystemSketch's tldraw-only inspector,
+ * a different package, unrelated to this one beyond the coincidental name)
+ * impossible to reuse outside a live tldraw Editor. This package never
+ * imports an engine, so it structurally cannot make that mistake.
+ */
+
+// WHY "textarea" is its own kind rather than a flag on "text": every
+// consumer that switches on FieldKind (this file's own doc comment on
+// `Record<FieldKind, ...>`-shaped tables) is FORCED to decide what a
+// multi-line control looks like the moment this union widens — a boolean
+// `multiline?: true` on the existing "text" kind would have let every one
+// of those switches keep compiling and silently render a single-line input
+// for TextBox's `children` once `lines="multi"`. See docs/TEXTBOX-EDITING-SPEC.md §2.
+//
+// WHY "glyph" is its own kind rather than reusing "text": the VALUE is an
+// encoded string (@bbox-ui/glyph-content's `content` grammar), same as
+// "text" — but the CONTROL is not a text box, it is the picker itself (a
+// panel row for a glyph field IS the trigger, per docs/GLYPH-PLAN.md's
+// contract table). storybook.ts still maps it to a plain text control
+// (Storybook has no picker), which is the one place "glyph" and "text"
+// deliberately agree.
+export type FieldKind = "segments" | "number" | "toggle" | "text" | "textarea" | "glyph";
+
+export type FieldValue = string | number | boolean;
+
+export interface FieldOption {
+  /** The literal prop value this option sets. */
+  value: string;
+  /** What a control (a segmented row, a select) prints for it. */
+  label: string;
+  /** `false` keeps this one option out of "randomise everything" while the
+   *  field itself stays in: a Port state of `hidden` is a real, settable
+   *  value, and also makes the instance vanish from the bench. */
+  randomize?: boolean;
+}
+
+export interface FieldSpec<TValue = FieldValue> {
+  /**
+   * Must equal the real component prop name it describes. `readFields` and
+   * `toArgTypes` both key off this string directly — there is no separate
+   * id-to-prop mapping table to keep in sync.
+   */
+  id: string;
+  /** Human caption for a panel row. */
+  label: string;
+  kind: FieldKind;
+  /**
+   * The value this field reads as when a subject does not specify it, and
+   * what an empty selection (§ readFields) reads as. For a component prop
+   * with a real default (e.g. `Port`'s `state = "empty"`), this MUST equal
+   * that default — `port.fields.test.ts` pins it.
+   */
+  defaultValue: TValue;
+  /** Required when `kind === "segments"`; the field's exhaustive value set, in display order. */
+  options?: FieldOption[];
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
+  hint?: string;
+  /**
+   * Fields sharing a group are declared to belong together, and a panel may
+   * render them on one row: Block's width and height, TextBox's four
+   * paddings, Stack's gap and gutter.
+   *
+   * WHY this is declared and not inferred: the first panel to pair fields
+   * did it by adjacency — any two consecutive numbers shared a row. That
+   * put a container's height beside its gap, which are not a pair, and
+   * would have put Pill's line opacity beside its fill opacity had they been
+   * neighbours. Figma pairs X with Y because they are one value, not because
+   * they are adjacent. A pairing is a fact about the fields, so it lives on
+   * the fields. Absent means "own row", which stays the default.
+   */
+  group?: string;
+  /**
+   * `false` keeps a field out of "randomise everything". Default true.
+   *
+   * WHY: Randomize rolled Port's `reveal` to "on hover" and the port
+   * vanished from the bench until the pointer found it; Zach, 2026-09-11:
+   * "a disproportionate amount seem to disappear". The same goes for every
+   * host-computed, never-persisted field (eligible, hinting, dragging,
+   * producers): they are not properties a person sets, so a random value
+   * for them is noise, not exploration. Declared on the field, next to the
+   * hint that already says "never persisted", rather than inferred from it.
+   */
+  randomize?: boolean;
+  /**
+   * `true` marks a field the panel must render disabled — a value shown for
+   * provenance, never edited through this row. `HOST_FIELDS`'s `w`/`h`
+   * (`@bbox-ui/panel/hostFields`) are the first case: derived from the
+   * component (`size + 2*padding`), not a thing a person sets. Default
+   * false/absent.
+   */
+  readOnly?: boolean;
+  /**
+   * `true` marks a field as a HOST FACT — something the render surface
+   * (tldraw, React Flow, the DOM) owns and writes (position, rotation),
+   * never a component prop. `classifyField` (`@bbox-ui/panel`) sends every
+   * `host` field to the "advanced" tier unconditionally, ahead of its other
+   * rules: a host fact is neither the frequently-tweaked "simple" case nor
+   * a preset-governed "expert" one, it is just always there. Default
+   * false/absent.
+   */
+  host?: boolean;
+  /**
+   * A field marked `cascades` inherits its value from the nearest ANCESTOR
+   * instance whose component declares a field of the same `id`, and relays
+   * that value on down to its own descendants in turn. Default false.
+   *
+   * WHY this lives on the field and not on the instance or the page: which
+   * fields cascade (a Frame's `padding`, not a Button's `label`) is a fact
+   * about the FIELD's meaning, decided once by whoever authors the
+   * component's schema — same footing as `group`/`randomize` above. The
+   * page assembling the ancestor chain into an `inherited` bag per subject
+   * is a layout-time computation; this module only RESOLVES a bag someone
+   * else built, exactly as it already resolves a `presets` array someone
+   * else built (`resolve.ts`'s own module doc). Declaring it here also
+   * means a non-cascading field costs nothing extra to resolve: `resolveField`
+   * only looks at the inherited bag at all when this is true.
+   */
+  cascades?: boolean;
+  /**
+   * Fields sharing a `section` are declared to belong under the same
+   * SUB-HEADER inside one panel — Figma's Position / Layout / Appearance /
+   * Fill / Stroke. Absent means the component's own root section.
+   *
+   * WHY a second declaration beside `group` and not a reuse of it: `group`
+   * answers "do these two share a LINE" (width beside height); `section`
+   * answers "do these share a HEADING" (width, height, radius and
+   * orientation all under Layout). They are independent — Block's
+   * width/height are one group inside the Layout section — so one string
+   * cannot carry both without meaning different things at different
+   * nesting levels.
+   *
+   * WHY it is called `section` and not `header`, which was Zach's own word
+   * (2026-09-12, "I think we need one for like 'header' which allows us to
+   * group things under the same sub header"): in this panel "header"
+   * already names two other things — the panel's own title bar, and the
+   * Block's `header` REGION, which is itself one of the sections this
+   * declaration produces. A Bar's fields would then have read
+   * `header: "header"`. The word he reached for is the rendered artifact
+   * (the sub-header); `section` is the thing being declared.
+   *
+   * WHY on the field and not a list on the component: same argument
+   * `group` already won — a field's section is a fact about that field's
+   * meaning, so a component that adds a field gets it placed without a
+   * second edit somewhere else that can drift. Section ORDER comes from
+   * first appearance in the field array, so declaration order is layout
+   * order and there is no list to keep in sync.
+   */
+  section?: string;
+  /**
+   * Which inspector tier (Simple/Advanced/Expert, `@bbox-ui/panel`'s
+   * `fieldTiers.ts`) this field belongs to, EXPLICITLY curated by whoever
+   * authors the component's schema. Absent means Expert — Zach, 2026-09-14:
+   * "if nothing is added then you can assume its expert. Simple should only
+   * be like highly curated fields that we individually choose to promote."
+   * Reverses an earlier design (component-proposal era) that INFERRED a
+   * tier from a field's shape (a bare-name text field, a closed enum, a
+   * governed field) specifically so no component had to hand-list its own
+   * fields — that meant a field's prominence was an accident of its TYPE,
+   * not a deliberate product call, and Port's own two-slot work is what
+   * surfaced the gap: `textLayout` (exactly the control Zach wants front
+   * and centre) fell into Advanced by shape-inference alone, with no way
+   * to promote it short of changing what KIND of field it was.
+   */
+  tier?: "simple" | "advanced" | "expert";
+}
+
+/**
+ * Sentinel meaning "the subjects disagree" — tldraw's own `SharedStyle`
+ * draws exactly this distinction (`{type: 'shared'}` vs `{type: 'mixed'}`)
+ * for a multi-shape selection; this is that idea with zero tldraw import.
+ */
+export const MIXED = Symbol("bbox-ui/schema/mixed");
+export type Mixed = typeof MIXED;
+
+export interface FieldReading<TValue = FieldValue> {
+  field: FieldSpec<TValue>;
+  /** The field's value across every subject, or `MIXED` when subjects disagree. */
+  value: TValue | Mixed;
+}
+
+/**
+ * The reading side. `subjects` are plain prop bags (a component's own
+ * `props`, a tldraw shape's `props`, anything keyed like React props) —
+ * never an Editor, never a shape record. One reading per field, in the
+ * same order `fields` was given. Zero subjects reads as each field's own
+ * `defaultValue`, never `MIXED` — an empty selection is not disagreement.
+ */
+export function readFields<TProps extends Record<string, unknown>>(
+  fields: FieldSpec[],
+  subjects: TProps[],
+): FieldReading[] {
+  return fields.map((field) => {
+    if (subjects.length === 0) {
+      return { field, value: field.defaultValue };
+    }
+    const values = subjects.map((subject) => {
+      const raw = subject[field.id];
+      return raw === undefined ? field.defaultValue : (raw as FieldValue);
+    });
+    const [first, ...rest] = values;
+    const agree = rest.every((value) => value === first);
+    return { field, value: agree ? first : MIXED };
+  });
+}

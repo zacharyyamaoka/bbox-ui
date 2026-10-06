@@ -25,7 +25,7 @@
  * explicitly deferred, non-goals for this lane (T1-SPEC.md §4.8, §10) —
  * this array is intentionally narrow, not an oversight.
  */
-import type { FieldOption, FieldSpec } from "@bbox-ui/schema";
+import type { FieldOption, FieldSpec } from "./schema";
 import { APPEARANCE_FIELDS } from "./appearance.fields";
 import { SIMPLE_BLOCK } from "./layout";
 import { BLOCK_RADIUS_DEFAULT } from "./block";

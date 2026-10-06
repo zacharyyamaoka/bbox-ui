@@ -8,7 +8,7 @@
  * numbers are `PortCountBadge`'s (port.tsx) original measured chip,
  * carried forward exactly rather than re-approximated.
  */
-import type { FieldOption, FieldSpec, PresetSpec } from "@bbox-ui/schema";
+import type { FieldOption, FieldSpec, PresetSpec } from "./schema";
 
 export interface BadgeSizeSpec {
   height: number;

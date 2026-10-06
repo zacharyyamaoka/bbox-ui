@@ -1,0 +1,374 @@
+{
+ "what": "Every local branch ahead of main on 2026-09-29, dispositioned by read-only Sonnet 5.5 scouts (land / port / archive / unsure) with evidence.",
+ "branches": [
+  {
+   "branch": "worktree-agent-a0403d1eb3c109685",
+   "ahead": 3,
+   "lastCommit": "d579ae9 2026-09-22 Spike: a Branch region drawn as a thin Block preset beside today's BlockRegion, measured",
+   "disposition": "archive",
+   "reason": "A spike. Only 1 of its 3 commits is real (d579ae9); the other two are 'Spike base' merges of work already on main. The spike ships one story that is red on purpose, so landing it would put a failing test on main and break the run's green gate (G2).",
+   "evidence": "`git cherry -v main`: only d579ae9 is '+'. Its own commit message says 'KNOWN RED, by design of a spike' and lists 6 SPIKE-NEEDS on Block that have not shipped: non-clipping surface=\"frame\", opaque toggle, root data-* passthrough, member height, BlockPort band collapse, armHeaderPx. The 'ON MAIN' files (blockPortMembers.tsx/.layout.ts/.stories, hitRegions/*) match main: `git diff main <b> -- .../blockPortMembers.tsx` and harness.fixture.tsx are empty. blockPort.tsx on main is 626 lines newer. `merge-tree` is clean, but the branch's 4 unique files (BranchPreset.spike.stories.tsx, block.region.preset.tsx/.test.ts, and the story) have no consumer. Main's BlockRegion is a standalone composite (blockRegion.tsx:1074 says it 'is to become a Block preset'), and docs/FRAME-PLAN.md §3.4 plans the Frame/Block fold, which is not in this run. The finish-plan report (reports/finish-plan-2026-09-29.html) has no lane for it. The vault note has no request beyond the FRAME-PLAN quote 'Region is not just a preset...'.",
+   "zachAsked": "Yes, as a direction. The commit body quotes Zach 2026-09-22 that BlockRegion becomes a preset of Block. That is the spike's brief, not an instruction to land this spike.",
+   "uniqueValue": "Measured proof that a Branch region can be composed from Block + BlockMembers + BlockPort. It has 60 deltas, all within 1px, and lists the SPIKE-NEEDS. Keep the branch ref as the seed for the future Frame/Block fold."
+  },
+  {
+   "branch": "claude/region-wall-intersection-1bd334",
+   "ahead": 1,
+   "lastCommit": "52a1b92 2026-09-22 Region wall crossings: Option 1 ring, Option 2 sliding wall port",
+   "disposition": "port",
+   "reason": "The capability (ring or sliding wall port where a cable crosses a region wall) is already on main in a larger, newer form. The branch conflicts on 4 paths and is not landable. One small hunk is unique and still applies: the fix for a flaky wait in Grouping.stories.tsx. That fixes a real full-suite flake, and the run's G2 gate asks for the flaky set to be fixed. Port only that hunk and archive the rest.",
+   "evidence": "`merge-tree` conflicts: components/RegionWallCrossing.stories.tsx (file-location rename src/presets -> src/components), wireLayer.tsx, scene/wallPort.ts and wallPort.test.ts (add/add). Main's wallPort.ts is 797 lines against the branch's 324, and wallPort.test.ts is 763 against 232. Main commit 8448f4a says 'ring or port per toggle ... Adapted from 52a1b92 (cited)'. Main also has FrameAutoPortEdges.stories.tsx, WallCrossingMirror.stories.tsx and `onWireGeometry` in wireLayer.tsx:95, plus judge rounds 13719a8 and 8fcfbae. `git show main:.../Grouping.stories.tsx` still has the old `expectAllWiresResolved` (line 740), which waits only on data-unresolved-wires === \"\". The branch's hunk adds a wait for at least one `g[data-wire-id]`, and that selector still exists at main wireLayer.tsx:393. `merge-tree` reports Grouping.stories.tsx as auto-merged.",
+   "zachAsked": "Yes for the feature, from the 2026-09-22 daily note: 'draw a small ring where it intersects'. That feature is already on main. Nothing asks for the flake fix beyond the green gate.",
+   "portHunks": [
+    "apps/storybook-basics/src/scene/Grouping.stories.tsx: the `expectAllWiresResolved` body change in 52a1b92 (wait for `g[data-wire-id]` count > 0 as well as data-unresolved-wires === \"\", with its WHY comment)",
+    "Nothing else. wallMark.tsx, RegionWallCrossing.stories.tsx, docs/build_region_wall_crossing_report.py and docs/capture_region_wall_crossing.mjs are superseded by main's Frame wall-port work. The ALGORITHM-PROVENANCE row is already covered by main's own entries."
+   ],
+   "uniqueValue": "The vacuous-pass fix for `expectAllWiresResolved`. Measured in the commit: 'Boundary Classes' failed 3/3 full-suite runs."
+  },
+  {
+   "branch": "worktree-bridge-cse_017xqRi8VPYSzshszPLmYuKu",
+   "ahead": 2,
+   "lastCommit": "d3dda75 2026-09-21 The report builder for the dock + ☰ sites round",
+   "disposition": "archive",
+   "reason": "Superseded. Main already has the same features in a later, evolved form. The branch targets paths that main deleted or moved, so a merge would only conflict and would regress newer work.",
+   "evidence": "`merge-tree` conflicts: chrome/chromeBar.tsx (modify/delete, moved to chrome/TitleBar/chromeBar.tsx), and sites.ts, sites.test.ts and sites.smoke.test.tsx (add/add), plus assets/bbox-ui.desktop and scripts/launch_systemsketch.py. Main's chrome/sites.ts keeps the same header quoting 'please connect the bbox whiteboard app to open when I press bbox-ui', and adds siteStatus and useSiteActionsWithStatus. Main's scripts/launch_systemsketch.py already brings up Storybook on :5421 (line 126). Main's assets/bbox-ui.desktop now says StartupWMClass=bbox-ui (fixed 2026-09-22 when the shared class broke grouping), and the icon commits 5089a0b and 16fd469 came after. The branch's docs/build_bbox_dock_and_sites_report.py is replaced by main's docs/build_dock_icon_report.py plus scripts/dock_icon.py.",
+   "zachAsked": "Yes, 2026-09-21: 'open when I press bbox-ui', then a menu option for the site and Storybook. Both are delivered on main.",
+   "uniqueValue": "None found. The branch's StartupWMClass=systemsketch is the version main later measured as wrong."
+  },
+  {
+   "branch": "claude/board-url-2026-09-20",
+   "ahead": 2,
+   "lastCommit": "538492a 2026-09-20 Record the fourth copy that landed mid-build, measured",
+   "disposition": "port",
+   "reason": "Its app code is superseded. Main already opens `?board=<abs path>` through files/launchConfig with the real file host, and main.tsx says it deliberately does not boot review/boardParam. Landing the branch would re-introduce a competing second boot path and conflict on main.tsx and boardParam.*. What main lacks is the handoff half. The generator does not print a paste-safe link, main's skills/bbox-review-board/SKILL.md still says the app 'cannot open a path from a URL', and main's CLAUDE.md names a `boardLinkFor` that does not exist in main's code.",
+   "evidence": "`merge-tree` conflicts: main.tsx (content), boardParam.ts, boardParam.test.ts and boardParam.smoke.test.tsx (add/add). apps/systemsketch/src/main.tsx on main boots `persistenceKeyForSearch` from files/launchConfig, and its comment says it does so to avoid opening the board twice. `git grep boardLinkFor main` finds it only in CLAUDE.md, not in code. Main's SKILL.md ('Today the new app cannot open a path from a URL') is stale relative to launchConfig.ts `boardHref`. The branch's create_review_board.mjs adds `boardLinkFor`, printed after the cold-reopen check and returned as `openUrl` (+25 lines). Its SKILL.md adds the rules 'never a markdown link', 'board must live in the served tree' and 'open it yourself before handing over'. Caveat: those rules describe the branch's own vite fence, so they need rewording to main's files host (scripts/systemsketch_files.py, a files-root fence with an allow_any_path option). Opening a board under a worktree path must be checked on main before the docs promise it.",
+   "zachAsked": "Yes. The commit quotes Zach 2026-09-19 rating the handoff Bad: 'you should make it so I can open this file directly.' Main satisfies the opening half through launchConfig.",
+   "portHunks": [
+    "skills/bbox-review-board/scripts/create_review_board.mjs: the `boardLinkFor(boardPath, origin)` helper, the two `log(...)` lines printing the link, and the `openUrl` field in the result JSON",
+    "skills/bbox-review-board/SKILL.md: the 'Hand over ONE link' bullet replacing the stale 'Today the new app cannot open a path from a URL' bullet, reworded so 'served tree' becomes the file host's real fence",
+    "A single `boardLinkFor` helper (literal '=' and '/', escape only # & + %) placed beside `documentHref`/`boardHref` (files/launchConfig.ts or storybook-basics files/workspaceModel.ts), with one test that both spellings parse to the same path. This makes main's CLAUDE.md true. Do NOT bring boardParam.ts, boardFile.ts, fileAccess.ts, boardContract.ts or the vite.config.ts changes, which are a second implementation.",
+    "docs/build_board_url.py and docs/drive_board_url.mjs are optional report tooling. Skip them."
+   ],
+   "uniqueValue": "The paste-safe link printed by the generator, and the handoff rules in the skill."
+  },
+  {
+   "branch": "worktree-agent-a45de5bb9101da160",
+   "ahead": 17,
+   "lastCommit": "40572ff 2026-09-19 The step-in/expand report, and two clipping bugs the captures found",
+   "disposition": "port",
+   "reason": "Mixed branch. The notebook-lab half (apps/notebook-lab, marimo-dom, the lab reports and probes) has moved to its own repo, /home/bam/marimo-canvas, so it is archive. The step-in/expand bench in storybook-basics is absent from main and from marimo-canvas, and Zach asked for it. It is unmerged only because the branch conflicts on the src/stories -> src/components rename, package.json and pnpm-workspace.yaml, so port just that bench.",
+   "evidence": "`git cherry -v main` shows 17 '+' commits. Diffstat: 53 files, 13,381 insertions, most under apps/notebook-lab. `merge-tree` conflicts: storybook-basics/package.json, pnpm-workspace.yaml, and file-location for src/stories/StepIn.stories.tsx (should be src/components/). The lab moved: /home/bam/marimo-canvas is a git repo whose history contains lab-extract's commits (16ffd86 ... 8d2cf43) and 81f1389 'the lab becomes its own repo'. Zach's project note line 3606 says the notebook threads' write-up is filed under SystemSketch, not bbox-ui, and the plan report lists 'cluster 19 Run code on canvas — the notebook lab moved to its own repo'. Research reports reports/canvas-notebook-2026-09-18.html and notebook-lab-work-order-2026-09-18.html already sit in /home/bam/bbox-ui/reports. Step-in is not on main: `git grep -i stepIn main -- apps` finds no such component. It is not in marimo-canvas either (grep of src, docs and *.mjs is empty). Main's docs/PARITY-SPEC-2026-09-20.md:134 lists 'Step in / Step out of an expanded Block ... Real unbuilt work', and the finish plan's L-NAV lane owns 'step in/out rows (P-015)'. StepIn.stories.tsx imports only ../components/{block,codeEditor,codeEditorLayout}, which all exist on main.",
+   "zachAsked": "Yes. 4a663fe quotes Zach's Daily Note 2026-09-19. Verified in the vault: 'when you step inside something the rest becomes like empty canvas. a modal that pops ups...'",
+   "portHunks": [
+    "apps/storybook-basics/src/stepIn/tokens.ts and tokens.test.ts (the OKLCH tone ladder and the camera maths, imports only components). Both are new files.",
+    "apps/storybook-basics/src/stories/StepIn.stories.tsx -> apps/storybook-basics/src/components/StepIn.stories.tsx. Retitle from 'Blocks/StepInVsExpand' with tags ['area:blocks','lane:step-in-expand'] to the closed Components/<family> title and tag vocabulary that src/storyOrganisation.test.ts enforces. Otherwise `pnpm test` goes red on main. Check that `src/stepIn/` also satisfies src/engineFree.test.ts.",
+    "apps/storybook-basics/capture_step_in.mjs (optional capture script).",
+    "DO NOT take: apps/notebook-lab/* (now marimo-canvas), pnpm-workspace.yaml, pnpm-lock.yaml or package.json edits (main already has the test script), docs/probe_*.py/.out, docs/build_canvas_*/notebook_* report builders, the two reports/*.html, or the notebook-lab step-in files (stepIn.tsx, record_step_in.mjs, docs/build_step_in_report.py)."
+   ],
+   "uniqueValue": "The storybook-side step-in vs expand bench (dissolve/fly/recede readings and a measured tone ladder), which is evidence for L-NAV's step in/out. Zach's pick among the three readings is not recorded anywhere I could find, so the port should stay a variants gallery."
+  },
+  {
+   "branch": "lab-extract",
+   "ahead": 13,
+   "lastCommit": "8d2cf43 2026-09-19 The five lanes, as a page he can answer from",
+   "disposition": "archive",
+   "reason": "Moved elsewhere. This is the history-extraction branch that became the standalone marimo-canvas repo. It shares no merge base with main (`fatal: main...lab-extract: no merge base`), so it cannot be merged onto an integration branch cut from main.",
+   "evidence": "`git log --format=%H lab-extract` yields 13 commits, and all 13 hashes appear in /home/bam/marimo-canvas's history (16ffd86 ... 8d2cf43). `git -C /home/bam/marimo-canvas log` continues past them with 81f1389 'marimo-canvas: the lab becomes its own repo' and 2c09157 'marimo-dom ... scores 9/9', so that repo is strictly ahead. The plan report says 'cluster 19 Run code on canvas — the notebook lab moved to its own repo'. `git ls-tree -r lab-extract` is a root-level lab app (run_lab.py, server/lab_server.py, src/Lab.tsx) that is not a bbox-ui tree.",
+   "zachAsked": "Yes, the notebook lab (Daily notes 2026-09-18/19). It is delivered in /home/bam/marimo-canvas.",
+   "uniqueValue": "None. Everything is contained in marimo-canvas."
+  },
+  {
+   "branch": "claude/harden-menu-kit-533e7171",
+   "disposition": "port",
+   "ahead": 12,
+   "lastCommit": "2026-09-19 8962371 Put the judge loop in the report, findings and own-goals together",
+   "uniqueValue": "Ten Codex judge rounds hardening the menu kit, none of it on main. Keyboard reorder: KeyboardSensor and a named, focusable grip on framesPanel. Popover/dropdown portal fixes. Round 8 removed a Node global (process.env) from the copied kit source, and round 9 removed Object.hasOwn (ES2022); both are portability fixes for shadcn-copied source. Also tests that could not fail were rewritten, and there is a new registry gate, docs/validate_registry_payloads.mjs, which validates payloads against shadcn's own registryItemSchema.",
+   "zachAsked": "Indirect. Zach asked for the menu kit ('port over all the menus we have implemented there to the editor-component kit in bbox-ui'). The hardening was the judge loop run on that work. The branch is the un-landed tail of that ask.",
+   "reason": "Unique, wanted, and not on main. `git cherry -v main` shows all 12 commits as '+', and `git grep KeyboardSensor main -- apps/storybook-basics/src` finds only portEdge.tsx (none in framesPanel). validate_registry_payloads.mjs and docs/menus/data/judge.json are absent from main's tree. It is not 'land' because merge-tree conflicts. The branch is stacked on 565fb78 (the menu-kit merge, which is on main), but main then renamed the components (src/stories -> src/components, and the editor kit to src/editor/), grew editor/toolDock.tsx by +532 lines and the editor stories by +339 to +667 lines each, and regenerated every public/r/*.json. Git's rename detection auto-merges most files, so the conflict set is small. The cost is 6 hand-resolved source files plus regenerating the generated payloads, not a rewrite. Port it as a merge with hand-resolution plus `pnpm registry:build` (npx shadcn build) and docs/build_menu_registry_items.py, not a cherry-pick. The branch also carries formatting churn (a prettier re-wrap of dropdown-menu.tsx) that should not be ported.",
+   "evidence": "`git log main..b` shows 12 commits (7091614 through 8962371). `git diff --stat main...b` shows 51 files, +2402/-268. `git merge-tree --write-tree --name-only main b` conflicts in: components/dropdown-menu.tsx, editor/{ChromeBar,FloatingToolbar,ToolDock}.stories.tsx, editor/toolDock.tsx, docs/capture_menu_kit_shots.mjs, and 19 public/r/*.json. The remaining editor/* files (framesPanel, inlineRename, compareReview, controlStrip, problemsPanel and others) auto-merge through the rename. `git diff --stat 565fb78 main -- <those paths>` confirms main moved on. Its own commit messages say 78 test files / 622 tests were green on the branch. The branch's 12 commits are cited in the final commit body.",
+   "portHunks": [
+    "Do a real `git merge` of the branch rather than a cherry-pick, so rename detection applies. Resolve these 6 files by hand.",
+    "apps/storybook-basics/src/components/dropdown-menu.tsx: keep main's version and take only the DropdownMenuPortal `children` pass-through. The rest of the diff is prettier re-wrapping.",
+    "apps/storybook-basics/src/editor/toolDock.tsx: main added +532 lines. Re-apply the branch's changes on top: the Object.hasOwn -> .call form, the unconditional duplicate-id warning with no process.env, the check-mark `data-slot`, and the FamilyPopouts story hooks.",
+    "apps/storybook-basics/src/editor/{ChromeBar,FloatingToolbar,ToolDock}.stories.tsx: keep main's stories and re-add the branch's stronger play assertions (mixed Back/Forward states, exactly one initial tab stop, the FamilyPopoutsOpen story).",
+    "docs/capture_menu_kit_shots.mjs: resolve by hand.",
+    "Take unconflicted: docs/validate_registry_payloads.mjs (whole file) and docs/menus/data/judge.json. Regenerate, do not merge, every public/r/*.json.",
+    "After the merge run `npx shadcn build`, `node docs/validate_registry_payloads.mjs`, and a throwaway-project typecheck (see CLAUDE.md, 'The registry is the product')."
+   ]
+  },
+  {
+   "branch": "claude/orthogonal-design-styles-8d71d7",
+   "disposition": "port",
+   "ahead": 5,
+   "lastCommit": "2026-09-18 484d530 Add No. 7 · Obsidian — one violet accent on an almost-neutral ground",
+   "uniqueValue": "The ten-rung skin ladder Zach specified: Unstyled, Sketch, Shadcn, and No. 1-7 (through Terminal, Notion and Obsidian). It is built only from values for the existing fifteen --bbox-skin-* tokens. It includes a fix for the Unstyled bug (the `ButtonBorder` system colour, and `--bbox-skin-line-override: currentColor`). skin.test.ts gains distinctness, orthogonality and a 2px-geometry pin. Also docs/build_skins_report.py and docs/skin_shots.json.",
+   "zachAsked": "Yes. Zach, in the project note: 'we can support like 3 other orthongal variants'. He then listed the picker order: Unstyled, Sketch, Shadcn, No. 1-5. He then asked for Unstyled to show, Terminal to become an IDE, and Notion and Obsidian to be added.",
+   "reason": "Unique and explicitly asked for; main still has `BBOX_SKINS = [\"default\",\"plain\",\"sketch\"]` (apps/storybook-basics/src/skin/skin.ts:57), so none of the new skins exist there. Not 'land': merge-tree conflicts in skin.css (7 hunks), skin.ts (1 hunk) and Styles.stories.tsx (2 hunks), because main added +181 lines of skin.css, +141 of skin.ts and +803 of Styles.stories.tsx after the merge base (port variants, region variants, 'the boundary at the edge' M8). That is only 10 hunks in 3 files, and all are additive on both sides. Port by hand rather than archive. Note the diff includes reports/node-editor-prior-art-2026-09-17.html and its builder; they are byte-identical on main already, so nothing to do. Prefer main's docs/capture_storybook_shots.mjs, since the branch's edit predates it.",
+   "evidence": "`git cherry -v main b` shows 4 '+' (1afc5e7, 932a3d0, cd6c18c, 484d530), plus the merge commit 6317686. `git diff --stat main...b` shows 9 files, +2616/-98. `git merge-tree --write-tree --name-only main b` conflicts in skin/Styles.stories.tsx, skin/skin.css and skin/skin.ts; skin.test.ts and capture_storybook_shots.mjs auto-merge. `git ls-tree main` has no docs/build_skins_report.py and no docs/skin_shots.json. Vault: /home/bam/zach_brain/Projects/bbox-ui/PROJECT - Black Box UI.md lines ~2540-2557 and 3180-3221 contain Zach's request and the AI replies.",
+   "portHunks": [
+    "skin.ts: extend BBOX_SKINS, BBOX_SKIN_LABELS and BBOX_SKIN_BLURBS from 3 to the ten skins, and keep the picker order Zach specified. Keep main's M8 changes (retired dead tokens, the edge boundary).",
+    "skin.css: add the seven new `[data-bbox-skin=...]` token blocks (unstyled, shadcn, No.1-7 including terminal, notion, obsidian) and the unstyled `ButtonBorder` / line-override rules. Resolve the 7 hunks against main's port/region variant blocks.",
+    "Styles.stories.tsx: the eight-plus-rung gallery and the orthogonality play function; merge with main's +803-line version.",
+    "skin.test.ts: take the branch's added distinctness and orthogonality assertions (146 lines).",
+    "New files, unconflicted: docs/build_skins_report.py and docs/skin_shots.json."
+   ]
+  },
+  {
+   "branch": "claude/w1-anchor-layout",
+   "disposition": "port",
+   "ahead": 1,
+   "lastCommit": "2026-09-18 f00fb2b W1: anchor-space port layout — a PortLayoutFn registry replaces flex+sortable",
+   "uniqueValue": "The anchor-space port-layout contract in portEdge.layout.ts: Anchor, PortLayoutFn and registerPortLayout/portLayout. The three SpacingScheme distributions and `aligned` become registry entries, byte-identical to the flex output. Also packVariableSlotSpans and portConstraintOf (an honest ELK FIXED_ORDER/FIXED_POS mapping). portEdge.tsx switches from useSortable to absolute AnchorSlotCards driven by useDraggable/useDroppable, plus a nearestAnchor collision detector and an `anchorLayout` prop. It deletes neutralizeScale and comment B1. A story registers a non-linear ellipse layout from outside the layout file.",
+   "zachAsked": "Yes. The commit for the branch's seed, 76e3b92 on claude/node-editor-library-research-41b089, records Zach: 'port layout things which support arbitrary layouts'. He also said DND kit should only 'modify the data structure'. The project note has the sweep card 'open registry' at ~3445-3498.",
+   "reason": "Unique, wanted, absent from main: `git grep -E 'PortLayoutFn|registerPortLayout|nearestAnchor|AnchorSlotCard' main` returns nothing. Not 'land': conflicts, and a rename hazard. The story is at stories/PortEdge.AnchorLayouts.stories.tsx, a directory main renamed to components/. There is an add/add conflict in portEdge.layout.test.ts. portEdge.tsx has 7 conflict hunks because main rewrote it after the base c166fc0 (+741 lines): Auto|Custom spacing (93cb478), IDE hotkeys (b86acfa), a multiple-returns divider (9ce5304), empty-margin press fix (2830138), and the kit refactor and overflow chip (c6f481b, 5751182). The pure layout half is clean: portEdge.layout.ts auto-merges with 0 conflicts (+253 lines). The tsx half, replacing sortable with anchor slots, must be re-derived against main's portEdge.tsx, not merged. The lane in docs/finish-2026-09-29 (L-PORTS-RAIL) already writes both portEdge.tsx and portEdge.layout.ts, so port it inside that lane or before it, to avoid two writers.",
+   "evidence": "`git log main..b`: 1 commit. `git diff --stat main...b`: 4 files, +764/-98. Merge-base is c166fc0. `git merge-tree`: conflicts in the moved story (file location), portEdge.layout.test.ts (add/add) and portEdge.tsx. `git diff --stat c166fc0 main` on the three portEdge files: +798/-63. The demo report reports/anchor-layout-2026-09-18.html exists on disk, untracked, and its commit 76e3b92 is only on claude/node-editor-library-research-41b089, which is outside this task's six.",
+   "portHunks": [
+    "apps/storybook-basics/src/components/portEdge.layout.ts: take the branch's +253 lines wholesale. It merges with 0 conflicts: the Anchor/PortLayoutRail/PortLayoutFn types, portLayoutRegistry, registerPortLayout, portLayout, packVariableSlotSpans, portConstraintOf.",
+    "apps/storybook-basics/src/components/portEdge.layout.test.ts: resolve the add/add conflict by keeping main's 72 lines and appending the branch's registry, portConstraintOf and packVariableSlotSpans cases.",
+    "apps/storybook-basics/src/components/portEdge.tsx: re-apply by hand onto main's version. Take AnchorSlotCard (useDraggable+useDroppable with the same id), the nearestAnchor collisionDetection, the `anchorLayout` prop, and the deletion of neutralizeScale and B1. Keep main's Custom spacing, hotkeys, multiple-returns divider and margin-press behaviours. Re-run all PortEdge stories, which are the byte-identity proof.",
+    "Move stories/PortEdge.AnchorLayouts.stories.tsx to components/PortEdge.AnchorLayouts.stories.tsx (157 lines, the ellipse layout demo)."
+   ]
+  },
+  {
+   "branch": "claude/moc-links-control-flow-d4c546",
+   "disposition": "archive",
+   "ahead": 1,
+   "lastCommit": "2026-09-18 99a5f64 Add the control-flow coverage map report",
+   "uniqueValue": "docs/build_control_flow_map_report.py (725 lines) and reports/control-flow-map-2026-09-18.html: a coverage matrix of which of pyblocks, systemsketch and bbox-ui has caught up with each loop/branch/mutation/kwargs/break decision. Every status cell is a real file probe at build time. The report is a snapshot from 2026-09-18.",
+   "zachAsked": "Indirect. The commit body says Zach 'could not find the loop / branch / mutation / kwargs / break work from the component catalogue'. The primary deliverable was five vault pages plus MOC - Control Flow, and the vault side already exists (/home/bam/zach_brain/Projects/bbox-ui/MOC - Control Flow.md). The branch is only the visual half.",
+   "reason": "Report-only branch. The rule for a report or doc not on main is 'land' only if Zach's notes reference it. I grepped the vault outside Sources/Chats and .claude for control-flow-map-2026 and build_control_flow_map and found no reference. The only hits are chat transcripts. The report's probes measured pre-integration state on 2026-09-18, and 3+ waves of control-flow work have landed since, so its 'missing bbox-ui component' cells are stale. It merges cleanly (merge-tree writes a tree with no conflicts, docs only). If a coverage view is wanted, the builder is the asset, because its probe() checks are re-runnable, not the frozen HTML. Keep the ref; do not land into the integration branch.",
+   "evidence": "`git diff --stat main...b`: 2 files, +1137. `git ls-tree -r main` has no control-flow-map path. `git merge-tree` shows no conflicts. `git check-ignore -v`: reports/control-flow-map-2026-09-18.html is listed in .git/info/exclude:53, so the html sits on disk in the main checkout, untracked. `grep -rl` over /home/bam/zach_brain, excluding .claude and Sources/Chats, finds only PROJECT - Black Box UI.md and its (v1), which matched the skins names, not this report."
+  },
+  {
+   "branch": "claude/marimo-research-obsidian-399651",
+   "disposition": "archive",
+   "ahead": 1,
+   "lastCommit": "2026-09-18 73b34d0 Ask marimo what it actually claims, then ask the vault what it already decided",
+   "uniqueValue": "Builder for reports/marimo-key-ideas-2026-09-18.html: marimo's actual commitments (state removed, not surfaced) plus a sweep of 78 vault mentions across 13 notes. It is research only; no code changed.",
+   "zachAsked": "Yes, as a question: Zach asked what the key ideas behind marimo are and where marimo appears in his vault. It is not a code request.",
+   "reason": "Research-only. The finding is already durable elsewhere: the vault note /home/bam/zach_brain/Projects/SystemSketch/Running Code on the Canvas — marimo, Derived Ports and Five Stylings (2026-09-18).md, referenced from the bbox-ui project note. The rendered report exists on disk (reports/marimo-key-ideas-2026-09-18.html, excluded from git). The notebook lab has since moved to its own repo. Landing is also hazardous: the branch's docs/build_marimo_report.py collides add/add with main's docs/build_marimo_report.py, which is a different report ('marimo, measured', writing reports/vpl-marimo-2026-09-18.html, commit ad3f125). Landing it would overwrite or conflict with that builder. If anyone wants the builder, it must be renamed, for example build_marimo_key_ideas_report.py, to avoid the collision. That is not worth a slot in the integration.",
+   "evidence": "`git merge-tree --write-tree --name-only main b`: 'CONFLICT (add/add): Merge conflict in docs/build_marimo_report.py'. `git show main:docs/build_marimo_report.py | sed -n 33,37p` shows OUT=reports/vpl-marimo-2026-09-18.html; the branch's line 33 is OUT=reports/marimo-key-ideas-2026-09-18.html. `git diff --stat main:docs/build_marimo_report.py b:docs/build_marimo_report.py`: 706 insertions, 370 deletions (two different scripts). Project note line ~3606 says the marimo and notebook write-ups are filed under SystemSketch, not bbox-ui. `git ls-tree -r main | grep -i marimo` finds only the builder."
+  },
+  {
+   "branch": "claude/component-docs-reorganize-bf287b",
+   "disposition": "archive",
+   "ahead": 1,
+   "lastCommit": "2026-09-18 10e87c4 Add the pyblocks split report + its routing manifest",
+   "uniqueValue": "docs/build_pyblocks_split_report.py, docs/pyblocks-split-routes.json (1955 lines) and reports/pyblocks-split-2026-09-18.html: a record of splitting PROJECT - pyblocks.md (10,621 lines) into 13 vault notes (154 sections / 5,226 lines routed). It is the audit trail of a vault refactor already executed.",
+   "zachAsked": "Yes for the split itself, per the commit ('Split per Zach's two rules: the goldens stay...'). The report is the receipt, not a request.",
+   "reason": "Report/manifest-only, and about a vault refactor that is already done: the routed notes exist in /home/bam/zach_brain/Projects, and /evolve froze the pre-split note as v5. No bbox-ui code is involved. The vault notes do not reference this report (no hit for pyblocks-split-2026 outside Sources/Chats and .claude), so the 'referenced by Zach's notes' condition for landing is not met. It merges cleanly (docs-only, no conflicts) if wanted later. The html is already on disk, excluded (.git/info/exclude:45), and the branch ref keeps the manifest. The worktree /home/bam/bbox-ui/.claude/worktrees/component-docs-reorganize... is not in the current list, but the branch ref remains. Archive.",
+   "evidence": "`git diff --stat main...b`: 3 files, +2887 (all docs/ and reports/). `git merge-tree` shows no conflicts. `git ls-tree -r main` has no pyblocks-split path. `git check-ignore -v reports/pyblocks-split-2026-09-18.html` matches .git/info/exclude:45. The commit body says 154 sections were routed to 13 notes and the pre-split note was frozen by /evolve."
+  },
+  {
+   "branch": "claude/beautiful-bt-registry",
+   "ahead": 1,
+   "lastCommit": "611d985 2026-09-18 Publish the measurement oracle, and a React Flow node built on the trunk",
+   "disposition": "port",
+   "reason": "Unique and wanted (it is the donor for the plan's L-REG lane), but cut from 8dbbbd4, 558 commits behind main. The registry closure it lists is stale and three generated public/r files conflict. Graft the two source files and the small registry item, then regenerate the rest.",
+   "evidence": "`git log main..b` shows 1 commit. `git cherry -v main b` shows '+', so no equivalent patch is on main. `git merge-tree --write-tree --name-only main b` conflicts in public/r/block-port.json, port-edge.json and wire-layer.json, all generated by `npx shadcn@latest build`; registry.json auto-merges. main lacks apps/storybook-basics/src/components/blockNodeReactflow.tsx and blockNodeReactflow.layout.ts. main's registry has no block-port-node-reactflow and no bbox-block-layout item. The branch's block-port-node-reactflow closure lists ~22 files. main's own block-port item lists 35, including paintOrder, sideEffects.layout, returnDividerMarks, portSpacing.layout, popover, tooltip and skin/portVariants, because blockPort.tsx grew 783 lines. main's registry `block-node-reactflow` still points at packages/adapter-reactflow/src/block-node.tsx. docs/verify_registry_install.py lists it in EXPECTED_UNINSTALLABLE. The plan's lanes.json L-REG says 'block-node-reactflow sources the trunk's React Flow node views'. main's reactFlowHost.tsx already has MeasuredPortHandles, so the branch's measured-handle idea is on main for the host but not as an installable registry node. bbox-block-layout's three files (layout.ts, port.layout.ts, blockLayout.ts with layoutSimpleBlock at line 361) all exist on main, and their imports still resolve.",
+   "uniqueValue": "An installable React Flow node built on the trunk BlockPort, which answers the CLAUDE.md 'adapters cannot be installed' problem. Also the bbox-block-layout registry item, which publishes the layoutSimpleBlock measurement oracle.",
+   "zachAsked": "No explicit request found. beautiful-bt is only a project-list entry in the project note. The plan's L-REG lane wants the same outcome.",
+   "portHunks": [
+    "apps/storybook-basics/src/components/blockNodeReactflow.tsx (273 lines). Re-check its calls to BlockPort, BlockEdgeSpec, BlockPortLayout and BlockView against main's much-changed blockPort.tsx. The exports still exist on main.",
+    "apps/storybook-basics/src/components/blockNodeReactflow.layout.ts (102 lines). Imports port.layout, port and portEdge types, all still on main.",
+    "apps/storybook-basics/src/stories/BlockNodeReactflow.stories.tsx (144 lines)",
+    "registry.json: the `bbox-block-layout` item, which applies as-is",
+    "registry.json: `block-port-node-reactflow`. Do NOT copy its file list. Re-express it as registryDependencies:[block-port] plus the two node files, deps @xyflow/react only. Then re-run `npx shadcn@latest build` and docs/verify_registry_install.py; drop block-node-reactflow from EXPECTED_UNINSTALLABLE only if the throwaway install type-checks.",
+    "public/r/*.json: do not port. Regenerate."
+   ]
+  },
+  {
+   "branch": "claude/node-editor-library-research-41b089",
+   "ahead": 10,
+   "lastCommit": "d9d2721 2026-09-18 Correct the work order's base-branch warning — wave 2 has landed on main",
+   "disposition": "port",
+   "reason": "Mostly research and report builders, and Zach's notes reference the reports. main has none of the six report builders or docs/report_feedback.py. But the branch also carries a spike workspace app, a stale work order and 2.4 MB of rendered HTML. Take the docs and builders only.",
+   "evidence": "`git log main..b` shows 10 commits, all 2026-09-17 or 09-18. `git cherry -v main b` shows all '+'. `git diff --name-status main...b` shows every file absent on main except .claude/feedback.md, pnpm-lock.yaml and pnpm-workspace.yaml. main has only a different, earlier report, reports/node-editor-prior-art-2026-09-17.html with docs/build_node_editor_prior_art_report.py. `git merge-tree` conflicts only in .claude/feedback.md. pnpm-workspace.yaml and pnpm-lock.yaml auto-merge, but adding apps/anchor-lab needs a `pnpm install` and adds d3-hierarchy. The apps/anchor-lab spike demonstrates W1's anchor-space layout, and W1's implementation commit f00fb2b is only on claude/w1-anchor-layout, not main. grep for PortLayoutFn or registerPortLayout on main finds nothing. The branch's WORK-ORDER-2026-09-18.md is stale (four lanes, from a base that predates today's plan). Zach's project note has feedback sections on the sweep (line 3472) and on the 100-ideas report (~3510, linking file:///home/bam/bbox-ui/reports/hundred-ideas-2026-09-18.html). The rendered HTML for these reports already sits in the main checkout's reports/ (untracked or git-excluded).",
+   "uniqueValue": "The prior-art sweep, the 100-ideas ranking, the sweep answers and the dnd-kit trade-off report, plus docs/report_feedback.py (shared verdict-buttons and Copy-feedback module) and the .claude/feedback.md rule that points to it.",
+   "zachAsked": "He engaged with the reports but downplayed them: 'not on critical path'. He rated #1 with a star (schema-declared nesting grammar, 'lets implement this'). That is a feature request, not something this branch builds.",
+   "portHunks": [
+    "docs/build_prior_art_sweep_report.py, build_hundred_ideas_report.py, build_sweep_answers_report.py, build_dndkit_tradeoff_report.py, build_anchor_layout_report.py",
+    "docs/report_feedback.py (imported by the sweep and hundred-ideas builders)",
+    "docs/hundred_ideas_data.py, idea_diagrams.py, idea_visuals.py and docs/ideas-pipeline/*",
+    "the top entry of .claude/feedback.md: '2026-09-18 · Bad · reports are an input surface too'. Add it by hand; this is the only merge conflict.",
+    "SKIP apps/anchor-lab/*, pnpm-workspace.yaml and pnpm-lock.yaml (a spike for W1, which is not on main)",
+    "SKIP docs/WORK-ORDER-2026-09-18.md and docs/build_work_order_report.py (stale)",
+    "SKIP reports/*.html (source-only git boundary; the rendered copies already exist on disk)"
+   ]
+  },
+  {
+   "branch": "claude/component-docs-reorganize-8ce972",
+   "ahead": 2,
+   "lastCommit": "17d7721 2026-09-17 Add the vault component-page reorganisation tooling",
+   "disposition": "archive",
+   "reason": "Executed one-shot vault tooling. The reorganisation it drove is finished in the vault, and vault writes belong to a vault session, not this repo.",
+   "evidence": "`git log main..b` shows 2 commits, adding only docs/build_component_reorg_plan.py and docs/vault_{build_mocs,component_pages,evolve,route_content,verify_reorg}.py. `git merge-tree` is clean, so mergeability is not the issue. The scripts hard-code VAULT=/home/bam/zach_brain and rewrite vault notes. The result already exists in the vault: Projects/bbox-ui/Components/ holds 40 pages, plus '(v0)' snapshot notes and MOC - bbox-ui Components, and the project note line 14 says 'moved to one page per component'. The proposal report is already rendered at /home/bam/bbox-ui/reports/component-page-reorg-2026-09-17.html. The plan's own WORK-ORDER.md (~line 274) says vault writes belong to a vault session. No product code is touched. The branch name is reused as a worktree slug by unrelated lanes; the branch itself holds only these two commits.",
+   "uniqueValue": "Only a rerunnable record of how the vault was reorganised. No repo behaviour.",
+   "zachAsked": "The reorg itself was done. Nothing in the note asks for this tooling to live in the repo."
+  },
+  {
+   "branch": "claude/libavoid-routing-comparison-e5175e",
+   "ahead": 1,
+   "lastCommit": "0d674f8 2026-09-17 Add libavoid-vs-Tidy comparison report builder",
+   "disposition": "land",
+   "reason": "Zach explicitly asked for this research, the builder exists nowhere on main, and it merges cleanly as a single new docs file with no rename hazard.",
+   "evidence": "`git log main..b` shows 1 commit adding only docs/build_libavoid_comparison.py (1299 lines). `git cherry -v main b` shows '+'. `git merge-tree --write-tree --name-only main b` returns a clean tree (66998b9...) with no conflicts. `git ls-tree main` has no libavoid file. The similarly named main merge 8dbbbd4 ('libavoid-routing-comparison-99f8df: sweep every edge direction') is a different branch. The project note (~line 2420) links file:///home/bam/bbox-ui/reports/libavoid-vs-tidy-2026-09-17.html and says the 'Report builder is bbox-ui/docs/build_libavoid_comparison.py (committed on claude/libavoid-routing-comparison-e5175e)'. The rendered copy is on disk and git-excluded, so the builder is the only durable source.",
+   "uniqueValue": "Builder for the libavoid-vs-Tidy report. Its verdict is to take three nudging ideas and not the router, and to use libavoid-js only as a dev-time test oracle.",
+   "zachAsked": "Yes. The docstring quotes his ask: 'read through libavoid, and compare it to our current implementation of tidy'.",
+   "portHunks": []
+  },
+  {
+   "branch": "claude/create-page-legend-tags",
+   "ahead": 8,
+   "lastCommit": "edd73ee 2026-09-12 Reset icon instead of x, compact number boxes, and correct two stale comments",
+   "disposition": "archive",
+   "reason": "Fully covered by the other branch and by main. Its two unique commits already exist on main in a different form as 0405eaf. Its other six commits share the same SHAs as the first six on claude/create-page, which has one more round.",
+   "evidence": "`git log main..b` shows 8 commits. The first six (a7f85a3, 7cb2705, ef51c0e, cea6880, 0f755b2, dfd5e87) have the same SHAs as claude/create-page's first six. The last two are 44c6878 (provenance dot to OVERRIDE/MIXED tag, resizable inspector column) and edd73ee (RotateCcw reset icon). main already has these as 0405eaf 'Provenance tag, reset icon, and a resizable inspector column' (2026-09-12), so `git cherry` shows '+' only because the patches differ. On main, workbench.tsx has DEFAULT_INSPECTOR_WIDTH=416 and INSPECTOR_WIDTH_KEY, FigmaDense.tsx imports RotateCcw from lucide-react, and sections/StandardRow.tsx documents the 'OVERRIDE / MIXED tag' change. `git diff --stat claude/create-page claude/create-page-legend-tags` shows the only extra content is FigmaDense/inspector-column/workbench (already on main) and that create-page has the round-7 test the legend branch lacks. `git merge-tree` conflicts in 12 files, including FigmaDense, NumberInput, IconStrip, RowPopover and the lockfile.",
+   "uniqueValue": "None beyond claude/create-page.",
+   "zachAsked": "The tag and reset icon came from his /babble legend round and his own driving, and both are already on main as 0405eaf."
+  },
+  {
+   "branch": "claude/create-page",
+   "ahead": 7,
+   "lastCommit": "5ee1bfb 2026-09-12 Controls judge round 7: the Mixed-gesture guards are rendered and mutation-tested",
+   "disposition": "port",
+   "reason": "Seven Codex judge rounds fixed data-destroying Mixed-selection bugs and unclamped number input in packages/panel, and main still has the pre-fix code. Merging is infeasible: it is 799 commits behind and 10 files conflict. Panel is now used only by the docs /create page and demos/inspector, so value is modest. Port only if @bbox-ui/panel survives the plan.",
+   "evidence": "`git log main..b` shows 7 commits (a7f85a3 through 5ee1bfb). `git cherry -v main b` shows all '+'. `git merge-tree` conflicts in apps/docs/package.json, code-view.tsx, packages/panel/package.json, FieldTraceRow.tsx, NumberInput.tsx, FigmaDense.tsx, IconStrip.tsx, RowPopover.tsx, test/bench.test.ts and pnpm-lock.yaml. Merge-base is 185f786 (2026-09-11), 799 commits behind. main's packages/panel/src/NumberInput.tsx (last touched by 75126a0) only has the 'commitDefaultOnBlur' and undefined-means-Mixed guard. It has no reduceNumberInput, commitFor, snapTo or scrubValue, no typed-value clamp to min/max/step, and no numberInput*.test, scrub.test or mixedGuards.dom.test. Main's FigmaDense has no scrub guard on Mixed rows. The fixes are: a Mixed row no longer overwrites the selection on a scrub, arrow or spin; a clear removes the override; the code view emits every stored prop. Panel consumers on main are apps/docs (create page) and demos/inspector only. The systemsketch app uses packages/inspector.",
+   "uniqueValue": "The number box as a tested state machine, with typed values clamped and snapped, no Mixed overwrite from scrub, arrows or spin, and stored props emitted truthfully in the code view. Includes the rendered Mixed-guard tests.",
+   "zachAsked": "Not by name. The underlying complaint was the bug 'I cannot delete the initial 0.' The judge rounds were the auto-loop's hardening, not a Zach request.",
+   "portHunks": [
+    "packages/panel/src/NumberInput.tsx: the reduceNumberInput, commitFor, blurOutcome, clampTo and snapTo machine, keeping main's `commitDefaultOnBlur` prop and Mixed-empty semantics",
+    "packages/panel/test/numberInput.test.ts, numberInput.dom.test.tsx, numberInput.resync.dom.test.tsx, scrub.test.ts, mixedGuards.dom.test.tsx. These need @testing-library/react and dom in packages/panel devDeps, since main uses react-test-renderer and jsdom ^25.",
+    "packages/panel/src/variants/FigmaDense.tsx: the scrubValue Mixed guard only. Keep main's tag and reset-icon code from 0405eaf.",
+    "packages/panel/src/variants/IconStrip.tsx and RowPopover.tsx: Mixed-inert arrows, the shared override model, and the settle-pending-edit-on-dismiss fix",
+    "packages/panel/src/FieldTraceRow.tsx, bench.tsx and test/oneModel.test.ts (the structural tests that refuse a local 'has override' or a controlled type=number). Re-check them against main's new sections/ and members/ files.",
+    "apps/docs/src/components/create/viewport/code-view.tsx: emit every stored prop (round 3)",
+    "packages/bbox-ui/src/block.fields.ts: WIDTH_FIELD and HEIGHT_FIELD min:0 (merges clean)",
+    "pnpm-lock.yaml: regenerate. Do not port the conflicted file."
+   ]
+  },
+  {
+   "branch": "claude/inspector-panel-v5",
+   "disposition": "archive",
+   "ahead": 1,
+   "lastCommit": "efb3e81 2026-09-12 Babble 5 inspector-panel section designs (S1-S5 variants + demos/capture-inspector-v5.mjs + docs/build_inspector_v5.py)",
+   "reason": "Superseded spike. It is round 1 of a babble. Zach picked from it (S1 title+hairline, S2 chevron-on-hover fold, S5 compact collapse), and those picks were re-applied on main and then reduced to ONE shipped panel. The branch's five rival variants (variants/Accordion, FigmaFlat, MembersAsRows, Rail, StackedLabels) and the switcher were deleted on purpose.",
+   "evidence": "Branch is 1 ahead and 780 behind main; merge-tree conflicts in inspector-column.tsx, SectionInspector.tsx, build-sections.tsx, workbench.tsx, StandardRow.tsx, sections/contract.ts and shared.tsx, plus others. Main commit a5fc4eb (2026-09-12) says round 1's five proposals are settled, S1+S2+S5 are premises and the rest is rejected. It also says efb3e81 could not be replayed because it sat on f28b2cc, an unmerged members-control tip, so the work was re-applied on origin/main. Commit e93218c ('Ship P1...') and 1e2fe0c ('Ship one panel ... the rivals and the switcher went with it') finish the job. Main has packages/panel/src/sections/{FoldRow,SectionPanel,StandardRow,contract,shared}.tsx. `git diff --stat branch main -- packages/panel/src/sections` shows main deleting the five variants. The vault note DP - Inspector Panel records the comment 'S1 spliced with S2 fold' and marks the branch 'pushed, not merged'. The rejected S3/S4/S5 variants are documented by the round-1 report, which is on disk in reports/media (gitignored) and referenced by the vault note.",
+   "uniqueValue": "None still wanted. Only the rejected variants and the frozen-criteria report builder (docs/build_inspector_v5.py) are unique, and those are the record of a settled decision.",
+   "zachAsked": "He asked for the picks S1, S2 and S5, and they are on main via a5fc4eb. Nothing more from this branch."
+  },
+  {
+   "branch": "claude/dndkit-lab",
+   "disposition": "archive",
+   "ahead": 1,
+   "lastCommit": "5898ecb 2026-09-12 Add a Stage 6 'Single port edge' combining every lab control, plus a new edge-owned grouping syntax",
+   "reason": "Superseded by the real component. Stage 6 of the lab was the spec for PortEdge, and its logic was ported into the storybook-basics PortEdge, so the lab demo itself is a spike. The branch merges cleanly (merge-tree tree 940c496, no conflicts) but the demo would land against a Port API that was later split, and the lab is not maintained on main.",
+   "evidence": "DP - Port Edge.md line 430 (Sep 16 plan) says Stage 6 'is one commit on claude/dndkit-lab (5898ecb)' and that the plan 'copies its logic into the new component rather than merging first'; it adds that the demo predates the Port/LabeledPort split, so a merge as-is fails typecheck. Main now has apps/storybook-basics/src/components/portEdge.tsx and portEdge.layout.ts, and portEdge.layout.ts holds parseGroupSyntax, the edge-owned `[args,kwargs]` grammar (referenced in DP - Kwargs & Variadics line 65). Main's demos/dndkit-lab already has Stage 5, PortEdgeStage.tsx, and the Port split rename (362b9cc, 2026-09-15). Main also carries packages/panel/src/portEdges/ and reports/dndkit-tradeoff-2026-09-18.html.",
+   "uniqueValue": "Only the lab demo (SinglePortEdgeStage.tsx, groupSyntax.ts, a small trackStyleOverride seam in Container.tsx). The logic is already ported.",
+   "zachAsked": "Yes, on 2026-09-12: 'let's first just get a single port edge working'. That ask is now satisfied by the ported component on main."
+  },
+  {
+   "branch": "claude/create-page-latest",
+   "disposition": "port",
+   "ahead": 6,
+   "lastCommit": "dfd5e87 2026-09-11 Controls judge round 6: every number surface refuses a Mixed write; the shared-field rule is number-only",
+   "reason": "Six judge-hardening commits (rounds 1-6) that are NOT on main in any other form, but they conflict and touch files main has since rewritten. Main's NumberInput.tsx is still the 101-line 09-11/09-12 version. The branch has a 267-line pure state machine with clamp and snap, an empty-vs-Mixed rule, and a rule that a box shows the store after blur. Main also lacks the branch's tests (numberInput*.test.ts, scrub.test.ts) and the truthful code view. Port the specific hunks rather than merging.",
+   "evidence": "`git cherry -v main` shows all 6 commits as '+'. Branch forked at 185f786 (2026-09-11). Merge-tree conflicts in apps/docs/package.json, code-view.tsx, packages/panel/package.json, FieldTraceRow.tsx and NumberInput.tsx; FigmaDense.tsx, IconStrip.tsx and RowPopover.tsx also change on both sides. Main has no numberInput test files in packages/panel/test and no reduceNumberInput, snapTo, clampTo or scrubValue (`git grep` on main returns only unrelated floatingToolbar clamps). Main still has controlled `type=\"number\"` inputs in FieldTraceRow.tsx:298, FigmaDense.tsx:1280 and RowPopover.tsx:577, which branch round 1 said were the same bug fixed by routing through the shared box. Main's code-view.tsx still omits props equal to their default (`spec.defaultValue === raw`), the exact behaviour round 3 reversed. packages/panel is still consumed by apps/docs (create page).",
+   "portHunks": [
+    "packages/panel/src/NumberInput.tsx: take the branch's pure reduceNumberInput machine plus clampTo/snapTo/commitFor. Keep main's `commitDefaultOnBlur` prop (added by the HostFactsSection lane) and reconcile it with the machine's clear-on-empty rule; this is the conflicting file.",
+    "packages/panel/test/numberInput.test.ts, numberInput.dom.test.tsx, numberInput.resync.dom.test.tsx and scrub.test.ts: new files, copy verbatim. Add the branch's oneModel.test.ts additions and the bench.test.ts structural test that refuses a second controlled type=\"number\". Add devDependencies @testing-library/dom, @testing-library/react, jsdom and react-dom to packages/panel/package.json, and check the lockfile.",
+    "apps/docs/src/components/create/viewport/code-view.tsx: emit every stored prop, wrap children containing < > { or newline as a JSON string expression, and add the '// not carried by bboxStandalonePort' note for props the adapter drops. This matches his 'render stored properties truthfully' rule.",
+    "packages/panel/src/FieldTraceRow.tsx, variants/FigmaDense.tsx, IconStrip.tsx and RowPopover.tsx: graft only (a) the switch to the shared NumberInput, (b) the Mixed-row scrub gate and spin swallow, (c) the clear button ungated from 'governed' (main's canReset/resetsTo in fieldModel.ts may already cover this, so check first), and (d) the Escape/select focus-return in the dropdown. Do not take whole files because main rewrote the row for OVERRIDE/MIXED tags.",
+    "packages/bbox-ui/src/block.fields.ts: Block width and height `min: 0`. This auto-merged cleanly."
+   ],
+   "uniqueValue": "Real data-loss and correctness fixes to the inspector number box, found by a cross-model judge and re-driven live. These include: leaving a Mixed box no longer overwrites a multi-selection; a typed value respects min, max and step; clearing removes the override instead of storing the default; and the truthful code view.",
+   "zachAsked": "Partly. The seed was his 'I cannot delete the initial 0' report. The rest is an unrequested judge loop, but it hardens a shipped control."
+  },
+  {
+   "branch": "claude/glyph-picker-demo",
+   "disposition": "archive",
+   "ahead": 1,
+   "lastCommit": "cf8cf47 2026-09-11 Add the click-to-open Glyph picker interaction, as a story-level acceptance test",
+   "reason": "Superseded spike. It hand-rolled a ~100-icon curated picker (apps/storybook/src/GlyphPicker.tsx + glyphIcons.ts) as a story-level demo. Main has the real picker (packages/glyph-picker, all of Lucide, emoji, paste-to-upload, Base UI popover) and a story of it at the same path.",
+   "evidence": "merge-tree conflicts in apps/storybook/src/stories/GlyphPicker.stories.tsx (add/add) and pnpm-lock.yaml. Main's apps/storybook/src/stories/GlyphPicker.stories.tsx imports GlyphPicker from @bbox-ui/glyph-picker and calls it 'the ONE Notion-style Glyph picker ... ported by value from SystemSketch's BlockIconPicker'. Main commits 1aa33fc (2026-09-11, glyph-picker port), 650f797 (lazy Lucide chunk) and a86e75a (2026-09-21, 'A block can wear an icon, and two triggers open one picker') sit on top. Main also has apps/storybook-basics/src/editor/glyphPicker/{glyphPicker.tsx,lucideLibrary.ts,emojiLibrary.ts,uploadIcon.ts}. The branch's own message says it is a scoped-down version that skips the search/upload pipeline. CLAUDE.md marks apps/storybook as opt-in.",
+   "uniqueValue": "None. The curated 100-icon list (glyphIcons.ts) is a strict subset of what main ships.",
+   "zachAsked": "Yes, the Glyph picker (vault note: 'Ok to finish off is the glyph component working?'), and main delivers it through packages/glyph-picker."
+  },
+  {
+   "branch": "claude/component-proposal",
+   "disposition": "land",
+   "ahead": 1,
+   "lastCommit": "1311bc0 2026-09-10 Propose the bbox-ui component family, its schema, and one storybook in three hosts",
+   "reason": "Report-only branch. Its tracked report, reports/bbox-ui-component-proposal-2026-09-10.html, and its builder are NOT on main, and Zach's vault note references the report by path. The note calls it 'Proposal only, nothing implemented.' The proposal's core idea (FieldSpec declaration split from reading) was later built as packages/schema. The only conflict is a two-line .gitignore addition that main already covers.",
+   "evidence": "`git cherry` shows '+'. `git ls-tree -r main` has no component_proposal, component-proposal or docs/empty.systemsketch. The branch adds only .gitignore, docs/build_component_proposal.py, docs/capture_proposal_shots.mjs, docs/empty.systemsketch and the report. merge-tree conflicts only in .gitignore: main's .gitignore already has a broader ignore set and the branch adds `reports/media/` and `__pycache__/`. Check `git grep -n 'reports/media' main -- .gitignore` before resolving; the resolution is to keep main's .gitignore (add `__pycache__/` only if missing). The vault note Projects/bbox-ui/Components/DP - Code Editor.md:580-581 cites the media edition at reports/media/bbox-ui-component-proposal-2026-09-10.html and 'branch claude/component-proposal @ 1311bc0'. That media page is on disk but gitignored. The tracked 124 KB no-captures edition is only on this branch.",
+   "uniqueValue": "The tracked report edition, its builder and its capture script. They give a durable, reviewable record of the original component-family and schema proposal.",
+   "zachAsked": "Not literally as a feature. It was a proposal, and he references it in the vault."
+  },
+  {
+   "branch": "claude/code-field",
+   "disposition": "archive",
+   "ahead": 12,
+   "lastCommit": "b1baf0a 2026-09-09 drive-code-field.mjs: real-clipboard paste-after-typing proof; README z-index sentence fixed",
+   "reason": "Equivalent on main in another form, via piecemeal forward-port. Main's packages/bbox-ui/src/codeField.tsx, codeFieldGuards.ts, codeFieldRows.tsx and codeGrammar.ts (plus their tests and registry entries) are the descendants of this branch. They differ from the branch only by a `\"use client\"` line, and CodeBlock was later renamed back to CodeField. The one unique piece, the `name: Type = default` signature grammar, is unused on main and explicitly out of scope there.",
+   "evidence": "`git diff branch main -- packages/bbox-ui/src/codeField.tsx codeFieldRows.tsx` is only the two added `\"use client\"` lines. codeFieldGuards.ts has no diff. Main line counts (592, 263, 323) match the branch (590, 261, 323). The round-2 fixes (setCaret, expansion prune, tooltipParent, annotation forwarding) are all present in main's codeField.tsx. Main history: c77d7c4 (2026-09-12, 'label slot is a real CodeField'), ed96763 and 368a524 ('CodeBlock becomes CodeField'), c29266d. Main's registry.json ships codeField.css, codeField.tsx, codeFieldGuards.ts, codeFieldRows.tsx and codeGrammar.ts. The project note line 1150 says 'built and proven on claude/code-field ... being forward-ported piecemeal instead of landed once'. Merge-tree conflicts in README.md, demos/reactflow and tldraw App.tsx and index.css, codeField.tsx, codeFieldRows.tsx, theme.css, both registry.json files and pnpm-lock.yaml. Merging would regress main's CodeField. Main's packages/bbox-ui/src/port.tsx:647 says the `name: Type = default` grammar is explicitly out of scope, and storybook-basics/src/scene/portDeclaration.ts does that parse (parsePortDeclaration). Only signature.ts and signatureGrammar.ts (and their tests) and codeTokens.css exist solely on the branch. Nothing on main imports a signature module.",
+   "uniqueValue": "Only the orphaned signature.ts and signatureGrammar.ts (a depth-0 `name: Type = default` slot parser and grammar) with their tests. If Zach later wants the one-line typed-port field to highlight name, type and default as separate slots, graft those four files then. Also drive-code-field.mjs, a real-host proof script that main deleted.",
+   "zachAsked": "Yes, the Code Field ('#1 I want a code field'), and main ships it as CodeField."
+  },
+  {
+   "branch": "claude/review-boards-2026-09-19",
+   "disposition": "archive",
+   "reason": "Superseded: main carries its own review-board skill, generator, validator and the same ?board= loader; the branch's review_runtime.py relaunch server is replaced by the shared stable-preview-switcher lanes. Merging it conflicts in 7 files and reintroduces paths the studio rename is about to move.",
+   "evidence": "main..branch is 13 ahead, 293 behind, last commit 2026-09-19. `git cherry -v main` shows all 13 as '+' (no patch-identical commit), but the capability exists on main under other paths: skills/bbox-review-board/{SKILL.md,scripts/create_review_board.mjs,scripts/layout_quality.mjs} (commit afdff9d), apps/systemsketch/src/review/boardParam.ts + boardParam.test.ts + boardParam.smoke.test.tsx + __fixtures__/*.tldr (commit e4cfbc8; `git diff main branch` on boardParam.ts is a 1-line comment path change, so main's is the newer copy), apps/systemsketch/review/*.tldr boards, and a CLAUDE.md section 'Seed the review board before handoff' plus 'Handing over a board — a link, never a file chooser'. `git merge-tree --write-tree --name-only main <b>` reports conflicts in .claude/feedback.md, .gitignore, apps/systemsketch/src/main.tsx, boardParam.smoke.test.tsx, and a file/dir clash where main's .claude/skills is a directory. The branch's layout_quality.mjs differs from main's only by a stricter vocabulary (wires[], 80-unit clearance, region corner ids), not a missing capability. The finish plan (docs/finish-2026-09-29/WORK-ORDER.md lines 127-130) already lists this as archive, with the confirm-nothing-missing check, which this comparison completes.",
+   "lastCommit": "2026-09-19 e51430f review-boards manifest: the relaunch command runs the branch's script until the merge",
+   "uniqueValue": "Only three things main lacks: scripts/review/capture_journey.mjs (hero video from real input), docs/build_review_report.py (one report from one manifest), and scripts/review_runtime.py (pinned serve/relaunch). The relaunch part is replaced by the switcher lane. If Zach wants the journey-capture and report-builder harness, graft those two files only, as a separate decision.",
+   "zachAsked": "Yes, but already delivered in another form. The branch's CLAUDE.md quotes his 2026-09-19 ask that a board never be blank and that a link relaunch it. main's bbox-review-board skill and its ?board= loader deliver that. He did not name review_runtime.py."
+  },
+  {
+   "branch": "claude/branch-preset-spike-2026-09-22",
+   "disposition": "archive",
+   "reason": "A spike. The Branch-as-Block-preset test was built to prove a representation, and it ships a deliberately red story. Its two base commits (hit regions, BlockPortMembers) are already on main.",
+   "evidence": "3 ahead, 134 behind, last commit 2026-09-22. `git cherry -v main` shows only d579ae9 as '+'. The other two are 'Spike base: merge hit regions' and 'Spike base: merge collapsed members'. main already has apps/storybook-basics/src/components/blockPortMembers.{tsx,layout.ts}, BlockPortMembers.stories.tsx and hitRegions/HitRegionsBlockPort.stories.tsx and HitRegionsBlockRegion.stories.tsx. Only three new files are unique (block.region.preset.tsx 645 lines, block.region.preset.test.ts, BranchPreset.spike.stories.tsx). The commit message says 'KNOWN RED, by design of a spike' and lists SPIKE-NEEDS (surface=frame, opaque toggle, root data-* passthrough, member height, band collapse) that Block does not yet have. `git merge-tree` is clean, so it could merge, but it would land a red story. The project note only carries the 'Branch Preset | Branch (alias conditional)' row, not a request for this spike.",
+   "lastCommit": "2026-09-22 d579ae9 Spike: a Branch region drawn as a thin Block preset beside today's BlockRegion, measured",
+   "uniqueValue": "A measured prototype of Branch drawn through Block, BlockMembers and BlockPort (60 deltas within 1px) and the list of SPIKE-NEEDS. It is useful only if BlockRegion-as-preset is revived. Keep it reachable under an archive tag.",
+   "zachAsked": "Indirectly. The commit quotes his 2026-09-22 direction that BlockRegion becomes a preset of Block, and the spike was the test. The spike itself is not a deliverable."
+  },
+  {
+   "branch": "claude/notebook-lab-work-order-472c22",
+   "disposition": "port",
+   "reason": "The app moved to its own repo, so do not merge. Three things on this branch are not on main and worth keeping. (1) The reports Zach's notes link to and their generators. (2) Four trunk fixes that the moved-out lab depends on. (3) The commit 71cac09, which marimo-canvas's submodule pins and which exists only on this branch. A plain merge conflicts in 3 trunk files.",
+   "evidence": "22 ahead, 558 behind, last commit 2026-09-19. Commit 6af8006 message: the lab is 'marimo-canvas now', and 'WHAT STAYS HERE ... the five trunk components this work changed ... belong in the trunk'. Net diff vs main contains no apps/notebook-lab (already removed) but does contain 5 trunk files, docs builders and 2 reports. `git merge-tree --write-tree --name-only` conflicts in blockPort.tsx, portEdge.tsx, wireLayer.tsx. `git grep` on main finds no 'anchored' mode, no 'scaleOf' and no deferred-commit fix in those files. Main's blockPort.tsx already forwards disabled/onLabelWrite (lines ~1103-1125), so that part of the branch's blockPort change is already covered. /home/bam/marimo-canvas/.gitmodules pins vendor/bbox-ui at 71cac09 by local path, and `git branch --contains 71cac09` lists only this branch. Zach's notes link file:///home/bam/bbox-ui/reports/canvas-notebook-2026-09-18.html and notebook-lab-work-order-2026-09-18.html (World Model/.../C - Bidirectional Transformation (Lenses).md line 63; Projects/SystemSketch/Running Code on the Canvas ... (2026-09-18).md line 151). Neither report is tracked on main. Both are on disk, listed in .git/info/exclude, and byte-identical to the branch copies (checked with cmp). The plan's blanket 'archive' would drop the trunk fixes and orphan the submodule pin.",
+   "lastCommit": "2026-09-19 f205648 Drop the notebook-lab importer from the lockfile",
+   "portHunks": [
+    "apps/storybook-basics/src/components/codeEditor.tsx: the deferred commit in the unmount effect (pendingCommit / requestAnimationFrame, cancelled on StrictMode remount). Auto-merges clean.",
+    "apps/storybook-basics/src/components/portEdge.layout.ts: AnchoredConfig, the 'anchored' Distribution mode and its two early returns. Auto-merges clean.",
+    "apps/storybook-basics/src/components/portEdge.tsx: AnchoredSlotCard, the renderItem ctx {editable, onLabelWrite} and the anchored branch. Conflicts, resolve by hand against main.",
+    "apps/storybook-basics/src/components/wireLayer.tsx: centreOf(dot, containerRect, scale) and scaleOf(container, containerRect), so cables measure correctly under a camera transform. Conflicts, resolve by hand.",
+    "apps/storybook-basics/src/components/blockPort.tsx: only data-editable={ctx.editable || undefined} and the ctx.editable wiring. Skip the disabled/onLabelWrite part, main already has it.",
+    "apps/storybook-basics/src/stories/PortEdge.stories.tsx: the 10-line anchored story. It auto-merged onto components/PortEdge.stories.tsx.",
+    "docs/build_canvas_notebook_report.py, docs/build_canvas_fitness_report.py, docs/build_notebook_lab_report.py, docs/build_notebook_lab_work_order.py, docs/capture_notebook_shots.mjs, docs/probe_cable_edit.{py,out}, docs/probe_marimo_ports.{py,out}. Docs only, merge clean.",
+    "reports/canvas-notebook-2026-09-18.html (290 KB) and reports/notebook-lab-work-order-2026-09-18.html (22 KB), if these should be tracked rather than sit ignored on disk.",
+    "Before deleting the branch: create tag archive/notebook-lab-work-order-472c22 so 71cac09 stays reachable for marimo-canvas."
+   ],
+   "uniqueValue": "The 'anchored' port distribution, the wireLayer camera-scale measurement and the StrictMode-safe CodeEditor commit are real trunk fixes with no equivalent on main. The lab's design reports and their builders also exist nowhere else in git.",
+   "zachAsked": "Yes for the reports, since he links them from his notes. He also asked for this lab work on 2026-09-19 ('Please continue with this implmenetation: .../notebook-lab-work-order-2026-09-18.html'). He never asked for the trunk hunks specifically, but the extraction commit says they belong in the trunk."
+  },
+  {
+   "branch": "claude/canvas-jupyter-execution-871b9c",
+   "disposition": "archive",
+   "reason": "A strict ancestor of the notebook-lab branch. Its 15 commits are the first 15 of that branch's 22, and its content is the apps/notebook-lab app that later moved to the marimo-canvas repo. Merging it would put a 10,000-line app back into the monorepo. Anything worth keeping arrives through the notebook-lab port.",
+   "evidence": "`git merge-base --is-ancestor claude/canvas-jupyter-execution-871b9c claude/notebook-lab-work-order-472c22` is true (both tips share c003a8f). 15 ahead, 558 behind, last commit 2026-09-18. Its diff vs main is 43 files, 10,346 insertions, mostly apps/notebook-lab/**, plus pnpm-workspace.yaml and pnpm-lock.yaml. `merge-tree` conflicts in pnpm-workspace.yaml. The same reports and docs builders are also on the notebook-lab branch, which additionally has the trunk fixes and the extraction commits 6af8006 and f205648. The lab lives at /home/bam/marimo-canvas, and lanes.json line 1085 records 'the notebook lab moved to its own repo'.",
+   "lastCommit": "2026-09-18 c003a8f Work order: lane 5 is now started-and-stopped, not in flight",
+   "uniqueValue": "None beyond what the notebook-lab branch already holds. The only extra is the in-monorepo copy of apps/notebook-lab, which now exists in /home/bam/marimo-canvas.",
+   "zachAsked": "Yes originally (the 2026-09-18 marimo canvas thread), but its content lives on in the notebook-lab branch and the marimo-canvas repo."
+  },
+  {
+   "branch": "claude/whiteboard-channels-2026-09-24",
+   "disposition": "archive",
+   "reason": "Superseded by the shared stable_preview_switcher. The peer lane on claude/subagent-bbox-studio-rename-bb4cdd already replaces the hand-rolled channel model this branch extends.",
+   "evidence": "2 ahead, 5 behind, last commit 2026-09-24. Its 7-file diff adds apps/storybook-basics/src/editor/releaseChannel.{ts,test.ts} (a port of the old app's release-model wording and phase machine), edits apps/systemsketch/statusEndpoint.ts and scripts/launch_systemsketch.py to publish stableOrigin/previewOrigin, and rewrites docs/CHANNELS.md. `git grep releaseChannel` finds no consumer in apps/ on main, and none on the peer branch, so the trunk module is dead logic. Peer branch claude/subagent-bbox-studio-rename-bb4cdd (ahead of main by 4 commits, tip ed9539c dated 2026-09-29) adds apps/systemsketch/stable-preview.json and deletes the hand-rolled launchers (scripts/bbox_release.py, launch_bbox_storybook.py, launch_bboxui.py and their tests); that branch does not contain 303d828 or c7ca6d7. WORK-ORDER.md line 87 says the switcher 'supersedes claude/whiteboard-channels-2026-09-24'. The branch's launch_systemsketch.py and statusEndpoint.ts edits would conflict with the peer's rewrite. `merge-tree` is clean against main today, so the archive call rests on supersession, not on a conflict.",
+   "lastCommit": "2026-09-24 c7ca6d7 Barrier: both channels publish where both channels live",
+   "uniqueValue": "Only the Preview :4343 port choice (not :4340, which is the terminal dev port) and the reasoning that bbox_release's hash-pinned promote does not fit a commit-id-built app. The switcher's own config should carry both.",
+   "zachAsked": "Yes, 2026-09-24: 'I want the whiteboard to open by default to the stable build BUT I need then option to easily switch to the preview build as well.' The switcher lane answers that ask, so this branch is not needed."
+  }
+ ]
+}

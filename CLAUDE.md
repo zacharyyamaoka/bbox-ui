@@ -72,6 +72,44 @@ canonical lineage, three consumers." The checkable version:
   trunk's version forward. Never average the two, and never keep both "for
   now" — that is exactly how the vendored copy above started to diverge.
 
+## The host apps only host — the functionality lives here
+
+**Most changes go in bbox-ui, where possible and appropriate.** bbox-ui is the
+library; a **host app** is the implementation that mounts it in one canvas engine —
+`apps/systemsketch` today, which Zach has said is more accurately named
+`apps/bbox-tldraw` (2026-09-19), and `apps/bbox-reactflow` when that exists.
+SystemSketch — the larger product — is a separate thing ("another monster"), not
+these apps. The default home for a new capability — a component, menu, panel,
+setting, layout or scene logic, routing, a file host, a behaviour — is the trunk
+(`apps/storybook-basics/src`). A host app imports it, configures it and wires it.
+
+Zach, 2026-09-19: *"most changes where possible and appropriate should be done
+in bbox-ui. that is the library. system sketch is the implementation that uses
+tldraw. We want the functionality in bbox-ui"* — for two reasons he gave:
+
+1. **The library stays separate from the implementation.**
+2. **It leaves the door open to switch host quickly** — React Flow, or whatever
+   comes next. Whatever lives only in the app is what a second host has to
+   rebuild, and a fix made only in the app is one the next host inherits
+   nothing from.
+
+**The test, before writing code in a host app: would a React Flow host
+need this too?** If yes, it belongs in the trunk. Code stays in the app only when
+it has to name tldraw's API to exist — a `ShapeUtil`, binding or tool,
+tldraw's `components` / `overrides` slots, `onMount`, the store and
+`persistenceKey`, the licence key — or when it is pure composition: which trunk
+part goes in which tldraw slot. Even then keep it thin, and leave a `WHY:`
+comment saying what forced it to be tldraw-specific.
+
+What enforces this today, and what doesn't: `apps/storybook-basics/src/engineFree.test.ts`
+keeps `components/`, `scene/`, `editor/`, `presets/` and `layout/` from importing
+tldraw or `@xyflow/react`, so the trunk side of the line cannot rot. **Nothing
+stops the app growing functionality that could have lived in the trunk** — that
+direction is this rule, a convention with no test behind it. The 2026-09-19
+chrome ruling in `.claude/feedback.md` is this rule applied to menus, toolbars,
+docks and panels. When a change lands app-only for a reason the test above
+doesn't cover, say so in the handoff.
+
 ## The registry is the product
 
 **There is exactly one distribution channel, and npm is not it.** Every
@@ -83,14 +121,23 @@ fix for the adapters.
 `registry.json` at the root is how people consume this — shadcn takes a GitHub
 repo as a registry directly, with no website at all.
 
-**But `port` and `block` do NOT install, and that sentence used to say they
-did.** Measured 2026-09-18 against a real throwaway project: `npx shadcn@latest
-add .../port.json` fails with `npm error 404 … @bbox-ui/schema@*`, before it
-writes a single file. `packages/schema` is `private: true` like every other
-`packages/*`, and `appearance.fields.ts`, `port.fields.ts`, `port.presets.ts`,
-`block.fields.ts` and `pill.tsx` all import it — so this is the same
-uninstallable-by-construction class as the two adapters and `glyph.tsx`, and
-the fix is the same source change, not a registry tweak.
+**Every item installs — the uninstallable pin is empty** (lane L-REG,
+2026-10-06). `EXPECTED_UNINSTALLABLE` in `docs/verify_registry_install.py` is
+`set()`, and `packages/bbox-ui/test/registryInstallable.test.ts` keeps it
+that way: it fails if any published payload imports an unpublished
+`@bbox-ui/*` package, if the pin is non-empty or deleted, or if this section
+stops saying so. Measured at the L-REG commit: 47 items, every one installed
+ALONE into its own throwaway project and type-checked (`tsc --strict` exit 0),
+and all 47 together, exit 0.
+
+History, so nobody re-litigates it. On 2026-09-18 `port` and `block` did not
+install, although this section then said they did: `npx shadcn@latest add
+.../port.json` failed with `npm error 404 … @bbox-ui/schema@*` before writing a
+file, because `packages/schema` is `private: true` and five v1 files imported
+it. The fix was the source change this section always named: frozen v1 now
+imports its own verbatim copy, `packages/bbox-ui/src/schema/` (provenance
+header in each file; frozen with v1, deliberately not parity-pinned to
+`packages/schema`).
 
 Worse, the breakage was hidden behind a *second* one. Both items shipped
 file lists that omitted what their entry points import — `port.tsx` needs
@@ -116,14 +163,14 @@ because it cannot know where one was meant to point after `target:` remapping.
 
 So every file a component imports relatively must land as its **sibling**. That
 is why `port` and `block` each ship `layout.ts` and `lib/utils.ts` targeted into
-`components/bbox/`. Change a `target:` and you can silently break the install
+`components/bbox/v1/`. Change a `target:` and you can silently break the install
 while every build stays green.
 
 **The sibling rule depends on which relative path the source actually
 wrote, not just which folder it's in.** `packages/bbox-ui/src/port.tsx`
 imports `./lib/utils` (utils nested one level *below* the component), so its
-registry item can flatten straight into `components/bbox/` and target
-`lib/utils.ts` at `components/bbox/lib/utils.ts` — that keeps `./lib/utils`
+registry item can flatten straight into `components/bbox/v1/` and target
+`lib/utils.ts` at `components/bbox/v1/lib/utils.ts` — that keeps `./lib/utils`
 resolving. The trunk (`apps/storybook-basics/src/`) is laid out differently:
 `components/` and `lib/` are **siblings**, so every trunk component imports
 `../lib/utils` (up-and-over, not down-and-in). Flattening `components/*` into
@@ -150,29 +197,28 @@ cleanly and then failed to compile. That check is now one command:
 python3 docs/verify_registry_install.py --dir /tmp/bbox-registry-check
 ```
 
-It installs every installable item from `public/r/` into a fresh project and
-runs `tsc`. First run (2026-09-22): 37 items, `tsc` exit 0 — and deleting one
-installed file turns it red, so it can fail. After `region` became
-`block-region` and `labeled-group` joined it (same day): 38 items, exit 0.
+It installs every item from `public/r/` into a fresh project and runs `tsc`
+(name items after `--dir` to install just those, the way a consumer does).
+First run (2026-09-22): 37 items, `tsc` exit 0 — and deleting one installed
+file turns it red, so it can fail. 2026-10-06 (L-REG): 47 items, exit 0, and
+each one alone as well — `python3 -m pytest -q
+docs/acceptance/registry/test_registry_installs.py` is the per-item proof
+(~5 min; it is not under `scripts/tests` on purpose).
 
-**Which items it skips is derived, not listed by hand — and the derivation is
-pinned.** The old spelling was a hand-written set of four names, which is
-exactly the thing that goes stale: an item that newly imports an unpublished
-`@bbox-ui/*` package would just join the skip list and the gate would stay
-green over a real breakage. The script now reads the **shipped payload content**
-(the adapters import `@bbox-ui/core` in source and never declare it in
-`dependencies`, so trusting the manifest calls them installable and then watches
-npm 404) and fails on any delta against `EXPECTED_UNINSTALLABLE`, in either
-direction. Mutation-tested red both ways, 2026-09-22.
-
-The class grew from four to six on the 2026-09-22 integration merge:
-`block-region` and `labeled-group` joined it, because `blockRegion.tsx` now
-imports `./glyph` for the corner tab (commit `069e418`) and `glyph.tsx` imports
-`@bbox-ui/glyph-content`, `private: true`. So the run is 36 items, exit 0 — two
-items that installed on `main` that morning no longer do. Fixing it is the same
-source change `glyph.tsx` has always needed (copy the package's ~110 lines as a
-sibling); until then the registry ships two more reference implementations, and
-this note is the "do not paper over it".
+**What it would skip is derived, not listed by hand — and the derivation is
+pinned, to an empty set.** The old spelling was a hand-written skip list,
+which is exactly the thing that goes stale: an item that newly imports an
+unpublished `@bbox-ui/*` package would just join it and the gate would stay
+green over a real breakage. The script reads the **shipped payload content**
+(the adapters once imported `@bbox-ui/core` in source without declaring it,
+so trusting the manifest called them installable) and fails on any delta
+against `EXPECTED_UNINSTALLABLE`, in either direction. The pin held six names
+from 2026-09-22 (`port`, `block`, `block-region`, `labeled-group`, and the two
+adapters) until L-REG emptied it; `block-region` / `labeled-group` had joined
+because `blockRegion.tsx` put a `./glyph` in its corner tab (`069e418`) and
+`glyph.tsx` imported `@bbox-ui/glyph-content`. The generator now HARD FAILS
+any item, of any lineage, that imports or depends on a private package — no
+legacy soft WARNING any more.
 
 **Renaming or removing an item goes through `RETIRED_ITEMS`** in the
 generator. It merges into `registry.json`, so a renamed item used to leave its
@@ -180,40 +226,76 @@ old entry behind, pointing at files that no longer exist: `--check` passed
 and only `npx shadcn build` failed. The generator now retires listed names and
 refuses to write any item whose files are missing.
 
-**The two adapters cannot be installed by anyone.** `block-node-reactflow` and
-`block-shape-tldraw` import `@bbox-ui/core`, which is `private: true` and
-unpublished. Retargeting cannot fix it — shadcn copies source verbatim, so the
-import has to already say something a consumer can resolve.
+**The two adapters install through `registryDependencies`** (L-REG). Until
+2026-10-06 neither could be installed by anyone: both imported
+`@bbox-ui/core`, `private: true`, and retargeting could not fix it because
+shadcn copies source verbatim. The fix was the source change this section
+named — import a copied sibling, declare the item that ships it:
 
-With npm ruled out, the only remaining fix is a **source change**: have the
-adapters import the copied siblings (`./block`) rather than the workspace
-package, and declare `block` as a `registryDependency` so it lands beside them.
-That needs the repo to resolve the same specifier, so it is real work, not a
-registry.json tweak. Until then they are reference implementations, and the docs
-say so. Do not paper over it.
+- `block-node-reactflow` is now the TRUNK's React Flow node
+  (`apps/storybook-basics/src/hosts/blockNodeReactflow.tsx`, ported from
+  donor `611d985`; in `hosts/` because `engineFree.test.ts` walls engines out
+  of `components/`). It declares `block-port` and ships only what `block-port`
+  does not: its two files plus the `Block` card it wraps, landing at
+  `components/bbox/hosts/` beside `block-port`'s mirrored
+  `components/bbox/components/`. `packages/adapter-reactflow` stays as the
+  demos' v1 adapter and is no longer shipped.
+- `block-shape-tldraw` imports `./core` — in this repo a one-line shim,
+  `packages/adapter-tldraw/src/core.ts`, re-exporting `@bbox-ui/core`, which
+  the item does NOT ship; it declares `bbox-v1-core`, which lands v1's
+  `index.ts` as `components/bbox/v1/core.ts` beside the adapter.
+
+**What a consumer types:** nothing extra — `npx shadcn@latest add
+https://bbox-ui.com/r/block-node-reactflow.json` pulls `block-port` in by its
+URL. A registryDependency is a full URL (`REGDEP_URL` in the generator)
+because, measured with shadcn 4.21.3: a bare name resolves against shadcn's
+OWN registry, a relative `./x.json` resolves against the consumer's cwd and
+fails, and an `@bbox/x` namespace works but costs every consumer a
+`registries` line in `components.json`. `verify_registry_install.py`
+rewrites that URL to its local copy of `public/r` — it never fetches the live
+site, which serves the last deploy. Consequence worth knowing: until the site
+is redeployed (Zach's call), a consumer installing an adapter from the URL
+gets the dependency's last-DEPLOYED bytes.
 
 **Sixteen items now publish the trunk directly** (`badge`, `bar`, `text`,
 `editable-text`, `folding-chevron`, `block-card`, `port-dot`, `code-editor`,
 `labeled-port`, `port-edge`, `block-port`, `trace`, `trace-badge`,
 `trace-editor`, `trace-tidy`, `wire-layer`) — sourced from
 `apps/storybook-basics/src/`, each self-contained the same way `port`/`block`
-are (no `registryDependencies` between bbox items; a shared file like
-`elbow/*` or `lib/utils.ts` is simply re-listed, with its own `target`, by
-every item that needs it). Since 2026-09-22 they are built by
+are (a shared file like `elbow/*` or `lib/utils.ts` is simply re-listed,
+with its own `target`, by every item that needs it — `registryDependencies`
+are reserved for the two adapters above, which sit ON another item). Since 2026-09-22 they are built by
 `docs/build_menu_registry_items.py` too (`TRUNK_ITEMS`): their hand-set file
 lists had drifted — `block.tsx`, `port.tsx`, `trace.tsx` gained imports the
 items never picked up — and eleven of them installed and then failed to compile.
 
-**Two install layouts, chosen by resolution, not by folder.** An item installs
-flat (`components/bbox/X`, with `lib/`, `skin/` as siblings of `bbox/`) when
-every one of its relative imports still resolves that way. When one would not —
-an `editor/` file importing `../components/button`, or `skin/portVariants.ts`
-importing `../components/port.layout` — the whole item installs as a mirror of
-the trunk tree, `components/bbox/{components,editor,lib,skin}/X`. So an item's
-install paths move only when they have to: 18 items are mirrored (the chrome
-that moved to `editor/`, and the four port items through `skin/`), 23 stay flat.
-Trade-off, recorded: a consumer who installs one flat and one mirrored item
-gets two copies of shared files (e.g. `button.tsx` at both depths).
+**Install layouts: two for the trunk, chosen by resolution, plus one for
+v1.** A trunk item installs flat (`components/bbox/X`, with `lib/`, `skin/` as
+siblings of `bbox/`) when every one of its relative imports still resolves
+that way. When one would not — an `editor/` file importing
+`../components/button`, `skin/portVariants.ts` importing
+`../components/port.layout`, a scene preset importing `../hosts/hostScene` —
+the whole item installs as a mirror of the trunk tree,
+`components/bbox/{components,editor,scene,hosts,lib,skin}/X`. Measured
+2026-10-06: 25 of 47 items are mirrored. Trade-off, recorded: a consumer who
+installs one flat and one mirrored item gets two copies of shared files (e.g.
+`button.tsx` at both depths).
+
+**Frozen v1 installs under `components/bbox/v1/`** (`port`, `block`,
+`bbox-v1-core`, `block-shape-tldraw`; `V1_PREFIX` in the generator). WHY: v1
+`block` and the trunk's `block-card` both landed at `components/bbox/block.tsx`
+with different bytes, so installing both kept whichever came last — hidden
+only because `block` 404'd. No consumer moved: no v1 item had ever installed.
+`bbox-skin` and `bbox-layout` keep their old targets; the donor's
+`bbox-block-layout` (`layoutSimpleBlock`, `blockLayout.ts:361`) lands at
+`lib/bbox/`. `registryInstallable.test.ts` fails if two items ever ship
+different bytes to one target again.
+
+**The control-flow presets are items** (`docs/CONTROL-FLOW-PLAN.md` §11 item
+6): `block-value` (`components/block.value.tsx`), `region-loop`
+(`scene/region.loop.ts`) and `region-branch` (`scene/region.branch.ts`). The
+loop/branch presets are scene-node factories, so they ship the scene kit they
+build on (~61 files, mirrored).
 
 **Naming principle (Zach, 2026-09-17): bbox-ui's own names are descriptive
 and precise; shorthand belongs to the consumer.** SystemSketch calls its
@@ -238,11 +320,14 @@ legacy lineage rather than the descriptive trunk items is deliberate and
 self-correcting — it resolves itself the day `apps/docs` migrates to the
 trunk, not something to "fix" by renaming `port`/`block` now.
 
-Two things the reset shipped are deliberately **not** registry items:
-- **`glyph.tsx`** — imports `@bbox-ui/glyph-content`, `private: true` and
-  unpublished, the same blocker class as the two adapters above. Fixing it
-  needs the same source change (copy the package's ~110 lines as a sibling)
-  and is out of scope here for the same reason.
+`glyph.tsx` travels inside `block-region` / `labeled-group` since L-REG: it
+decodes through `./glyph.content`, a verbatim copy of
+`packages/glyph-content/src/content.ts`. That copy is PARITY-PINNED (unlike
+v1's frozen copies): the editor's glyph picker still encodes through the
+package, so `registryInstallable.test.ts` ("L-REG glyph") fails the moment the
+two grammars drift — change both together.
+
+What the reset shipped that is deliberately **not** a registry item:
 - **`button`, `toggle`, `dropdown-menu`, `tooltip`, `collapsible`** — each
   file says so in its own header comment: copied verbatim from
   `apps/docs/src/registry/new-york-v4/ui/*` (or, for `toggle`,

@@ -7,5 +7,6 @@
 export * from "./appSettings";
 export * from "./cameraGestureHost";
 export * from "./cornerPlacementHost";
+export * from "./duplicateAtPointer";
 export * from "./interfaceScaleHost";
 export * from "./preferences";

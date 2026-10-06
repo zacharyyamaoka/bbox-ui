@@ -1,0 +1,741 @@
+{
+ "what": "Residuals named on non-ABSENT rows of docs/parity-backlog-triage-2026-09-21.md, checked against main by a read-only Sonnet 5.5 scout.",
+ "residuals": [
+  {
+   "sourceId": "P-087/P-012/P-443",
+   "sourceVerdict": "PREMISE-FALSE",
+   "residual": ".bbox envelope key + future-format version guard. A .bbox is still plain tldraw JSON; no top-level format key, so a newer or foreign file is only refused by whatever tldraw's schema parse says. (Product wrinkle: workspaceModel.ts records 'same bytes as .tldr, no-envelope rule' as a deliberate 09-21 choice, so the envelope needs Zach's word on the shape before building.)",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/chrome/FileMenu/fileActions.ts:69-70 `serializeBoard` returns plain serializeTldrawJson(editor); loadBoardText :146-157 only reports tldraw's parse error type; apps/storybook-basics/src/files/workspaceModel.ts:14-50 says .bbox is 'the SAME BYTES as .tldr'; grep envelope|formatVersion|bboxVersion in app + trunk files/ finds no code, only comments.",
+   "alreadyCoveredBy": "",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/chrome/FileMenu/fileActions.ts",
+    "apps/storybook-basics/src/files/workspaceModel.ts",
+    "apps/systemsketch/src/files/session.tsx",
+    "apps/systemsketch/src/files.smoke.test.tsx"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-014",
+   "sourceVerdict": "PREMISE-FALSE",
+   "residual": "Block title and description mark history per keystroke (one rename = N undo steps).",
+   "stillOpenOnMain": false,
+   "evidence": "apps/systemsketch/src/shapes/block/BlockFace.tsx:204-236 (title, createGestureMark + begin on first keystroke) and :355-372 (description); apps/systemsketch/src/undoGranularity.smoke.test.tsx:139-190 asserts one Ctrl+Z for title, description, rail label, glyph, inspector description.",
+   "alreadyCoveredBy": "",
+   "likelyWriteSet": [],
+   "size": "S"
+  },
+  {
+   "sourceId": "P-014",
+   "sourceVerdict": "PREMISE-FALSE",
+   "residual": "Second-order gap the code itself records: two separate typing runs on the SAME field with no other marked edit between them share one undo entry (inspector description keyed `description/<blockId>`; rail label via railGestureKey). Needs a blur/end signal from the inspector panel.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/chrome/panels.tsx:~118-127 (WHY: 'Closing it needs a blur signal from @trunk/editor/inspectorPanel, which forwards none today') and :~178 gesture.begin key; apps/systemsketch/src/shapes/block/railLabel.ts:115 'WHAT THIS STILL CANNOT SEE'.",
+   "alreadyCoveredBy": "",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/chrome/panels.tsx",
+    "apps/storybook-basics/src/editor/inspectorPanel.tsx",
+    "apps/systemsketch/src/shapes/block/railLabel.ts",
+    "apps/systemsketch/src/document/gestureHistory.ts"
+   ],
+   "size": "S"
+  },
+  {
+   "sourceId": "P-016/P-206/P-174",
+   "sourceVerdict": "PREMISE-FALSE",
+   "residual": "Arrowheads (head and tail choice, mirrored icon) for a selected cable. Note commit 4b49cd4 (09-22) deliberately made traces draw WITHOUT arrows, so P-096 must reconcile with that default.",
+   "stillOpenOnMain": true,
+   "evidence": "grep arrowhead|startMarker|endMarker|markerEnd in apps/systemsketch/src (non-test) -> only two comments (terminalRebind.ts:207, WireBindingUtil.ts:60); WireShapeUtil.tsx:56,284 props have no marker; pill (floatingToolbar.tsx:342-346) has only EdgeTypeCluster + TunnelCluster; trunk trace.layout.ts:88 already has markerEnd.",
+   "alreadyCoveredBy": "P-096",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/wire/WireFace.tsx",
+    "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionClusters.tsx",
+    "apps/storybook-basics/src/components/trace.tsx"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-206",
+   "sourceVerdict": "PREMISE-FALSE",
+   "residual": "The 'plain text only' pill state.",
+   "stillOpenOnMain": false,
+   "evidence": "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionClusters.tsx:416-432 StyleCluster renders rows from editor.getSharedStyles() via arrangeActions.ts:304 activeStyleRows, so a stock text shape already gets font/size/align rows; not driven in a browser by me. Pill-while-editing is P-052.",
+   "alreadyCoveredBy": "P-076",
+   "likelyWriteSet": [],
+   "size": "S"
+  },
+  {
+   "sourceId": "P-050",
+   "sourceVerdict": "ALREADY-DONE",
+   "residual": "`= default` as its own segment of a port declaration (parsePortDeclaration sweeps it into `type`).",
+   "stillOpenOnMain": true,
+   "evidence": "apps/storybook-basics/src/scene/portDeclaration.ts:52-58 (doc says a Python default 'lands wholly in type'); parsePortDeclaration :58-62 splits only at the first colon.",
+   "alreadyCoveredBy": "P-099",
+   "likelyWriteSet": [
+    "apps/storybook-basics/src/scene/portDeclaration.ts",
+    "apps/systemsketch/src/shapes/port/PortFace.tsx",
+    "apps/systemsketch/src/shapes/block/railLabel.ts"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-061",
+   "sourceVerdict": "ALREADY-DONE",
+   "residual": "A rail port's annotation (the half after the colon) has no surface on the card; the rail paints the name half only.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/shapes/block/BlockFace.tsx:74 `labelOf` returns name half; :590 feeds label only, no `type`/secondary; railLabel.ts:25-35 says the rail paints only the name half.",
+   "alreadyCoveredBy": "P-011",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/shapes/block/railLabel.ts",
+    "apps/storybook-basics/src/components/portEdge.tsx"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-066/P-162",
+   "sourceVerdict": "PREMISE-FALSE",
+   "residual": "Block FOOTER region (and a real body slot). The card has header + description only; nothing in the app renders the trunk Block's footer slot.",
+   "stillOpenOnMain": true,
+   "evidence": "grep -i footer in apps/systemsketch/src/shapes/block/*.ts* -> no hits; trunk block.tsx:145 `footer?: ReactNode` exists unused by the app; BlockFace.tsx passes header + descriptionSlot only.",
+   "alreadyCoveredBy": "P-194",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/storybook-basics/src/components/block.tsx",
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-066",
+   "sourceVerdict": "PREMISE-FALSE",
+   "residual": "Members section on the block card (the other half of 'members + footer').",
+   "stillOpenOnMain": true,
+   "evidence": "grep members in apps/systemsketch/src/shapes/block/BlockFace.tsx -> none; trunk blockMembers.tsx has no app importer (triage).",
+   "alreadyCoveredBy": "P-161",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/storybook-basics/src/components/blockMembers.tsx"
+   ],
+   "size": "L"
+  },
+  {
+   "sourceId": "P-071/P-225",
+   "sourceVerdict": "DUPLICATE-OF P-060",
+   "residual": "Header (row 0) data ports on a block: multiple, reorderable, control-flow data to the header and body data to the body. Only the single function port (P-134) is planned; general header ports ride on row/branch which is deferred (default drop).",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:103 ports are Record<PortSide, BlockPortSpec[]>, spec {id, declaration}; no row/branch; trunk blockPort.layout.ts:156 has RailBand \"block\"|\"body\" unused by the app.",
+   "alreadyCoveredBy": "P-060",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/storybook-basics/src/components/blockPort.layout.ts"
+   ],
+   "size": "L"
+  },
+  {
+   "sourceId": "P-072/P-172",
+   "sourceVerdict": "DUPLICATE-OF P-010",
+   "residual": "Port-scoped rows on the MAIN right-click menu: Add port above/below, Move up/down, Delete port, Mark unknown. The kit's buildPortMenu offers only Rename / Mark unresolved / Copy id; buildPortEdgeMenu has Edit Ports / Distribute Evenly; the app mounts none of them.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/App.tsx:76 still mounts SourceContextMenu; grep contextMenuModel|buildBlockMenu|ComponentContextMenu in apps/systemsketch/src -> 0 hits; apps/storybook-basics/src/editor/contextMenuModel.ts:185-221 (port rows) lack add-above/below, move, delete.",
+   "alreadyCoveredBy": "P-010",
+   "likelyWriteSet": [
+    "apps/storybook-basics/src/editor/contextMenuModel.ts",
+    "apps/systemsketch/src/source/sourceContextMenu.tsx",
+    "apps/systemsketch/src/shapes/block/railLabel.ts"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-172",
+   "sourceVerdict": "DUPLICATE-OF P-072",
+   "residual": "'Move to ▸ Header / Row n / New row below / New branch below' port rows; need the row/branch model.",
+   "stillOpenOnMain": true,
+   "evidence": "No row/branch on ports (BlockShapeUtil.tsx:30-36 BlockPortSpec = {id, declaration}); P-060 is in lanes.json deferred[].",
+   "alreadyCoveredBy": "P-060",
+   "likelyWriteSet": [
+    "apps/storybook-basics/src/editor/contextMenuModel.ts",
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-140",
+   "sourceVerdict": "DUPLICATE-OF P-010",
+   "residual": "Simple/Port/Expanded view toggle and Focus/Isolate rows in the right-click menu (pure re-exposure of pill actions). The kit's buildBlockMenu groups are visibility, ports, fields only; L-MENU-CONTEXT acceptance names Add port and Turn into, not these rows.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/storybook-basics/src/editor/contextMenuModel.ts:119-160 (no view/focus rows; grep focus|isolate|simple -> none in block menu); the actions exist in apps/systemsketch/src/chrome/ContextualPopupMenu/selectionActions.ts and focus lens.",
+   "alreadyCoveredBy": "P-010",
+   "likelyWriteSet": [
+    "apps/storybook-basics/src/editor/contextMenuModel.ts",
+    "apps/systemsketch/src/source/sourceContextMenu.tsx",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionActions.ts"
+   ],
+   "size": "S"
+  },
+  {
+   "sourceId": "P-082/P-192/P-193/P-199/P-237",
+   "sourceVerdict": "DUPLICATE-OF P-070",
+   "residual": "Depth navigation: step in/out with camera frame + visibility, crumbs, live back/forward, depth badge, infinite nesting.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/chrome/TitleBar/chromeBar.tsx:129-141 history hard-false with WHY 'no depth model', crumbs [] ; grep document.title -> 0.",
+   "alreadyCoveredBy": "P-070",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/document/depthModel.ts",
+    "apps/systemsketch/src/chrome/TitleBar/chromeBar.tsx",
+    "apps/systemsketch/src/chrome/frames.ts"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-081/P-153/P-157/P-216",
+   "sourceVerdict": "ALREADY-DONE",
+   "residual": "Bends/control points on NON-elbow routings (straight, curved). Deliberately none today: `pins` is read only by the elbow router, so straight/curved cables publish no pin handles. P-216 wants a middle-point drag on a straight edge (two segments) and a curved one staying a bezier.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:456-466 (recorded decision) and :476-486 (`routing !== \"elbow\" ? []`).",
+   "alreadyCoveredBy": "",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/wire/wireGeometry.ts"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-085/P-216",
+   "sourceVerdict": "DUPLICATE-OF P-081",
+   "residual": "Handle reveal rule: Figma's 'selected AND pointer near the edge' (box fitted to the arrow extents, 64px floor). Today handles show whenever the cable is the only selected shape, with no proximity gate.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:440-455 (handles ride tldraw's sole-selection gate, `ShapeHandleOverlayUtil.isActive`), no near-pointer logic anywhere in shapes/wire/.",
+   "alreadyCoveredBy": "P-156",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/wire/WireFace.tsx"
+   ],
+   "size": "S"
+  },
+  {
+   "sourceId": "P-081/P-106/P-181",
+   "sourceVerdict": "ALREADY-DONE",
+   "residual": "Terminal handles: drag a cable's end to re-aim it (P-053), the 'drag a handle instead' half of P-106.",
+   "stillOpenOnMain": false,
+   "evidence": "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:505-514 terminal `vertex` handles, :591 onHandleDragStart, terminalRebind.ts; apps/systemsketch/src/wireTerminal.smoke.test.tsx; backlog-verified.json marks P-053 NOW-DONE.",
+   "alreadyCoveredBy": "",
+   "likelyWriteSet": [],
+   "size": "S"
+  },
+  {
+   "sourceId": "P-093/P-115/P-175/P-203/P-229/P-233",
+   "sourceVerdict": "DUPLICATE-OF P-074",
+   "residual": "The linking UX the duplicates name beyond 'propagate an edit': definition badge, Unlink (rename = unlink), Duplicate-unlinked / paste-as-linked, Convert to DEF (disabled with reason once one exists), Remove DEF, DEF always present in the file, a linked block cannot contain itself, position never linked. L-LINKING acceptance names only propagation, go-to-definition and add-member, so these can be dropped without a red gate.",
+   "stillOpenOnMain": true,
+   "evidence": "Trunk engine exists (apps/storybook-basics/src/scene/linking.ts:174 definitionBadge, :449 unlinkOccurrence, :469 duplicateNodeUnlinked, :591 reconcileDefinitions); app has no importer (grep @trunk/scene/linking in apps/systemsketch/src -> only a comment in shapes/region/index.ts); no Unlink/Convert to DEF/Remove DEF string in app.",
+   "alreadyCoveredBy": "P-074",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/document/sceneFromStore.ts",
+    "apps/systemsketch/src/document/applySceneDiff.ts",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionActions.ts",
+    "apps/storybook-basics/src/editor/contextMenuModel.ts"
+   ],
+   "size": "L"
+  },
+  {
+   "sourceId": "P-077/P-089/P-094/P-095",
+   "sourceVerdict": "PREMISE-FALSE",
+   "residual": "Schema-driven inspector content: the panel today edits only glyph + description; no PropertyTable/field registry, no per-prop rows, no member-row retargeting.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/chrome/panels.tsx:117-186 InspectorSurface passes glyph and description props only; apps/storybook-basics/src/editor/inspectorPanel.tsx has no field schema.",
+   "alreadyCoveredBy": "P-057",
+   "likelyWriteSet": [
+    "apps/storybook-basics/src/editor/inspectorPanel.tsx",
+    "apps/storybook-basics/src/editor/inspectorSchema.ts",
+    "apps/systemsketch/src/chrome/panels.tsx"
+   ],
+   "size": "L"
+  },
+  {
+   "sourceId": "P-077/P-092/P-094",
+   "sourceVerdict": "PREMISE-FALSE",
+   "residual": "Simple/Advanced/Expert tier ladder (no size row on Simple), readable OVERRIDE/inherited/preset word labels per value, and remembering a manual dismissal of the auto-opening rail. Not in L-INSPECTOR acceptance (P-138 covers the reset button only).",
+   "stillOpenOnMain": true,
+   "evidence": "grep tier|Expert|OVERRIDE|inherited in apps/storybook-basics/src/editor/inspectorPanel.tsx and apps/systemsketch/src/chrome/panels.tsx -> none; apps/systemsketch/src/chrome/inspectorFollowsSelection.ts:106-160 reopens on every click when the rail is closed, no dismissal memory.",
+   "alreadyCoveredBy": "P-138",
+   "likelyWriteSet": [
+    "apps/storybook-basics/src/editor/inspectorPanel.tsx",
+    "apps/storybook-basics/src/editor/inspectorSchema.ts",
+    "apps/systemsketch/src/chrome/inspectorFollowsSelection.ts"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-089",
+   "sourceVerdict": "PREMISE-FALSE",
+   "residual": "Inspector extras listed in the backlog text: Inset / Edge-to-edge presets, description character counter, reset across a mixed selection, compact collapsed-section summary line, inset background. Only partly reachable from the schema rows the plan lists (portLayout, portMode, sizeMode, size helpers P-152).",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/chrome/panels.tsx:167-186 (glyph/description only); InspectorSurface subject is a single block (:112 WHY 'only a single selection gets a subject').",
+   "alreadyCoveredBy": "P-152",
+   "likelyWriteSet": [
+    "apps/storybook-basics/src/editor/inspectorPanel.tsx",
+    "apps/storybook-basics/src/editor/inspectorSchema.ts"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-108",
+   "sourceVerdict": "PREMISE-FALSE",
+   "residual": "Comments and layers surfaces in the right rail (only Frames, Problems, Inspector exist). The designed empty state is done for the Inspector.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/chrome/panels.tsx:48-52 PANEL_TITLE has three entries; :90 emptyCopy on the inspector.",
+   "alreadyCoveredBy": "",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/chrome/panels.tsx",
+    "apps/systemsketch/src/chrome/statusStrip.tsx"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-111",
+   "sourceVerdict": "PREMISE-FALSE",
+   "residual": "A bulk 'reset routing to automatic' command for a whole cable (gated on it having a custom route). Only per-corner double-click exists; Tidy (P-167) is a different command.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:679 double-click on one pin -> wireAutomaticRoute; grep 'Reset routing'|resetRoute in app -> none; no pill/menu row.",
+   "alreadyCoveredBy": "",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionClusters.tsx",
+    "apps/systemsketch/src/shapes/wire/wireGeometry.ts"
+   ],
+   "size": "S"
+  },
+  {
+   "sourceId": "P-113/P-132",
+   "sourceVerdict": "DUPLICATE-OF P-064",
+   "residual": "One shared completion menu across port labels, type fields, expression fields and inspector parameter fields.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/storybook-basics/src/components/codeEditor.tsx:18-30 'Dropped entirely, on both sides: grammar (slot decorations + completion)'; no completionMenu file in components/.",
+   "alreadyCoveredBy": "P-064",
+   "likelyWriteSet": [
+    "apps/storybook-basics/src/components/codeEditor.tsx",
+    "apps/storybook-basics/src/components/codeCompletion.ts"
+   ],
+   "size": "L"
+  },
+  {
+   "sourceId": "P-114",
+   "sourceVerdict": "DUPLICATE-OF P-058",
+   "residual": "Wire an outer boundary port to a port inside the expanded block (inner face).",
+   "stillOpenOnMain": true,
+   "evidence": "backlog-verified.json P-150: 'inner-face wiring (wallPort innerFaceHandle) unused by app'; wireGesture.ts:465-489 gates cross-boundary only.",
+   "alreadyCoveredBy": "P-058",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/wire/wireGesture.ts",
+    "apps/storybook-basics/src/scene/edgeValidation.ts"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-117",
+   "sourceVerdict": "PREMISE-FALSE",
+   "residual": "A standalone glyph SHAPE placed on the board.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/shapes/types.ts:16-20 lists five ss-* types, no glyph; apps/systemsketch/src/shapes/ has block, code, port, region, wire only.",
+   "alreadyCoveredBy": "P-213",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/glyph/GlyphShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/registry.ts"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-122",
+   "sourceVerdict": "DUPLICATE-OF P-054",
+   "residual": "Constraint on obstacle routing: the obstacle set must EXCLUDE the frame a cable lives inside (boundary port to child must route through, not around it). Vacuous until obstacles exist, and L-ROUTE acceptance ('no routed segment crosses a block rect') would contradict it if read literally.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/shapes/wire/wireGeometry.ts:191-198 traceGeometry called with no obstacles.",
+   "alreadyCoveredBy": "P-054",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/wire/wireGeometry.ts"
+   ],
+   "size": "S"
+  },
+  {
+   "sourceId": "P-125",
+   "sourceVerdict": "PREMISE-FALSE",
+   "residual": "Expanded block grabbable from port TEXT and a footer (only the 37px header band and the 3px outline ring answer today; interior hollow by recorded ruling).",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:349-395 getGeometry (header label band only, interior hollow); shapes/shared/pointerOwnership.ts:94-101 bodyIsContent; no footer exists.",
+   "alreadyCoveredBy": "",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/shared/pointerOwnership.ts"
+   ],
+   "size": "S"
+  },
+  {
+   "sourceId": "P-145/P-217",
+   "sourceVerdict": "DUPLICATE-OF P-120",
+   "residual": "Fold chevron / fold-to-header state.",
+   "stillOpenOnMain": true,
+   "evidence": "BlockShapeUtil.tsx:152 view enum only simple|port|expanded, no fold prop; P-120 is in lanes.json deferred[] (default: drop, 1/2/3/4 hotkeys cover it).",
+   "alreadyCoveredBy": "P-120",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-147/P-224",
+   "sourceVerdict": "DUPLICATE-OF P-059",
+   "residual": "The Pill primitive (inlet + outlet, `name = ...` when fed, own P tool and inspector shape) as the block's value view.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:152 no `value` view; apps/systemsketch/src/shapes/wire/edgeDropCatalog.ts:64 notes it as first catalogue entry to add.",
+   "alreadyCoveredBy": "P-059",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/shapes/block/BlockTool.ts"
+   ],
+   "size": "L"
+  },
+  {
+   "sourceId": "P-148/P-207",
+   "sourceVerdict": "ALREADY-DONE",
+   "residual": "The stronger 'hinting' state on the one legal dot under the pointer while a cable is in flight (eligible dots already light).",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/shapes/wire/portAvailability.ts:50 paints only \"available\"|\"unavailable\"; grep hinting in app -> only region hover overlay, none for ports.",
+   "alreadyCoveredBy": "P-116",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/wire/portAvailability.ts",
+    "apps/systemsketch/src/shapes/wire/wireGesture.ts",
+    "apps/storybook-basics/src/components/port.tsx"
+   ],
+   "size": "S"
+  },
+  {
+   "sourceId": "P-151",
+   "sourceVerdict": "DUPLICATE-OF P-142",
+   "residual": "Invalid states painted red on the shape itself, linter-style (currently only in the Problems panel).",
+   "stillOpenOnMain": true,
+   "evidence": "grep diagnostics= in apps/systemsketch/src/shapes -> none; apps/systemsketch/src/shapes/shared has no findingsBySubject.ts; problems.ts:282-321 feeds the panel only.",
+   "alreadyCoveredBy": "P-142",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/shared/findingsBySubject.ts",
+    "apps/systemsketch/src/shapes/shared/nodeShapeComponent.tsx",
+    "apps/systemsketch/src/chrome/problems.ts"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-158/P-173",
+   "sourceVerdict": "DUPLICATE-OF P-107",
+   "residual": "Offset vs inline port rows switch (inspector + right-click), plus a per-port offset-inline nudge.",
+   "stillOpenOnMain": true,
+   "evidence": "backlog-verified.json P-107: 'App fixed on inline default; no offset/inline control'; BlockFace.tsx:557-603 passes no portLayout.",
+   "alreadyCoveredBy": "P-107",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-159",
+   "sourceVerdict": "PREMISE-FALSE",
+   "residual": "Diff lens extras: the before-path ghost overlay for a selected cable, was/now chips, and port-level add/remove enumeration. L-COMPARE ships only the name rung, unmatched, diff3Scene, propertyRows and appearance diff, none of which paint these.",
+   "stillOpenOnMain": true,
+   "evidence": "grep ghost|wasNow|priorPose|former in apps/systemsketch/src/chrome/CompareView, shapes/shared/diffMark.ts, storybook-basics/src/editor/compareDialog.tsx -> none; sceneDiff.ts:410 'this kit never invents a ghost node for a removed one'.",
+   "alreadyCoveredBy": "",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/chrome/CompareView/compareView.tsx",
+    "apps/systemsketch/src/shapes/shared/diffMark.ts",
+    "apps/storybook-basics/src/scene/sceneDiff.ts"
+   ],
+   "size": "L"
+  },
+  {
+   "sourceId": "P-195",
+   "sourceVerdict": "PREMISE-FALSE",
+   "residual": "Diff paint owned by the trunk components (docs/COMPARISON-NEXT-STEPS.md N2, then N3/N6): per-component `diff` prop so a removed port draws in the row it is missing from. App paints marks only via NodeShapeFrame; trunk Block/Port/PortEdge take no diff prop. L-COMPARE lists only N1, N7, N8.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/shapes/block/BlockFace.tsx:708 `diff={shape.props.diff}` on NodeShapeFrame; grep diff in trunk components/block.tsx, port.tsx, blockPort.tsx, portEdge.tsx -> no diff prop; docs/COMPARISON-NEXT-STEPS.md:98-99 N2 row.",
+   "alreadyCoveredBy": "",
+   "likelyWriteSet": [
+    "apps/storybook-basics/src/components/block.tsx",
+    "apps/storybook-basics/src/components/port.tsx",
+    "apps/storybook-basics/src/components/portEdge.tsx",
+    "apps/systemsketch/src/shapes/shared/diffMark.ts"
+   ],
+   "size": "L"
+  },
+  {
+   "sourceId": "P-163",
+   "sourceVerdict": "ALREADY-DONE",
+   "residual": "Fetch proxy for the picker's URL path (SSRF guard, pinned-IP opener, image/* check). The picker does a bare browser fetch, so a URL without CORS headers fails. Needs a server piece, so likely a Zach call.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/storybook-basics/src/editor/glyphPicker/uploadIcon.ts:214-223 plain `fetch(url)`, comment says a CORS-less image taints the canvas.",
+   "alreadyCoveredBy": "",
+   "likelyWriteSet": [
+    "apps/storybook-basics/src/editor/glyphPicker/uploadIcon.ts"
+   ],
+   "size": "S"
+  },
+  {
+   "sourceId": "P-180",
+   "sourceVerdict": "ALREADY-DONE",
+   "residual": "Three of nine Connections switches still reach nothing: allowHiddenPorts, allowFanOut (no gate, no lint rule) and allowSamePolarity (ports carry no direction).",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/chrome/ShareMenu/validationLevelHost.ts:143-174 states it; connectionPolicyOf passes allowSamePolarity but the judge ignores it at :176-185.",
+   "alreadyCoveredBy": "P-123",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/chrome/ShareMenu/validationLevelHost.ts",
+    "apps/storybook-basics/src/scene/edgeValidation.ts",
+    "apps/systemsketch/src/chrome/problems.ts"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-186",
+   "sourceVerdict": "PREMISE-FALSE",
+   "residual": "Paste-at-cursor: nothing on main applies isPasteAtCursorMode. Delivered on claude/dead-settings-2026-09-22 (commit 51e3a36, cameraGestureHost.tsx:~248), which W1-LAND merges.",
+   "stillOpenOnMain": true,
+   "evidence": "grep isPasteAtCursorMode|pasteAtCursor in apps/systemsketch/src on this tree -> 0 code hits; `git grep isPasteAtCursorMode claude/dead-settings-2026-09-22` -> cameraGestureHost.tsx:248 and pasteUnderCursor.smoke.test.tsx.",
+   "alreadyCoveredBy": "P-101",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/chrome/ShareMenu/cameraGestureHost.tsx"
+   ],
+   "size": "S"
+  },
+  {
+   "sourceId": "P-186/P-245",
+   "sourceVerdict": "PREMISE-FALSE",
+   "residual": "The four rebindable wheel BINDINGS (wheelUp -> undo etc.) and modifierWheelZoomsOppositely: persisted Settings rows that do nothing, left inert on purpose (would need a host-owned wheel listener over stock tldraw). A dead-control decision for Zach: build, or remove the rows.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/chrome/ShareMenu/cameraGestureHost.tsx:190-203 'NOT APPLIED, and deliberately'; same text on the dead-settings branch.",
+   "alreadyCoveredBy": "",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/chrome/ShareMenu/cameraGestureHost.tsx",
+    "apps/systemsketch/src/App.tsx"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-187",
+   "sourceVerdict": "PREMISE-FALSE",
+   "residual": "Per-cable delay value and animation (variant is only data|async|delayed, no delay prop, no animated flag) and a dedicated connection panel.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:56,284 variant literalEnum only; grep delay|animated in WireShapeUtil.tsx/WireFace.tsx -> only a cap comment; panels.tsx has no cable section.",
+   "alreadyCoveredBy": "P-137",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/wire/WireFace.tsx",
+    "apps/storybook-basics/src/editor/inspectorSchema.ts"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-189",
+   "sourceVerdict": "PREMISE-FALSE",
+   "residual": "Control point must paint above the cable's label. Vacuous today (no cable label exists), and handles are tldraw overlay so likely satisfied; verify when labels land.",
+   "stillOpenOnMain": true,
+   "evidence": "No cable label prop in WireShapeUtil.tsx (P-156/P-171 absent); handles come from getHandles (:469).",
+   "alreadyCoveredBy": "P-156",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/wire/WireFace.tsx"
+   ],
+   "size": "S"
+  },
+  {
+   "sourceId": "P-197",
+   "sourceVerdict": "PREMISE-FALSE",
+   "residual": "Wrap selection into a Block or a Branch specifically (Group already wraps into a Frame/region).",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/document/grouping.ts:313 groupSelection makes a region; selectionClusters.tsx:725 GroupCluster is the only wrap; grep wrapIn|wrapSelection -> none. Not in any lane (P-178 is Turn into, a different command).",
+   "alreadyCoveredBy": "",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/document/grouping.ts",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/selectionClusters.tsx"
+   ],
+   "size": "S"
+  },
+  {
+   "sourceId": "P-198/P-231",
+   "sourceVerdict": "DUPLICATE-OF P-090",
+   "residual": "Communication view (arrows between any face of simplified blocks) and port auto-generation between views.",
+   "stillOpenOnMain": true,
+   "evidence": "No communication mode in apps/systemsketch/src; P-090 is in lanes.json deferred[] (Q-P069).",
+   "alreadyCoveredBy": "P-090",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx"
+   ],
+   "size": "L"
+  },
+  {
+   "sourceId": "P-204",
+   "sourceVerdict": "DUPLICATE-OF P-075",
+   "residual": "UI | SOURCE mode toggle on the code field.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/storybook-basics/src/components/codeEditor.tsx:18-24 'Dropped entirely: the rendered/source mode toggle'.",
+   "alreadyCoveredBy": "P-075",
+   "likelyWriteSet": [
+    "apps/storybook-basics/src/components/codeEditor.tsx",
+    "apps/systemsketch/src/shapes/code/CodeFace.tsx"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-205",
+   "sourceVerdict": "PREMISE-FALSE",
+   "residual": "Drift resolution: a drifted code origin only paints an OriginBadge; nothing opens the Compare surface for it and there is no re-read / keep-both action. (Untriaged cluster 18 in L-CODE covers re-bind/detach, not both-changed compare.)",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/shapes/code/CodeFace.tsx:12,105 OriginBadge only; grep compareReview|CompareReview in app -> only a comment in chrome/CompareView/compareView.tsx:6.",
+   "alreadyCoveredBy": "",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/code/CodeFace.tsx",
+    "apps/systemsketch/src/chrome/CompareView/compareView.tsx",
+    "apps/storybook-basics/src/scene/codeOrigin.ts"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-168",
+   "sourceVerdict": "DUPLICATE-OF P-127",
+   "residual": "Code pill overflow choice (wrap/scroll/clip/resize-to-fit) beyond font size and line numbers; P-127 acceptance names only the latter two.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/chrome/ContextualPopupMenu/floatingToolbar.tsx:282-320 code cluster is a language menu only.",
+   "alreadyCoveredBy": "P-127",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/floatingToolbar.tsx",
+    "apps/systemsketch/src/shapes/code/CodeShapeUtil.tsx"
+   ],
+   "size": "S"
+  },
+  {
+   "sourceId": "P-214",
+   "sourceVerdict": "DUPLICATE-OF P-078",
+   "residual": "Drag a port across edges (left rail to top rail).",
+   "stillOpenOnMain": true,
+   "evidence": "backlog-verified.json P-078 STILL-ABSENT; BlockFace.tsx:500-550 rails reorder within one lane only.",
+   "alreadyCoveredBy": "P-078",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/storybook-basics/src/components/portEdge.tsx"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-220",
+   "sourceVerdict": "DUPLICATE-OF P-211",
+   "residual": "Go to definition / step inside a box without mutating view state.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/source/sourceContextMenu.tsx:240 has no go-to-definition row; goToDefinition.ts does not exist.",
+   "alreadyCoveredBy": "P-211",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/block/goToDefinition.ts",
+    "apps/systemsketch/src/source/sourceContextMenu.tsx"
+   ],
+   "size": "S"
+  },
+  {
+   "sourceId": "P-227",
+   "sourceVerdict": "UNSURE",
+   "residual": "Type block / Type Mapping / go-to-type-definition. A product question (ruling 8 removed a separate Type concept).",
+   "stillOpenOnMain": true,
+   "evidence": "apps/storybook-basics/src/scene/portDeclaration.ts:5-16 (ruling 8 quote); lanes.json deferredClusters cluster 3 records it.",
+   "alreadyCoveredBy": "deferredClusters cluster 3",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/registry.ts"
+   ],
+   "size": "L"
+  },
+  {
+   "sourceId": "P-230",
+   "sourceVerdict": "DUPLICATE-OF P-063",
+   "residual": "Members list in the inspector, drag to reorder.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/chrome/panels.tsx:136-186 no members section; blockMembers.tsx has no app importer.",
+   "alreadyCoveredBy": "P-063",
+   "likelyWriteSet": [
+    "apps/storybook-basics/src/editor/inspectorPanel.tsx",
+    "apps/storybook-basics/src/components/blockMembers.tsx"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-234/P-235",
+   "sourceVerdict": "DUPLICATE-OF P-232",
+   "residual": "Library browser/popout/panel of draggable parts.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/chrome/Toolbar/dock.tsx:248 librarySlot is a placeholder; P-232 is in lanes.json deferred[] (Q-P232).",
+   "alreadyCoveredBy": "P-232",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/chrome/Toolbar/dock.tsx"
+   ],
+   "size": "L"
+  },
+  {
+   "sourceId": "P-084",
+   "sourceVerdict": "ALREADY-DONE",
+   "residual": "A second unhurried click on an already-selected block opens the field clicked (title, description, port label still need double-click or Enter).",
+   "stillOpenOnMain": true,
+   "evidence": "backlog-verified.json P-185 PARTIAL 'Block title, description and port label still need double-click or Enter'; BlockShapeUtil.tsx:430 canEdit true is the double-click door only.",
+   "alreadyCoveredBy": "P-185",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx",
+    "apps/systemsketch/src/shapes/block/BlockTool.ts"
+   ],
+   "size": "M"
+  },
+  {
+   "sourceId": "P-062/P-088/P-143/P-160",
+   "sourceVerdict": "DUPLICATE-OF P-055",
+   "residual": "Wall-level triggers for the port lane: open it on a portless wall or by clicking a body half (inputs left, outputs right), so the FIRST port of an empty block can be typed. The lane itself now opens from a port DOT click, which needs an existing port.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/shapes/block/portLaneHost.ts:1-50 trigger is a click on a dot; portLane.smoke.test.tsx:99 opens from a dot; backlog-verified P-056 PARTIAL 'no trigger to add first port to a portless wall'.",
+   "alreadyCoveredBy": "P-056",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/shapes/block/portLaneHost.ts",
+    "apps/systemsketch/src/shapes/block/BlockFace.tsx",
+    "apps/systemsketch/src/shapes/wire/wireGesture.ts"
+   ],
+   "size": "S"
+  },
+  {
+   "sourceId": "P-184",
+   "sourceVerdict": "DUPLICATE-OF P-103",
+   "residual": "ELK Tidy scoped to the selection at 2+ blocks, else the whole board; elkjs not installed.",
+   "stillOpenOnMain": true,
+   "evidence": "grep elkjs in all package.json -> none; grep elk in apps/systemsketch/src -> none. L-ROUTE acceptance does not state the scoping rule.",
+   "alreadyCoveredBy": "P-103",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/document/autoLayout.ts",
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/arrangeActions.ts"
+   ],
+   "size": "L"
+  },
+  {
+   "sourceId": "P-174",
+   "sourceVerdict": "DUPLICATE-OF P-206",
+   "residual": "Pill shows shape controls, text controls, or both depending on whether the shape or its text is active (Excalidraw rule) including while editing text.",
+   "stillOpenOnMain": true,
+   "evidence": "apps/systemsketch/src/chrome/ContextualPopupMenu/floatingToolbar.tsx:172-202 visibility gate reads no editing state.",
+   "alreadyCoveredBy": "P-052",
+   "likelyWriteSet": [
+    "apps/systemsketch/src/chrome/ContextualPopupMenu/floatingToolbar.tsx"
+   ],
+   "size": "S"
+  },
+  {
+   "sourceId": "P-181/P-182/P-222/P-228",
+   "sourceVerdict": "PREMISE-FALSE / DUPLICATE-OF P-222",
+   "residual": "None. These four are ruled out by Zach (docs/PARITY-PICKS-2026-09-21.md 'Explicit NO'; P-181 contradicts P-106). Listed so nobody re-files them; none is in lanes.json.",
+   "stillOpenOnMain": false,
+   "evidence": "apps/systemsketch/src/shapes/wire/wireGesture.ts:5-7 (a dot never picks up an existing cable); triage rows P-181, P-182, P-222, P-228 say DO NOT BUILD.",
+   "alreadyCoveredBy": "",
+   "likelyWriteSet": [],
+   "size": "S"
+  }
+ ]
+}

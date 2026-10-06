@@ -73,8 +73,9 @@ import {
   BreadcrumbSeparator,
 } from "./breadcrumb";
 import { Button } from "../components/button";
-import { Dialog, DialogContent, DialogTitle } from "../components/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "../components/dialog";
 import { Input } from "../components/input";
+import { ScrollArea } from "../components/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/table";
 import { cn } from "../lib/utils";
 
@@ -139,6 +140,9 @@ export interface FileNavigatorProps {
    *   `P-place` per Place button, `P-recent` per Recent button;
    *   `P-parent`, `P-crumbs` (the breadcrumb nav), `P-new-folder`,
    *   `P-new-folder-name`, `P-filter`;
+   *   `P-list` (the file list's ScrollArea — named because the rail is a
+   *   ScrollArea too, so "the first one in the dialog" is the WRONG one and a
+   *   geometry check that used it measured the rail's overflow instead);
    *   `P-sort-name|size|modified` header buttons with `aria-sort`;
    *   `P-row` per row with `data-kind="folder"|"document"`, `data-path`,
    *   `aria-selected`;
@@ -442,63 +446,138 @@ export function FileNavigator(props: FileNavigatorProps): ReactElement | null {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         aria-describedby={undefined}
-        className={cn("flex max-h-[85vh] w-full max-w-3xl flex-col gap-3 sm:max-w-3xl", popupClassName)}
+        /*
+         * WHY the frame is a FIXED height and not `max-h-[85vh]`, and why it
+         * carries `data-viewport-frame` (2026-09-22, Zach: "its just way to
+         * long goes off the screen"):
+         *
+         *  1. `max-h` let the file COUNT decide the frame: a folder of three
+         *     boards gave a short dialog and one of thirty gave a tall one, so
+         *     the footer moved under the pointer between folders. A file
+         *     browser's frame is furniture — `h-[min(...)]` is the same idiom
+         *     `settingsView.tsx`'s `POPUP_DIALOG` uses, and 680px is what 85vh
+         *     already measured at the 800px-tall window this was drawn on, so
+         *     the size Zach picked is unchanged where he picked it.
+         *  2. `data-viewport-frame` is the contract with a host that SCALES its
+         *     chrome. A host zoom is a layout scale, so a viewport length
+         *     written inside it resolves against the UNZOOMED viewport and then
+         *     paints scaled — `85vh` painted ~136vh at 160%, and MEASURED in
+         *     the real app at 1280x800 the popup came out 1228.8x1088 with its
+         *     top edge at y=-144 and Cancel/Open past the bottom of the window.
+         *     The attribute lets the host hold this box in real pixels and zoom
+         *     its interior instead; see `apps/systemsketch/src/
+         *     interface-scale.css`. A host that does not scale ignores it and
+         *     nothing changes.
+         *  3. `overflow-hidden` is what makes (2) safe rather than decorative:
+         *     once the interior is scaled independently of the frame, the frame
+         *     is the thing that must clip. It is also the backstop the
+         *     un-scaled case already wanted — the stock `DialogContent` sets no
+         *     overflow at all, so before this the table painted THROUGH the
+         *     footer.
+         */
+        className={cn("flex h-[min(680px,calc(100vh-4rem))] w-full max-w-3xl flex-col gap-3 overflow-hidden sm:max-w-3xl", popupClassName)}
         data-testid={P}
         data-mode={mode}
+        data-viewport-frame=""
         onKeyDown={onDialogKeyDown}
       >
-        <header className="flex items-start justify-between gap-2">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-xs text-muted-foreground">{eyebrow}</span>
-            <DialogTitle>{title}</DialogTitle>
-          </div>
-        </header>
+        <DialogHeader className="shrink-0 gap-0.5">
+          <span className="text-xs text-muted-foreground">{eyebrow}</span>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
 
-        <div className="grid grid-cols-[160px_1fr] gap-3 overflow-hidden">
-          <aside className="flex flex-col gap-1 overflow-y-auto text-sm">
-            <strong className="text-xs text-muted-foreground">Places</strong>
-            {places.map((place) => (
-              <Button
-                key={place.path}
-                type="button"
-                variant="ghost"
-                size="sm"
-                title={place.path}
-                data-testid={testId("place")}
-                className={cn(RAIL_ROW, listing?.dir === place.path && "bg-muted")}
-                onClick={() => void load(place.path)}
-              >
-                <span className="w-full truncate">{place.label}</span>
-                <small className="w-full truncate text-muted-foreground">{place.path}</small>
-              </Button>
-            ))}
-            <strong className="mt-2 text-xs text-muted-foreground">Recent</strong>
-            {recents.length ? (
-              recents.map((path) => (
-                <Button
-                  key={path}
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  title={path}
-                  data-testid={testId("recent")}
-                  className={RAIL_ROW}
-                  onClick={() => {
-                    if (mode === "open") void runAction(() => onOpenDocument(path, { newWindow: false }));
-                    else void load(parentDirectory(path));
-                  }}
-                >
-                  <span className="w-full truncate">{documentTitle(path)}</span>
-                  <small className="w-full truncate text-muted-foreground">{parentDirectory(path)}</small>
-                </Button>
-              ))
-            ) : (
-              <p className="px-2 text-muted-foreground">No recent files yet.</p>
-            )}
+        {/* WHY `grid-rows-[minmax(0,1fr)]` and not just `overflow-hidden`:
+            a grid's implicit row is `auto`, which sizes to its CONTENT, and a
+            grid item stretches to its ROW rather than to the container. So the
+            flex shrink above resolved this box to the space left over (545px,
+            measured) while the row underneath it stayed at the full 1187px of
+            table — the list pane inherited 1187px, its own `flex-1 min-h-0`
+            had nothing left to do, and the rows painted past the frame instead
+            of scrolling inside it. `minmax(0, 1fr)` is what makes the row the
+            container's height and lets its children shrink below content. */}
+        {/* WHY the rail track is `minmax(7rem, 22%)` and not the flat `160px`
+            it was: under a host that scales the interior of this frame, a
+            track written in px keeps its LOCAL width while the frame's real
+            width is fixed — so the rail's share of the row grows with the
+            scale. MEASURED at 1280x800/160% with `160px`: the interior
+            resolves to 460 local px, the rail takes 160 of them (35%, against
+            22% at 100%) and the file list is left 288 — which is what turned
+            every name into "Board …". A percentage track is computed against
+            the same local box, so the rail keeps its PROPORTION and therefore
+            its painted size at every scale. The `7rem` floor is for the other
+            end: the stock `max-w-[calc(100%-2rem)]` lets this frame get narrow
+            on a small window, and 22% of that is not a rail. */}
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(7rem,22%)_1fr] grid-rows-[minmax(0,1fr)] gap-3">
+          {/* WHY the rail gets a `border-r` and its own ScrollArea: Zach,
+              2026-09-22, that it "wastes most of its vertical space while the
+              list beside it overflows". It cannot be given less height — it is
+              one column of a two-column row — so what was actually wrong is
+              that its empty half read as blank dialog rather than as the
+              bottom of a column. A divider is the sibling settings panel's own
+              answer (`settingsView.tsx`'s nav aside, `border-r border-border`),
+              and it costs no layout. The ScrollArea is the same swap the list
+              below gets, for the same reason: a long Recent list used to grow a
+              classic inset bar here too. */}
+          <aside className="flex min-h-0 flex-col border-r border-border pr-3 text-sm">
+            <ScrollArea className="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]]:overflow-x-hidden!">
+              <div className="flex flex-col gap-1 pr-1">
+                <strong className="text-xs text-muted-foreground">Places</strong>
+                {places.map((place) => (
+                  <Button
+                    key={place.path}
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    title={place.path}
+                    data-testid={testId("place")}
+                    className={cn(RAIL_ROW, listing?.dir === place.path && "bg-muted")}
+                    onClick={() => void load(place.path)}
+                  >
+                    <span className="w-full truncate">{place.label}</span>
+                    <small className="w-full truncate text-muted-foreground">{place.path}</small>
+                  </Button>
+                ))}
+                <strong className="mt-2 text-xs text-muted-foreground">Recent</strong>
+                {recents.length ? (
+                  recents.map((path) => (
+                    <Button
+                      key={path}
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      title={path}
+                      data-testid={testId("recent")}
+                      className={RAIL_ROW}
+                      onClick={() => {
+                        if (mode === "open") void runAction(() => onOpenDocument(path, { newWindow: false }));
+                        else void load(parentDirectory(path));
+                      }}
+                    >
+                      <span className="w-full truncate">{documentTitle(path)}</span>
+                      <small className="w-full truncate text-muted-foreground">{parentDirectory(path)}</small>
+                    </Button>
+                  ))
+                ) : (
+                  <p className="px-2 text-muted-foreground">No recent files yet.</p>
+                )}
+              </div>
+            </ScrollArea>
           </aside>
 
           <div className="flex min-w-0 flex-col gap-2 overflow-hidden">
-            <div className="flex items-center gap-1.5">
+            {/* WHY this row wraps, and why the breadcrumb carries a `basis`:
+                this is the reflow `interface-scale.css` says `zoom` was chosen
+                FOR — "the pill wraps, the dock's flex row re-wraps" — applied
+                to the one row here whose parts have fixed widths (the Filter
+                field, the + Folder button) inside a frame whose real width
+                does not move. At 160% those parts wanted more than the row
+                had, and the only flexible item was the breadcrumb, so the path
+                collapsed to its last few characters. `basis-40` gives the
+                breadcrumb a hypothetical size to wrap AGAINST — without one,
+                `flex-1 min-w-0` shrinks happily to nothing and `flex-wrap`
+                never gets a chance to fire. At 100% nothing wraps: the row
+                needs ~396px of a ~564px column. */}
+            <div className="flex shrink-0 flex-wrap items-center gap-1.5">
               <Button
                 type="button"
                 variant="ghost"
@@ -517,7 +596,7 @@ export function FileNavigator(props: FileNavigatorProps): ReactElement | null {
                   says `aria-current="page"` — and the trail is the only
                   thing on this dialog that says where you are. */}
               <Breadcrumb
-                className="flex min-w-0 flex-1 items-center overflow-x-auto text-sm"
+                className="flex min-w-0 flex-1 basis-40 items-center overflow-x-auto text-sm"
                 aria-label="Folder path"
                 data-testid={testId("crumbs")}
                 ref={crumbsRef}
@@ -589,6 +668,19 @@ export function FileNavigator(props: FileNavigatorProps): ReactElement | null {
                     event.stopPropagation();
                     if (mode === "open") void submit();
                   } else if (event.key === "Escape") {
+                    // WHY the empty-box case is allowed THROUGH, and why that
+                    // asymmetry is the whole point: this field is `autoFocus`
+                    // in open mode, so swallowing Escape unconditionally — as
+                    // this did — meant Escape never closed the Open dialog at
+                    // all, on the very first keystroke of a fresh open.
+                    // MEASURED 2026-09-22 against the real mounted app: the
+                    // navigator was still in the DOM 10s after Escape.
+                    // With text in the box Escape abandons the search without
+                    // losing the dialog; with the box already empty there is
+                    // nothing to abandon and it belongs to the Dialog.
+                    // `settingsView.tsx`'s search input makes the identical
+                    // split for the identical reason.
+                    if (query === "") return;
                     event.preventDefault();
                     event.stopPropagation();
                     setQuery("");
@@ -645,8 +737,34 @@ export function FileNavigator(props: FileNavigatorProps): ReactElement | null {
               </form>
             ) : null}
 
-            <div className="min-h-0 flex-1 overflow-y-auto rounded-md border">
-              <Table>
+            {/* WHY a stock `ScrollArea` and not `overflow-y-auto`, which is what
+                this was: the sibling settings panel already made this call and
+                records Zach's word for the look he wants ("obsidan",
+                `settingsView.tsx`). Two concrete things the native bar did
+                here. It is laid out INSIDE the box, so it steals width from
+                the rows the moment it appears — and it appears and disappears
+                as you walk in and out of folders, so the columns twitch.
+                And `overflow-y: auto` computes `overflow-x: auto` too, which
+                is the second half of why "Modified" could sit scrolled out of
+                view with no bar offering to bring it back. ScrollArea's
+                viewport, pinned `overflow-x: hidden` here, closes that axis for
+                good; `table-fixed` below is what makes closing it safe. */}
+            <ScrollArea
+              data-testid={testId("list")}
+              className="min-h-0 flex-1 rounded-md border [&_[data-slot=scroll-area-viewport]]:overflow-x-hidden!"
+            >
+              {/* WHY `table-fixed`: with `table-auto` every column's width is
+                  negotiated from its CONTENT, so one long file name pushed the
+                  table's min-content width past its container and the tail of
+                  the last column was simply scrolled out of sight — the
+                  "Modifie" in Zach's 2026-09-22 screenshot is the Modified
+                  header, not a styling bug. MEASURED in the real app at
+                  1280x800/100%: the table wanted 612px inside a 562px box, and
+                  the smoke test's stress row wanted 727 inside 563. Fixed
+                  layout takes the two `w-24` columns off the top and gives
+                  Name the rest, so the header can never be squeezed off the
+                  edge by a file someone names. */}
+              <Table className="table-fixed">
                 <TableHeader>
                   <TableRow>
                     {SORT_COLUMNS.map(([column, label]) => {
@@ -696,13 +814,24 @@ export function FileNavigator(props: FileNavigatorProps): ReactElement | null {
                       }}
                       onDoubleClick={() => void runAction(() => activate(row))}
                     >
+                      {/* WHY the name truncates but keeps `title`: a fixed
+                          column has to shorten something, and Zach's rule for
+                          that is explicit — abbreviate with a visible ellipsis
+                          and keep the complete raw value immediately
+                          discoverable, never silently clip. `truncate` is the
+                          ellipsis; `title` is the full name on hover. The
+                          `min-w-0` is what lets the flex row shrink at all —
+                          a flex item's automatic minimum size is its content,
+                          so without it `truncate` never fires. */}
                       <TableCell className="flex items-center gap-2">
                         {row.kind === "folder" ? (
-                          <FolderIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+                          <FolderIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                         ) : (
-                          <FileIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+                          <FileIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                         )}
-                        {row.name}
+                        <span data-name="" title={row.name} className="min-w-0 truncate">
+                          {row.name}
+                        </span>
                       </TableCell>
                       <TableCell className="text-muted-foreground">{formatFileSize(row.size)}</TableCell>
                       <TableCell className="text-muted-foreground">
@@ -717,7 +846,7 @@ export function FileNavigator(props: FileNavigatorProps): ReactElement | null {
                   {query ? `Nothing here matches “${query}”.` : "This folder has no boards yet."}
                 </p>
               ) : null}
-            </div>
+            </ScrollArea>
 
             {mode === "saveAs" ? (
               <div className="flex items-center gap-2">
@@ -737,8 +866,18 @@ export function FileNavigator(props: FileNavigatorProps): ReactElement | null {
                       event.stopPropagation();
                       void submit();
                     } else if (event.key === "Escape") {
+                      // The same rule as the Filter field above, and the same
+                      // root cause: this one is `autoFocus` in saveAs mode, so
+                      // an unconditional swallow — which is all this branch
+                      // used to be, a `preventDefault` with an empty body —
+                      // made Escape do nothing whatsoever on a freshly opened
+                      // Save dialog. Typed text is still worth protecting from
+                      // a stray Escape; an empty field has nothing to protect
+                      // and the key belongs to the Dialog.
+                      if (name === "") return;
                       event.preventDefault();
                       event.stopPropagation();
+                      setName("");
                     }
                   }}
                 />
@@ -751,12 +890,24 @@ export function FileNavigator(props: FileNavigatorProps): ReactElement | null {
         </div>
 
         {error ? (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="shrink-0 text-sm text-destructive">
             {error}
           </p>
         ) : null}
 
-        <footer className="flex items-center justify-end gap-2 border-t pt-3">
+        {/* WHY the stock `DialogFooter` replaces the hand-rolled `<footer>`:
+            Zach, 2026-09-19 — "as always please be using stock shadcn as much
+            as possible" — and the hand-rolled one had re-derived the border and
+            the right-alignment by hand while missing what the stock part is
+            actually for. `-mx-4 -mb-4 … p-4` cancels the popup's own padding so
+            the action row is FULL-BLEED against the frame's bottom edge, which
+            is both the stock dialog look everywhere else in this kit and the
+            thing that makes the primary action unmistakable at the bottom of a
+            long list. `shrink-0` is load-bearing now that the frame has a fixed
+            height: without it the footer is the flex child that gives way when
+            the list is long, and the buttons are the one row that may never
+            be the thing that shrinks. */}
+        <DialogFooter className="shrink-0 items-center gap-2">
           <Button type="button" variant="ghost" data-testid={testId("cancel")} onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
@@ -788,7 +939,7 @@ export function FileNavigator(props: FileNavigatorProps): ReactElement | null {
                   ? "Replace"
                   : "Save"}
           </Button>
-        </footer>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

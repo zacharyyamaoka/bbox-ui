@@ -9,7 +9,7 @@ import {
   createControlRegistry,
   type ControlDefinition,
 } from "./controlRegistry";
-import { DEFAULT_GLYPH_FAMILIES, swatchGlyph, type GlyphFamilies } from "./controlGlyphs";
+import { DEFAULT_GLYPH_FAMILIES, paintFaceGlyph, swatchGlyph, type GlyphFamilies } from "./controlGlyphs";
 
 /**
  * `ControlStrip`/`ControlPanel` (`controlStrip.tsx`/`controlPanel.tsx`) are
@@ -39,9 +39,16 @@ export type DemoKind =
   | "lineStyle"
   | "bold"
   | "align"
+  | "fontFamily"
   | "fontSize"
+  | "textInk"
   | "shapeLibrary"
-  | "duplicate";
+  | "duplicate"
+  // The two label-less triggers of the "Two Faces" bar Zach picked on
+  // 2026-09-24 — same swatch vocabulary as `fill`, but their trigger face
+  // draws the RESULT rather than naming the control (see `TwoFacesBar`).
+  | "inside"
+  | "edge";
 
 /** 21 real swatches + the 22nd (custom) cell — an 11-column, 2-row grid,
     the exact shape docs/menus/screenshots/01 draws (`columns` on the
@@ -71,6 +78,17 @@ export const DEMO_SWATCH_HEX: Record<string, string> = {
 };
 
 export const FONT_SIZE_PX: Readonly<Record<string, number>> = { s: 18, m: 24, l: 36, xl: 44 };
+
+/** What each `strokeWidth` rung actually paints at. `controlGlyphs.tsx` keeps
+    its own copy of these three numbers module-private on purpose ("a host that
+    needs the pixel value elsewhere owns its own copy"), and a `FacePaint`
+    takes px, not a rung name — so this is that host copy. */
+export const DEMO_STROKE_PX: Readonly<Record<string, number>> = { thin: 2, medium: 3.5, thick: 7 };
+
+const SWATCH_OPTIONS = Object.keys(DEMO_SWATCH_HEX).map((value, index) => ({
+  value,
+  label: `Color ${index + 1}`,
+}));
 
 /** Exported so `ControlLab.stories.tsx` can read each kind's registered
     default layout/trigger and option list when building its lever rows —
@@ -149,6 +167,28 @@ export const demoDefinitions: Readonly<Record<DemoKind, ControlDefinition<DemoKi
       { value: "end", label: "Right" },
     ],
   },
+  // The two controls screenshot 02 needs that no other story exercised.
+  // Both come from the donor's BLOCK_TITLE_CONTEXTUAL_RECIPE
+  // (contextualControlRegistry.ts:346-354), whose four groups —
+  // ['font','size'] | ['bold'] | ['color'] | ['align'] — are exactly that
+  // bar's three dividers.
+  fontFamily: {
+    kind: "fontFamily",
+    label: "Font",
+    trigger: "value",
+    layout: "list",
+    glyph: "font",
+    // The four stacks `controlGlyphs.tsx`'s FONT_STACKS actually knows; a
+    // value outside them renders in the sans fallback rather than throwing,
+    // so keeping this list aligned with that map is what makes the "Aa"
+    // preview truthful about the family it names.
+    options: [
+      { value: "sans", label: "Sans" },
+      { value: "serif", label: "Serif" },
+      { value: "mono", label: "Mono" },
+      { value: "draw", label: "Handwritten" },
+    ],
+  },
   fontSize: {
     kind: "fontSize",
     label: "Font size",
@@ -160,6 +200,24 @@ export const demoDefinitions: Readonly<Record<DemoKind, ControlDefinition<DemoKi
       { value: "l", label: "Large" },
       { value: "xl", label: "Extra large" },
     ],
+  },
+  textInk: {
+    // WHY a SEPARATE kind from `fill` rather than reusing it: they share a
+    // palette but not a preview. Screenshot 02 draws text colour as a tinted
+    // letter, not as a disc — in the donor that letter is one of FigJam's
+    // traced icons, which deliberately did NOT travel (kit omission list:
+    // traced assets are SystemSketch product taste). So this is the honest
+    // shape of the gap: the kit renders the CONTROL, and the host supplies
+    // the glyph family that draws it. `demoGlyphs` below does exactly that
+    // with `textInk`, which makes this story a real exercise of the
+    // host-extendable glyph table rather than a claim about it.
+    kind: "textInk",
+    label: "Text colour",
+    trigger: "value",
+    layout: "swatches",
+    glyph: "textInk",
+    columns: 11,
+    options: Object.keys(DEMO_SWATCH_HEX).map((value, index) => ({ value, label: `Color ${index + 1}` })),
   },
   shapeLibrary: {
     kind: "shapeLibrary",
@@ -177,6 +235,42 @@ export const demoDefinitions: Readonly<Record<DemoKind, ControlDefinition<DemoKi
     glyph: "duplicate",
     options: [],
   },
+  // WHY `inside`/`edge` are colour controls rather than treatment controls:
+  // the trigger's VALUE is what its face is handed (`controlStrip.tsx`'s
+  // `TriggerFace` passes `current?.value` for `trigger: "value"`), and the
+  // colour is the one thing the face cannot infer. Everything else it paints
+  // — treatment, dash, width, opacity — rides in through the `read` closure
+  // the host builds over its own live state, which is exactly what
+  // `TwoFacesBar` below demonstrates.
+  //
+  // WHY two glyph fields and not one: `glyph` draws an OPTION, `triggerGlyph`
+  // draws the TRIGGER, and here they are deliberately different families. The
+  // trigger paints the live combination (this colour, at this treatment, at
+  // this opacity); an option cell has to paint the colour you would be
+  // choosing, plainly. One field for both made the palette render 21 copies
+  // of the trigger's own washed-out face instead of 21 colours.
+  inside: {
+    kind: "inside",
+    label: "Inside",
+    trigger: "value",
+    layout: "swatches",
+    glyph: "swatch",
+    triggerGlyph: "insideFace",
+    columns: 11,
+    custom: true,
+    options: SWATCH_OPTIONS,
+  },
+  edge: {
+    kind: "edge",
+    label: "Edge",
+    trigger: "value",
+    layout: "swatches",
+    glyph: "swatch",
+    triggerGlyph: "edgeFace",
+    columns: 11,
+    custom: true,
+    options: SWATCH_OPTIONS,
+  },
 };
 
 export const demoRegistry = createControlRegistry<DemoKind>(demoDefinitions);
@@ -189,6 +283,35 @@ export const demoGlyphs: GlyphFamilies = {
   ...DEFAULT_GLYPH_FAMILIES,
   swatch: swatchGlyph((name) => DEMO_SWATCH_HEX[name]),
   duplicate: () => <Copy aria-hidden="true" className="size-4" />,
+  // The two paint faces at their RESTING paint — a plain solid fill, a plain
+  // medium solid edge. That is all a surface with no live shape state (the
+  // lab board, an options row inside a panel) can truthfully say. A surface
+  // that DOES own the state spreads its own pair over these, which is what
+  // makes the bar's face answer "what is it now" — see `TwoFacesBar`.
+  insideFace: paintFaceGlyph("inside", (value) => ({
+    hex: value ? DEMO_SWATCH_HEX[value] : undefined,
+    fillStyle: "solid",
+  })),
+  edgeFace: paintFaceGlyph("edge", (value) => ({
+    hex: value ? DEMO_SWATCH_HEX[value] : undefined,
+    dash: "solid",
+    widthPx: DEMO_STROKE_PX.medium,
+  })),
+  // A tinted letter, the way screenshot 02 draws text colour. `currentColor`
+  // is deliberately NOT used: this glyph's whole job is to say which ink is
+  // selected, so it must paint the control's VALUE, not inherit the
+  // trigger's foreground. A value with no hex (a mixed selection) falls
+  // through to `currentColor` rather than guessing a winner — the same
+  // refusal-to-lie `swatchGlyph`'s own data-mixed state applies.
+  textInk: (value) => (
+    <span
+      aria-hidden="true"
+      className="grid size-5 place-items-center text-[13px] font-bold leading-none"
+      style={{ color: value ? DEMO_SWATCH_HEX[value] : undefined }}
+    >
+      A
+    </span>
+  ),
 };
 
 const meta = {
@@ -218,6 +341,199 @@ const meta = {
 
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+/**
+ * The bar Zach picked on 2026-09-24 — "Two Faces": Inside and Edge carry NO
+ * text, and the font-size combobox beside them still does.
+ *
+ * *"no need to put the text (inside and edge) on the drop down menu btw, we
+ * can learn to just know it by the icon"* — which is only survivable because
+ * each trigger's face paints the selection's actual answer. Both faces here
+ * are built over the SAME live state the panels write to, so pressing
+ * Hatched, or dragging Opacity, changes the bar itself; a fixed icon could
+ * not, and the two triggers would then be indistinguishable at rest.
+ *
+ * Opacity is inside each panel rather than on the bar (*"that is something
+ * that relates to the fill and stroke"*) — a `ContinuousBinding`, one per
+ * paint, so Inside and Edge fade independently.
+ *
+ * LOOK AT THE OPEN PANEL: the trigger and the palette under it draw through
+ * DIFFERENT glyph families, and that split is the whole reason the bar works.
+ * `triggerGlyph: "insideFace"` paints the live combination on the trigger;
+ * `glyph: "swatch"` paints each option as the plain colour you would be
+ * choosing. They were one field until 2026-09-24, and with one field a
+ * trigger that painted 60% transparent made all 21 swatches 60% transparent
+ * too — the popover lost the only thing it was open to show. `triggerGlyph`
+ * wins in `controlStrip.tsx`'s `TriggerFace` and nowhere else;
+ * `ControlOptionButton` (`controlPanel.tsx`) always reads `glyph`. The play
+ * function below pins both halves, because "the palette shows colours" is
+ * exactly the kind of claim a presence assertion passes while it is false.
+ */
+export const TwoFacesBar: Story = {
+  render: () => {
+    const [insideColor, setInsideColor] = useState("c5");
+    const [fillMode, setFillMode] = useState("semi");
+    const [insideOpacity, setInsideOpacity] = useState(0.6);
+    const [edgeColor, setEdgeColor] = useState("c7");
+    const [lineStyle, setLineStyle] = useState("dashed");
+    const [strokeWidth, setStrokeWidth] = useState("thick");
+    const [edgeOpacity, setEdgeOpacity] = useState(1);
+    const [fontSize, setFontSize] = useState("l");
+
+    // The faces, rebuilt per render over live state — see `demoGlyphs`'s own
+    // note. This closure IS the host's theme/shape resolver; the kit never
+    // reaches for either.
+    const glyphs: GlyphFamilies = {
+      ...demoGlyphs,
+      insideFace: paintFaceGlyph("inside", (value) => ({
+        hex: value ? DEMO_SWATCH_HEX[value] : undefined,
+        fillStyle: fillMode,
+        opacity: insideOpacity,
+      })),
+      edgeFace: paintFaceGlyph("edge", (value) => ({
+        hex: value ? DEMO_SWATCH_HEX[value] : undefined,
+        dash: lineStyle,
+        widthPx: DEMO_STROKE_PX[strokeWidth],
+        opacity: edgeOpacity,
+      })),
+    };
+
+    const fillModeBound = demoRegistry.bindControl("fillMode", {
+      id: "fillMode",
+      value: { type: "shared", value: fillMode },
+      onSelect: (value) => value && setFillMode(value),
+    });
+    const insideBound = demoRegistry.bindControl("inside", {
+      id: "inside",
+      value: { type: "shared", value: insideColor },
+      onSelect: (value) => value && setInsideColor(value),
+      modeControl: fillModeBound,
+      modePlacement: "above",
+      continuous: {
+        label: "Opacity",
+        value: insideOpacity,
+        min: 0,
+        max: 1,
+        step: 0.01,
+        format: (n) => `${Math.round(n * 100)}%`,
+        apply: (value) => setInsideOpacity(value),
+      },
+    });
+
+    // Three sections stacked above the Edge swatches — thickness, then line
+    // style, then the palette. `stackModes`'s chain walk is what makes that
+    // one link per section rather than one renderer per shape.
+    const strokeWidthBound = demoRegistry.bindControl("strokeWidth", {
+      id: "strokeWidth",
+      value: { type: "shared", value: strokeWidth },
+      onSelect: (value) => value && setStrokeWidth(value),
+    });
+    const lineStyleBound = demoRegistry.bindControl("lineStyle", {
+      id: "lineStyle",
+      value: { type: "shared", value: lineStyle },
+      onSelect: (value) => value && setLineStyle(value),
+      modeControl: strokeWidthBound,
+      modePlacement: "above",
+    });
+    const edgeBound = demoRegistry.bindControl("edge", {
+      id: "edge",
+      value: { type: "shared", value: edgeColor },
+      onSelect: (value) => value && setEdgeColor(value),
+      modeControl: lineStyleBound,
+      modePlacement: "above",
+      continuous: {
+        label: "Opacity",
+        value: edgeOpacity,
+        min: 0,
+        max: 1,
+        step: 0.01,
+        format: (n) => `${Math.round(n * 100)}%`,
+        apply: (value) => setEdgeOpacity(value),
+      },
+    });
+    const fontSizeBound = demoRegistry.bindControl("fontSize", {
+      id: "fontSize",
+      value: { type: "shared", value: fontSize },
+      onSelect: (value) => value && setFontSize(value),
+      rungPxByValue: FONT_SIZE_PX,
+    });
+
+    const composition = demoRegistry.composeControls(
+      {
+        id: "two-faces",
+        groups: [
+          { id: "paint", items: ["inside", "edge"] },
+          { id: "text", items: ["fontSize"] },
+        ],
+      },
+      [insideBound, edgeBound, fontSizeBound],
+    );
+
+    return <ControlStrip composition={composition} glyphs={glyphs} aria-label="Selection style" />;
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const inside = await canvas.findByTestId("bbox-control-inside");
+    const edge = canvas.getByTestId("bbox-control-edge");
+    const text = canvas.getByTestId("bbox-control-fontSize");
+
+    // The whole point: neither face trigger renders a word…
+    await expect(inside.textContent?.trim()).toBe("");
+    await expect(edge.textContent?.trim()).toBe("");
+    // …while the `text` trigger beside them still spells its value out.
+    await expect(text.textContent).toContain("Large");
+
+    // The words moved to the accessible name, they did not disappear — a
+    // label-less trigger still has to be nameable.
+    await expect(inside).toHaveAccessibleName(/^Inside,/);
+    await expect(edge).toHaveAccessibleName(/^Edge,/);
+
+    // Each face paints, and the two paint differently: Inside fills its box,
+    // Edge only inks its border. Both read the rect that actually carries the
+    // selection's colour — never a `data-role` underlay (`keyline`, or the
+    // conditional `hairline` a low-contrast edge draws), which is the
+    // control's own ink by design (`controlGlyphs.tsx`).
+    const coloured = (trigger: HTMLElement) =>
+      [...trigger.querySelectorAll("svg rect")].filter((rect) => !rect.hasAttribute("data-role"));
+    const insideFill = coloured(inside).map((rect) => getComputedStyle(rect).fill);
+    const edgeStyle = getComputedStyle(coloured(edge).at(-1)!);
+    await expect(insideFill.some((fill) => fill !== "none")).toBe(true);
+    await expect(edgeStyle.fill).toBe("none");
+    await expect(edgeStyle.stroke).not.toBe(edgeStyle.color);
+
+    // Opacity lives in the paint's own panel, never on the bar.
+    await expect(
+      canvas.getByTestId("bbox-control-strip").querySelector('[data-slot="control-continuous"]'),
+    ).toBeNull();
+    await userEvent.click(inside);
+    const body = within(document.body);
+    await waitFor(() => expect(body.getByTestId("control-continuous-input")).toBeInTheDocument());
+    await expect(body.getByRole("menuitemradio", { name: "Hatched" })).toBeInTheDocument();
+
+    // An option cell does NOT inherit the trigger's face. The trigger is
+    // painting `semi` at 60%; every swatch below it must still be its own
+    // flat colour, because it draws through `glyph` and the trigger through
+    // `triggerGlyph`.
+    const panel = document.body.querySelector('[data-testid="bbox-control-panel-inside"]')!;
+    const cells = [...panel.querySelectorAll('[role="menuitemradio"][data-kind="inside"]')];
+    await expect(cells).toHaveLength(SWATCH_OPTIONS.length);
+    const backgrounds = new Set<string>();
+    for (const cell of cells) {
+      const swatch = cell.querySelector(".bbox-control-glyph-swatch");
+      // A swatch, never a paint face: an `<svg>` here would mean the option
+      // grid had been handed the trigger's family.
+      await expect(swatch).not.toBeNull();
+      await expect(cell.querySelector("svg")).toBeNull();
+      backgrounds.add(getComputedStyle(swatch!).backgroundColor);
+    }
+    // 21 options, 21 distinct colours — the palette really is showing the
+    // palette, not 21 copies of one washed-out face.
+    await expect(backgrounds.size).toBe(SWATCH_OPTIONS.length);
+    // …and the mirror image on the trigger: a face, never a swatch.
+    await expect(inside.querySelector(".bbox-control-glyph-swatch")).toBeNull();
+    await expect(inside.querySelector("svg.bbox-control-glyph")).not.toBeNull();
+  },
+};
 
 /**
  * docs/menus/screenshots/01-floating-toolbar-fill-popover.png. `fillMode`
@@ -359,6 +675,118 @@ export const FontSizeList: Story = {
  * unchecked, because a custom scale means none of them are truthfully
  * current (`forceUnchecked`, `controlPanel.tsx`).
  */
+/**
+ * docs/menus/screenshots/02-rich-text-toolbar.png — the last of Zach's nine
+ * surfaces to get a rendered proof, and the one that most nearly got written
+ * off.
+ *
+ * It reads `Aa v | Large 36 v | B | A v | align v`, and the first reading was
+ * that this is tldraw's own `tlui-rich-text__toolbar`, which SystemSketch only
+ * skins (chrome/rich-text-toolbar.css:1-8 says so outright: "Stock tldraw owns
+ * the rich-text toolbar's commands, selection tracking, focus, and link
+ * editor") — nothing to port, therefore nothing to show. That reading was
+ * wrong. The bar is the BLOCK-TITLE formatting menu, and the donor composes it
+ * from the same registry as every other surface:
+ *
+ *     BLOCK_TITLE_CONTEXTUAL_RECIPE (contextualControlRegistry.ts:346-354)
+ *       { id: 'type',      items: ['font', 'size'] }
+ *       { id: 'emphasis',  items: ['bold'] }
+ *       { id: 'ink',       items: ['color'] }
+ *       { id: 'alignment', items: ['align'] }
+ *
+ * Four groups — exactly the three dividers the screenshot draws. The tell that
+ * settles it is screenshot 03, the font-size popover: it has NO Custom row,
+ * and "presets-only" is precisely what a surface bound to an explicit target
+ * rather than to a canvas selection gets (`FontSizePresetsOnly` below is the
+ * same popover in isolation). A tldraw-owned toolbar would not have that
+ * property.
+ *
+ * So this story is the architecture's central claim under test: one renderer,
+ * one registry, a DIFFERENT RECIPE, and a surface that looks nothing like the
+ * shape pill falls out with no renderer change at all. The only thing the kit
+ * genuinely cannot supply is the tinted "A" — that glyph is one of FigJam's
+ * traced icons, deliberately left behind — so the host spreads its own
+ * `textInk` family into `demoGlyphs`. That is not a workaround; it is the
+ * host-extendable glyph table doing the job it was ported for.
+ */
+export const BlockTitleBar: Story = {
+  render: () => {
+    const font = demoRegistry.bindControl("fontFamily", {
+      id: "fontFamily",
+      value: { type: "shared", value: "sans" },
+      onSelect: () => {},
+    });
+    const size = demoRegistry.bindControl("fontSize", {
+      id: "fontSize",
+      value: { type: "shared", value: "l" },
+      onSelect: () => {},
+      rungPxByValue: FONT_SIZE_PX,
+    });
+    const bold = demoRegistry.bindControl("bold", {
+      id: "bold",
+      value: { type: "shared", value: "on" },
+      onSelect: () => {},
+    });
+    const ink = demoRegistry.bindControl("textInk", {
+      id: "textInk",
+      value: { type: "shared", value: "c10" },
+      onSelect: () => {},
+    });
+    const align = demoRegistry.bindControl("align", {
+      id: "align",
+      value: { type: "shared", value: "start" },
+      onSelect: () => {},
+    });
+
+    // The donor's recipe, group ids and order unchanged.
+    const composition = demoRegistry.composeControls(
+      {
+        id: "block-title",
+        groups: [
+          { id: "type", items: ["fontFamily", "fontSize"] },
+          { id: "emphasis", items: ["bold"] },
+          { id: "ink", items: ["textInk"] },
+          { id: "alignment", items: ["align"] },
+        ],
+      },
+      [font, size, bold, ink, align],
+    );
+    return <ControlStrip composition={composition} glyphs={demoGlyphs} aria-label="Block title formatting" />;
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // Await the first assertion so everything after it can actually fail:
+    // an unmounted story satisfies every `not.toBeInTheDocument()` below
+    // vacuously. See CLAUDE.md, "Verifying story play functions".
+    await canvas.findByRole("toolbar", { name: "Block title formatting" });
+
+    // The recipe's four groups are the screenshot's three dividers. Assert the
+    // GROUPS, not a separator count: separators are the renderer's business,
+    // and the thing that must survive a port is that an empty group is never
+    // emitted (so a divider can never hang over a gap).
+    const groups = canvasElement.querySelectorAll("[data-contextual-group]");
+    await expect(groups).toHaveLength(4);
+    await expect([...groups].map((g) => g.getAttribute("data-contextual-group"))).toEqual([
+      "type",
+      "emphasis",
+      "ink",
+      "alignment",
+    ]);
+
+    // `data-contextual-recipe` carries WHICH recipe rendered — the donor's own
+    // test hook, and the only way to tell this bar from the shape pill without
+    // reading pixels.
+    await expect(canvasElement.querySelector("[data-contextual-recipe='block-title']")).not.toBeNull();
+
+    // The size trigger prints its rung's real px beside the name. This is the
+    // truthful-rendering rule applied to a control: "Large" means 36 here, and
+    // a surface that showed "Large" without the number would be telling a
+    // sticky note and a block title they were the same size when they are not.
+    await expect(canvas.getByText("36")).toBeInTheDocument();
+    await expect(canvas.getByText("Large")).toBeInTheDocument();
+  },
+};
+
 export const FontSizePresetsOnly: Story = {
   render: () => {
     const bound = demoRegistry.bindControl("fontSize", {
@@ -375,6 +803,12 @@ export const FontSizePresetsOnly: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    // Anchor on a preset row that MUST exist before asserting the Custom row
+    // does not. Without it this check passed against a completely empty DOM
+    // (an independent judge ran it that way, 2026-09-18): "no custom input
+    // here" is trivially true of a panel that rendered nothing at all, so
+    // the story could not distinguish presets-only from broken.
+    await canvas.findByText("Large");
     await expect(canvas.queryByTestId("control-custom-size-input")).toBeNull();
   },
 };

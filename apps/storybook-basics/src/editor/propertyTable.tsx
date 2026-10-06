@@ -456,7 +456,7 @@ export function PropertyTable({
           review={review}
         />
       ) : (
-        <div className="min-h-0 flex-1 overflow-auto">
+        <div className="isolate min-h-0 flex-1 overflow-auto">
           <table className="w-full table-fixed border-collapse text-xs" data-testid="compare-property-table" data-layout="columns">
             <thead className="sticky top-0 z-10 bg-card">
               <tr>
@@ -656,7 +656,7 @@ function FigmaLayout({
       </div>
 
       {active ? (
-        <div className="min-h-0 overflow-auto">
+        <div className="isolate min-h-0 overflow-auto">
           <table className="w-full table-fixed border-collapse text-xs" data-testid="compare-property-table" data-layout="figma">
             <thead className="sticky top-0 z-10 bg-card">
               <tr>

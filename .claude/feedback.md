@@ -37,6 +37,27 @@ The full replay record lives in the vault; these entries must stand alone.
   app is a divergence the next host inherits nothing from.
   <sub>source: `Projects/SystemSketch/PROJECT - System Sketch.md`, "More feedback", 2026-09-19</sub>
 
+- **2026-09-18 · Bad · reports are an input surface too** — If a report
+  contains anything you expect Zach to answer — a ranked list, options, a
+  decision surface, a fork — it ships with the response path built in.
+  Every item that could attract a reaction carries its own verdict buttons and
+  a markdown note box, and **one Copy button emits markdown that already names
+  each item by its number and exact title**. He must never have to type which
+  item he means; that bookkeeping is the report's job, not his. Zach:
+  *"that way I don't need to do book keeping about what example I am providing
+  feedback on."* Two traps, both measured: these pages are opened as `file://`
+  or as the desktop preview's `data:` URL, and on those opaque origins
+  **`localStorage` throws and `navigator.clipboard` is refused** — so wrap
+  every storage access in try/catch, and make the copy path end in a
+  pre-selected `<textarea>` so ⌘C works even when the button cannot.
+  **Do not re-implement this**: `docs/report_feedback.py` is the shared module
+  (`FB.CSS`, `FB.strip(rank, title, extra_axis=…)`, `FB.ui(report, noun,
+  total)`, `FB.JS`); `docs/build_hundred_ideas_report.py` and
+  `docs/build_prior_art_sweep_report.py` both import it.
+  <sub>rate note: `rate - Sep 18 2026, 8.46.17AM.md` · full rule is GLOBAL, in
+  the vault's `Settings/Memory/feedback_show_dont_tell.md` and its `MEMORY.md`
+  hook</sub>
+
 - **2026-09-17 · Bad ×3 same day (consolidated) · reports** — Any substantive
   review, proposal set, research answer, or implementation writeup ships as a
   **rich-media self-contained HTML report** — never a markdown file, never a

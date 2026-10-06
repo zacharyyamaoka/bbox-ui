@@ -53,91 +53,105 @@
         {
           "path": "packages/bbox-ui/src/appearance.fields.ts",
           "type": "registry:lib",
-          "target": "components/bbox/appearance.fields.ts"
+          "target": "components/bbox/v1/appearance.fields.ts"
         },
         {
           "path": "packages/bbox-ui/src/appearance.ts",
           "type": "registry:lib",
-          "target": "components/bbox/appearance.ts"
+          "target": "components/bbox/v1/appearance.ts"
         },
         {
           "path": "packages/bbox-ui/src/caretGeometry.ts",
           "type": "registry:lib",
-          "target": "components/bbox/caretGeometry.ts"
+          "target": "components/bbox/v1/caretGeometry.ts"
         },
         {
           "path": "packages/bbox-ui/src/codeField.css",
           "type": "registry:style",
-          "target": "components/bbox/codeField.css"
+          "target": "components/bbox/v1/codeField.css"
         },
         {
           "path": "packages/bbox-ui/src/codeField.tsx",
           "type": "registry:component",
-          "target": "components/bbox/codeField.tsx"
+          "target": "components/bbox/v1/codeField.tsx"
         },
         {
           "path": "packages/bbox-ui/src/codeFieldGuards.ts",
           "type": "registry:lib",
-          "target": "components/bbox/codeFieldGuards.ts"
+          "target": "components/bbox/v1/codeFieldGuards.ts"
         },
         {
           "path": "packages/bbox-ui/src/codeFieldRows.tsx",
           "type": "registry:component",
-          "target": "components/bbox/codeFieldRows.tsx"
+          "target": "components/bbox/v1/codeFieldRows.tsx"
         },
         {
           "path": "packages/bbox-ui/src/codeGrammar.ts",
           "type": "registry:lib",
-          "target": "components/bbox/codeGrammar.ts"
+          "target": "components/bbox/v1/codeGrammar.ts"
         },
         {
           "path": "packages/bbox-ui/src/fieldGesture.ts",
           "type": "registry:lib",
-          "target": "components/bbox/fieldGesture.ts"
+          "target": "components/bbox/v1/fieldGesture.ts"
         },
         {
           "path": "packages/bbox-ui/src/layout.ts",
           "type": "registry:lib",
-          "target": "components/bbox/layout.ts"
+          "target": "components/bbox/v1/layout.ts"
         },
         {
           "path": "packages/bbox-ui/src/lib/utils.ts",
           "type": "registry:lib",
-          "target": "components/bbox/lib/utils.ts"
+          "target": "components/bbox/v1/lib/utils.ts"
         },
         {
           "path": "packages/bbox-ui/src/port.fields.ts",
           "type": "registry:lib",
-          "target": "components/bbox/port.fields.ts"
+          "target": "components/bbox/v1/port.fields.ts"
         },
         {
           "path": "packages/bbox-ui/src/port.layout.ts",
           "type": "registry:lib",
-          "target": "components/bbox/port.layout.ts"
+          "target": "components/bbox/v1/port.layout.ts"
         },
         {
           "path": "packages/bbox-ui/src/port.presets.ts",
           "type": "registry:lib",
-          "target": "components/bbox/port.presets.ts"
+          "target": "components/bbox/v1/port.presets.ts"
         },
         {
           "path": "packages/bbox-ui/src/port.tsx",
           "type": "registry:component",
-          "target": "components/bbox/port.tsx"
+          "target": "components/bbox/v1/port.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/schema/field.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/schema/field.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/schema/index.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/schema/index.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/schema/resolve.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/schema/resolve.ts"
         },
         {
           "path": "packages/bbox-ui/src/sketchOutline.tsx",
           "type": "registry:component",
-          "target": "components/bbox/sketchOutline.tsx"
+          "target": "components/bbox/v1/sketchOutline.tsx"
         },
         {
           "path": "packages/bbox-ui/src/sketchPath.ts",
           "type": "registry:lib",
-          "target": "components/bbox/sketchPath.ts"
+          "target": "components/bbox/v1/sketchPath.ts"
         }
       ],
       "dependencies": [
-        "@bbox-ui/schema",
         "@codemirror/autocomplete",
         "@codemirror/commands",
         "@codemirror/language",
@@ -157,66 +171,80 @@
         {
           "path": "packages/bbox-ui/src/appearance.fields.ts",
           "type": "registry:lib",
-          "target": "components/bbox/appearance.fields.ts"
+          "target": "components/bbox/v1/appearance.fields.ts"
         },
         {
           "path": "packages/bbox-ui/src/appearance.ts",
           "type": "registry:lib",
-          "target": "components/bbox/appearance.ts"
+          "target": "components/bbox/v1/appearance.ts"
         },
         {
           "path": "packages/bbox-ui/src/block.fields.ts",
           "type": "registry:lib",
-          "target": "components/bbox/block.fields.ts"
+          "target": "components/bbox/v1/block.fields.ts"
         },
         {
           "path": "packages/bbox-ui/src/block.tsx",
           "type": "registry:component",
-          "target": "components/bbox/block.tsx"
+          "target": "components/bbox/v1/block.tsx"
         },
         {
           "path": "packages/bbox-ui/src/block.view.ts",
           "type": "registry:lib",
-          "target": "components/bbox/block.view.ts"
+          "target": "components/bbox/v1/block.view.ts"
         },
         {
           "path": "packages/bbox-ui/src/layout.ts",
           "type": "registry:lib",
-          "target": "components/bbox/layout.ts"
+          "target": "components/bbox/v1/layout.ts"
         },
         {
           "path": "packages/bbox-ui/src/lib/utils.ts",
           "type": "registry:lib",
-          "target": "components/bbox/lib/utils.ts"
+          "target": "components/bbox/v1/lib/utils.ts"
         },
         {
           "path": "packages/bbox-ui/src/pill.fields.ts",
           "type": "registry:lib",
-          "target": "components/bbox/pill.fields.ts"
+          "target": "components/bbox/v1/pill.fields.ts"
         },
         {
           "path": "packages/bbox-ui/src/pill.presets.ts",
           "type": "registry:lib",
-          "target": "components/bbox/pill.presets.ts"
+          "target": "components/bbox/v1/pill.presets.ts"
         },
         {
           "path": "packages/bbox-ui/src/pill.tsx",
           "type": "registry:component",
-          "target": "components/bbox/pill.tsx"
+          "target": "components/bbox/v1/pill.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/schema/field.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/schema/field.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/schema/index.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/schema/index.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/schema/resolve.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/schema/resolve.ts"
         },
         {
           "path": "packages/bbox-ui/src/sketchOutline.tsx",
           "type": "registry:component",
-          "target": "components/bbox/sketchOutline.tsx"
+          "target": "components/bbox/v1/sketchOutline.tsx"
         },
         {
           "path": "packages/bbox-ui/src/sketchPath.ts",
           "type": "registry:lib",
-          "target": "components/bbox/sketchPath.ts"
+          "target": "components/bbox/v1/sketchPath.ts"
         }
       ],
       "dependencies": [
-        "@bbox-ui/schema",
         "clsx",
         "tailwind-merge"
       ]
@@ -225,38 +253,61 @@
       "name": "block-node-reactflow",
       "type": "registry:component",
       "title": "Block node (React Flow adapter)",
-      "description": "React Flow custom node wrapping the Block; ports emit <Handle> DOM elements painted with the shared port-dot classes. NOTE: currently imports @bbox-ui/core, which is not yet published to npm \u2014 install the `block` item and repoint the import until it is.",
+      "description": "React Flow custom node rendering the trunk's BlockPort (a real Block wearing real PortEdge rails), with a real <Handle> at every port placed on the MEASURED dot centre. Installs block-port as a registry dependency.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/block.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/block.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockDescription.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/blockDescription.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockMembers.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/blockMembers.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/hosts/blockNodeReactflow.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/hosts/blockNodeReactflow.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/hosts/blockNodeReactflow.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/hosts/blockNodeReactflow.tsx"
+        }
+      ],
       "dependencies": [
+        "@dnd-kit/core",
+        "@dnd-kit/sortable",
+        "@dnd-kit/utilities",
         "@xyflow/react"
       ],
       "registryDependencies": [
-        "utils"
-      ],
-      "files": [
-        {
-          "path": "packages/adapter-reactflow/src/block-node.tsx",
-          "type": "registry:component",
-          "target": "components/bbox/block-node.tsx"
-        }
+        "https://bbox-ui.com/r/block-port.json"
       ]
     },
     {
       "name": "block-shape-tldraw",
       "type": "registry:component",
       "title": "Block ShapeUtil (tldraw adapter)",
-      "description": "tldraw ShapeUtil rendering the Block inside HTMLContainer; shape w/h are authoritative and port anchors are geometry points. NOTE: currently imports @bbox-ui/core, which is not yet published to npm \u2014 install the `block` item and repoint the import until it is.",
-      "dependencies": [
-        "tldraw@5.3.2"
-      ],
-      "registryDependencies": [
-        "utils"
-      ],
+      "description": "tldraw ShapeUtil rendering the frozen v1 Block inside HTMLContainer; shape w/h are authoritative and port anchors are geometry points. Installs bbox-v1-core as a registry dependency.",
       "files": [
         {
           "path": "packages/adapter-tldraw/src/block-shape-util.tsx",
           "type": "registry:component",
-          "target": "components/bbox/block-shape-util.tsx"
+          "target": "components/bbox/v1/block-shape-util.tsx"
         }
+      ],
+      "dependencies": [
+        "tldraw@5.3.2"
+      ],
+      "registryDependencies": [
+        "https://bbox-ui.com/r/bbox-v1-core.json"
       ]
     },
     {
@@ -2985,6 +3036,11 @@
           "target": "components/bbox/components/foldingChevron.tsx"
         },
         {
+          "path": "apps/storybook-basics/src/components/glyph.content.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/glyph.content.ts"
+        },
+        {
           "path": "apps/storybook-basics/src/components/glyph.layout.ts",
           "type": "registry:lib",
           "target": "components/bbox/components/glyph.layout.ts"
@@ -3102,7 +3158,6 @@
       ],
       "dependencies": [
         "@base-ui/react",
-        "@bbox-ui/glyph-content",
         "@codemirror/commands",
         "@codemirror/language",
         "@codemirror/lint",
@@ -3240,6 +3295,11 @@
           "target": "components/bbox/components/foldingChevron.tsx"
         },
         {
+          "path": "apps/storybook-basics/src/components/glyph.content.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/glyph.content.ts"
+        },
+        {
           "path": "apps/storybook-basics/src/components/glyph.layout.ts",
           "type": "registry:lib",
           "target": "components/bbox/components/glyph.layout.ts"
@@ -3357,7 +3417,6 @@
       ],
       "dependencies": [
         "@base-ui/react",
-        "@bbox-ui/glyph-content",
         "@codemirror/commands",
         "@codemirror/language",
         "@codemirror/lint",
@@ -3371,6 +3430,1212 @@
         "clsx",
         "lucide-react",
         "tailwind-merge"
+      ]
+    },
+    {
+      "name": "block-value",
+      "type": "registry:component",
+      "title": "Block Value",
+      "description": "The Value preset: a BlockPort whose body is a CodeEditor holding one literal, with its output port on the right wall. A preset of existing components, not a component of its own.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/badge.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/badge.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/bar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/barSize.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/barSize.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/block.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/block.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/block.value.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/block.value.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockDescription.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/blockDescription.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockMembers.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/blockMembers.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockPort.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/blockPort.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockPort.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/blockPort.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditor.css",
+          "type": "registry:style",
+          "target": "components/bbox/components/codeEditor.css"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditor.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/codeEditor.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorGesture.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorGesture.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorGuards.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorGuards.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorHighlight.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorHighlight.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorLayout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorLayout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorTheme.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorTheme.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/editableText.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/highlighter.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/highlighter.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/hitRegion.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/hitRegion.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/keyboardReorder.css",
+          "type": "registry:style",
+          "target": "components/bbox/components/keyboardReorder.css"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/keyboardReorder.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/keyboardReorder.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/labeledPort.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/labeledPort.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/paintOrder.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/paintOrder.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/popover.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/popover.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/port.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/port.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/port.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/port.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portEdge.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/portEdge.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portEdge.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/portEdge.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portLane.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/portLane.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portSpacing.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/portSpacing.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/returnDividerMarks.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/returnDividerMarks.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/returnDividers.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/returnDividers.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/sideEffectMarks.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/sideEffectMarks.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/sideEffects.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/sideEffects.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/tooltip.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/tooltip.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/lib/utils.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/skin/portVariants.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/skin/portVariants.ts"
+        }
+      ],
+      "dependencies": [
+        "@base-ui/react",
+        "@codemirror/commands",
+        "@codemirror/language",
+        "@codemirror/lint",
+        "@codemirror/state",
+        "@codemirror/view",
+        "@dnd-kit/core",
+        "@dnd-kit/sortable",
+        "@dnd-kit/utilities",
+        "@lezer/highlight",
+        "class-variance-authority",
+        "clsx",
+        "lucide-react",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "region-loop",
+      "type": "registry:component",
+      "title": "Region Loop",
+      "description": "The Loop preset: for / while as scene data over the generic Block Region \u2014 one arm plus the cable that comes back. Pure scene-node factories; installs with the scene kit it builds on.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/badge.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/badge.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/bar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/barSize.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/barSize.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockMembers.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/blockMembers.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockPort.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/blockPort.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockRegion.views.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/blockRegion.views.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditor.css",
+          "type": "registry:style",
+          "target": "components/bbox/components/codeEditor.css"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditor.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/codeEditor.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorGesture.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorGesture.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorGuards.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorGuards.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorHighlight.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorHighlight.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorLayout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorLayout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorTheme.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorTheme.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/editableText.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/binaryHeap.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/elbow/binaryHeap.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/boundaryCrossing.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/elbow/boundaryCrossing.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/elbowPath.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/elbow/elbowPath.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/elbowPins.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/elbow/elbowPins.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/elbowRouter.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/elbow/elbowRouter.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/geometry.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/elbow/geometry.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/index.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/elbow/index.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/nudge.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/elbow/nudge.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/softClearance.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/elbow/softClearance.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/frame.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/frame.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/frame.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/frame.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/highlighter.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/highlighter.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/hitRegion.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/hitRegion.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/keyboardReorder.css",
+          "type": "registry:style",
+          "target": "components/bbox/components/keyboardReorder.css"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/keyboardReorder.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/keyboardReorder.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/labeledPort.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/labeledPort.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/paintOrder.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/paintOrder.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/popover.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/popover.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/port.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/port.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/port.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/port.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portEdge.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/portEdge.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portEdge.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/portEdge.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portLane.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/portLane.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portSpacing.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/portSpacing.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/returnDividers.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/returnDividers.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/tooltip.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/tooltip.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/trace.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/trace.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/wiring.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/wiring.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/hosts/frameScene.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/hosts/frameScene.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/hosts/hostScene.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/hosts/hostScene.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/hosts/regionScene.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/hosts/regionScene.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/lib/utils.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/boundary.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/boundary.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/controlFlow.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/controlFlow.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/linking.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/linking.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/links.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/links.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/lint.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/lint.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/model.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/model.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/portEdgeCrossing.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/portEdgeCrossing.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/region.loop.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/region.loop.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/region.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/region.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/regionView.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/regionView.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/scene.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/scene.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/sceneWires.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/sceneWires.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/wallPort.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/wallPort.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/skin/portVariants.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/skin/portVariants.ts"
+        }
+      ],
+      "dependencies": [
+        "@base-ui/react",
+        "@codemirror/commands",
+        "@codemirror/language",
+        "@codemirror/lint",
+        "@codemirror/state",
+        "@codemirror/view",
+        "@dnd-kit/core",
+        "@dnd-kit/sortable",
+        "@dnd-kit/utilities",
+        "@lezer/highlight",
+        "class-variance-authority",
+        "clsx",
+        "lucide-react",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "region-branch",
+      "type": "registry:component",
+      "title": "Region Branch",
+      "description": "The Branch preset: if / elif / else as scene data over the generic Block Region \u2014 one arm node per case. Pure scene-node factories; installs with the scene kit it builds on.",
+      "files": [
+        {
+          "path": "apps/storybook-basics/src/components/badge.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/badge.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/bar.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/barSize.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/barSize.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockMembers.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/blockMembers.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockPort.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/blockPort.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/blockRegion.views.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/blockRegion.views.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditor.css",
+          "type": "registry:style",
+          "target": "components/bbox/components/codeEditor.css"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditor.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/codeEditor.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorGesture.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorGesture.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorGuards.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorGuards.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorHighlight.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorHighlight.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorLayout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorLayout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/codeEditorTheme.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/codeEditorTheme.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/editableText.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/editableText.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/binaryHeap.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/elbow/binaryHeap.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/boundaryCrossing.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/elbow/boundaryCrossing.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/elbowPath.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/elbow/elbowPath.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/elbowPins.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/elbow/elbowPins.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/elbowRouter.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/elbow/elbowRouter.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/geometry.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/elbow/geometry.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/index.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/elbow/index.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/nudge.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/elbow/nudge.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/elbow/softClearance.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/elbow/softClearance.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/frame.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/frame.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/frame.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/frame.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/glyph.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/highlighter.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/highlighter.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/hitRegion.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/hitRegion.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/keyboardReorder.css",
+          "type": "registry:style",
+          "target": "components/bbox/components/keyboardReorder.css"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/keyboardReorder.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/keyboardReorder.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/labeledPort.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/labeledPort.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/paintOrder.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/paintOrder.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/popover.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/popover.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/port.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/port.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/port.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/port.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portEdge.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/portEdge.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portEdge.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/portEdge.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portLane.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/portLane.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/portSpacing.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/portSpacing.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/returnDividers.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/returnDividers.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/tooltip.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/components/tooltip.tsx"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/trace.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/trace.layout.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/components/wiring.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/components/wiring.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/hosts/frameScene.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/hosts/frameScene.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/hosts/hostScene.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/hosts/hostScene.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/hosts/regionScene.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/hosts/regionScene.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/lib/utils.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/boundary.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/boundary.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/controlFlow.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/controlFlow.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/linking.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/linking.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/links.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/links.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/lint.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/lint.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/model.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/model.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/portEdgeCrossing.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/portEdgeCrossing.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/region.branch.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/region.branch.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/region.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/region.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/regionView.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/regionView.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/scene.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/scene.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/sceneWires.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/sceneWires.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/scene/wallPort.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/scene/wallPort.ts"
+        },
+        {
+          "path": "apps/storybook-basics/src/skin/portVariants.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/skin/portVariants.ts"
+        }
+      ],
+      "dependencies": [
+        "@base-ui/react",
+        "@codemirror/commands",
+        "@codemirror/language",
+        "@codemirror/lint",
+        "@codemirror/state",
+        "@codemirror/view",
+        "@dnd-kit/core",
+        "@dnd-kit/sortable",
+        "@dnd-kit/utilities",
+        "@lezer/highlight",
+        "class-variance-authority",
+        "clsx",
+        "lucide-react",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "bbox-v1-core",
+      "type": "registry:component",
+      "title": "bbox v1 core",
+      "description": "The frozen v1 component set (packages/bbox-ui) as one module, `core.ts`, with its whole closure \u2014 what the v1 tldraw adapter imports. New work installs the trunk items instead.",
+      "files": [
+        {
+          "path": "packages/bbox-ui/src/appearance.fields.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/appearance.fields.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/appearance.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/appearance.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/badge.fields.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/badge.fields.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/badge.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/v1/badge.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/bar.fields.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/bar.fields.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/bar.presets.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/bar.presets.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/bar.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/v1/bar.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/block.fields.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/block.fields.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/block.presets.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/block.presets.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/block.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/v1/block.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/block.view.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/block.view.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/blockFace.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/v1/blockFace.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/blockLayout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/blockLayout.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/caretGeometry.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/caretGeometry.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeField.css",
+          "type": "registry:style",
+          "target": "components/bbox/v1/codeField.css"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeField.fields.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/codeField.fields.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeField.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/v1/codeField.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeFieldGuards.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/codeFieldGuards.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeFieldRows.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/v1/codeFieldRows.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/codeGrammar.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/codeGrammar.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/completionMenu.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/completionMenu.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/fieldGesture.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/fieldGesture.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/flex.fields.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/flex.fields.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/flex.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/v1/flex.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/glyph.content.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/glyph.content.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/glyph.fields.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/glyph.fields.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/glyph.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/glyph.layout.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/glyph.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/v1/glyph.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/index.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/core.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/layout.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/lib/utils.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/lib/utils.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/pill.fields.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/pill.fields.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/pill.presets.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/pill.presets.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/pill.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/v1/pill.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/port.fields.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/port.fields.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/port.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/port.layout.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/port.presets.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/port.presets.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/port.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/v1/port.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/portEdge.fields.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/portEdge.fields.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/portEdge.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/v1/portEdge.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/portPlacement.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/portPlacement.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/region.fields.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/region.fields.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/region.presets.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/region.presets.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/region.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/v1/region.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/schema/field.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/schema/field.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/schema/index.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/schema/index.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/schema/resolve.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/schema/resolve.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/sketchOutline.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/v1/sketchOutline.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/sketchPath.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/sketchPath.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/skin.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/skin.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/stack.fields.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/stack.fields.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/stack.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/v1/stack.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/textBox.fields.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/textBox.fields.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/textBox.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/textBox.layout.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/textBox.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/v1/textBox.tsx"
+        },
+        {
+          "path": "packages/bbox-ui/src/trace.fields.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/trace.fields.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/trace.layout.ts",
+          "type": "registry:lib",
+          "target": "components/bbox/v1/trace.layout.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/trace.tsx",
+          "type": "registry:component",
+          "target": "components/bbox/v1/trace.tsx"
+        }
+      ],
+      "dependencies": [
+        "@codemirror/autocomplete",
+        "@codemirror/commands",
+        "@codemirror/language",
+        "@codemirror/state",
+        "@codemirror/view",
+        "@lezer/highlight",
+        "clsx",
+        "tailwind-merge"
+      ]
+    },
+    {
+      "name": "bbox-block-layout",
+      "type": "registry:lib",
+      "title": "Block layout",
+      "description": "The Simple View's flex CSS restated as pure arithmetic \u2014 layoutSimpleBlock() answers 'how big is this card' from an injected TextMeasure, with no DOM. The measurement oracle a layout engine needs when it has to place a Block it cannot render first.",
+      "files": [
+        {
+          "path": "packages/bbox-ui/src/blockLayout.ts",
+          "type": "registry:lib",
+          "target": "lib/bbox/blockLayout.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/layout.ts",
+          "type": "registry:lib",
+          "target": "lib/bbox/layout.ts"
+        },
+        {
+          "path": "packages/bbox-ui/src/port.layout.ts",
+          "type": "registry:lib",
+          "target": "lib/bbox/port.layout.ts"
+        }
+      ],
+      "dependencies": [
+        "react"
       ]
     }
   ]

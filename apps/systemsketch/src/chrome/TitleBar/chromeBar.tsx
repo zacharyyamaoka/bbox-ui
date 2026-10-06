@@ -113,7 +113,7 @@ export function SystemSketchChromeBar() {
   const menu = useMemo(
     () =>
       buildAppMenu({
-        label: "SystemSketch",
+        label: "bbox studio",
         platform: shortcutPlatform(),
         file: session.file,
         onSettings: () => setSettingsOpen(true),

@@ -37,22 +37,29 @@
 // persist it (a page's `meta`, `localStorage`, nothing).
 import {
   DndContext,
+  KeyboardSensor,
   PointerSensor,
   closestCenter,
   useSensor,
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, LayoutGrid, MoreHorizontal, Rows3 } from "lucide-react";
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode, type RefObject } from "react";
 
 import { moveItemKey } from "./framesOrder";
 import { Button } from "../components/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
@@ -151,6 +158,12 @@ export interface FramesPanelProps {
   onDelete?(key: string): void;
   saveView?: FramesPanelSaveView;
   reorder?: FramesPanelReorder;
+  /** Portal target inside the host's token scope (host-contract §4,
+   *  docs/menus/MENU-KIT-DESIGN.md:661). Forwarded to the view-options menu
+   *  in the header and to every row's own "Actions for …" menu — without it
+   *  either one portals to `document.body`, outside a themed host's scope,
+   *  and paints with the document's CSS variables instead of the host's. */
+  container?: HTMLElement | ShadowRoot | RefObject<HTMLElement | ShadowRoot | null> | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -263,9 +276,21 @@ interface RowContentProps {
   onFocus(key: string): void;
   onRename: FramesPanelProps["onRename"];
   onDelete?(key: string): void;
+  /** Threaded straight from `FramesPanelProps.container` down to this row's
+   *  own "Actions for …" menu — see that prop's WHY. */
+  container: FramesPanelProps["container"];
 }
 
-function RowContent({ item, mode, kinds, mutationLocked, onFocus, onRename, onDelete }: RowContentProps) {
+function RowContent({
+  item,
+  mode,
+  kinds,
+  mutationLocked,
+  onFocus,
+  onRename,
+  onDelete,
+  container,
+}: RowContentProps) {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const kindMeta = kinds[item.kind];
@@ -338,7 +363,7 @@ function RowContent({ item, mode, kinds, mutationLocked, onFocus, onRename, onDe
         >
           <MoreHorizontal className="size-4" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" container={container}>
           <DropdownMenuItem onClick={() => onFocus(item.key)}>Focus</DropdownMenuItem>
           <DropdownMenuItem disabled={mutationLocked} onClick={() => setEditing(true)}>
             Rename
@@ -402,14 +427,27 @@ function SortableFrameRow(props: FrameRowProps) {
       }}
       className="flex items-center gap-2.5 border-b border-border bg-popover px-3 py-2.5 last:border-b-0"
     >
+      {/* WHY this is NOT `aria-hidden`, which it used to be: `attributes`
+          from `useSortable` puts `tabIndex={0}`, `role="button"` and
+          `aria-roledescription="sortable"` on this element — so it was a
+          focusable, operable control that announced itself as sortable while
+          simultaneously telling assistive tech to ignore it. A keyboard user
+          could land on it; a screen-reader user was told nothing was there.
+          The two cannot both be right, and `aria-hidden` is the one that has
+          to go, because the element genuinely IS the drag handle.
+
+          Found while writing a test that drives the reorder from the
+          keyboard — the same test that surfaced there being no KeyboardSensor
+          registered at all (see `sensors` below). The label moves from a
+          `title` tooltip to a real accessible name for the same reason. */}
       <span
-        aria-hidden="true"
+        aria-label={`Reorder ${props.item.label}`}
         title="Drag to reorder"
         className="grid size-4 shrink-0 cursor-grab touch-none place-items-center text-muted-foreground hover:text-foreground active:cursor-grabbing"
         {...attributes}
         {...listeners}
       >
-        <GripVertical className="size-3.5" />
+        <GripVertical aria-hidden="true" className="size-3.5" />
       </span>
       <RowContent {...props} />
     </li>
@@ -480,7 +518,16 @@ function SaveViewForm({ saveView, disabled }: { saveView: FramesPanelSaveView; d
 /* Header                                                               */
 /* ------------------------------------------------------------------ */
 
-function ModeToggle({ mode, onModeChange }: { mode: FramesPanelMode; onModeChange(mode: FramesPanelMode): void }) {
+function ModeToggle({
+  mode,
+  onModeChange,
+  container,
+}: {
+  mode: FramesPanelMode;
+  onModeChange(mode: FramesPanelMode): void;
+  /** Threaded straight from `FramesPanelProps.container` — see that prop's WHY. */
+  container: FramesPanelProps["container"];
+}) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -495,12 +542,24 @@ function ModeToggle({ mode, onModeChange }: { mode: FramesPanelMode; onModeChang
       >
         <LayoutGrid className="size-4" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuLabel>View</DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={mode} onValueChange={(value) => onModeChange(value as FramesPanelMode)}>
-          <DropdownMenuRadioItem value="cards">Thumbnail cards</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="list">Compact list</DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
+      <DropdownMenuContent align="end" container={container}>
+        {/* WHY the Group wrapper: `DropdownMenuLabel` renders Base UI's
+            `Menu.GroupLabel`, which READS `MenuGroupContext` and throws
+            "MenuGroupContext is missing" if no `Menu.Group` is above it —
+            it is a group's label, not a free-standing heading. Without this
+            wrapper, clicking "Frames panel view options" threw and unmounted
+            the whole React root. It shipped that way because no play
+            function ever opened this menu; an independent judge found it by
+            clicking every trigger (2026-09-18). `ViewMenuOpens` in
+            FramesPanel.stories.tsx now opens it, so a regression here fails
+            the suite instead of waiting for a user. */}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>View</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={mode} onValueChange={(value) => onModeChange(value as FramesPanelMode)}>
+            <DropdownMenuRadioItem value="cards">Thumbnail cards</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="list">Compact list</DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -524,9 +583,23 @@ export function FramesPanel({
   onDelete,
   saveView,
   reorder,
+  container,
 }: FramesPanelProps) {
   const sortable = Boolean(reorder) && !readOnly && !reorderLocked && items.length > 1;
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  // WHY a KeyboardSensor beside the pointer one: these rows already tell
+  // assistive tech they are sortable — dnd-kit's `useSortable` sets
+  // `aria-roledescription="sortable"` and ships drag instructions — while
+  // registering only a PointerSensor, so a keyboard user was told the rows
+  // could be reordered and given no way to do it. The gap surfaced while
+  // writing a test that drives the reorder from the keyboard: it could not
+  // be written, which is the clearest evidence the feature was not there.
+  // `sortableKeyboardCoordinates` is the sortable preset's own translator
+  // from arrow keys to positions, so this is the stock pairing rather than
+  // a hand-rolled one.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   function handleDragEnd({ active, over }: DragEndEvent) {
     if (!reorder || !over || over.id === active.id) return;
@@ -554,6 +627,7 @@ export function FramesPanel({
     onRename,
     onDelete,
     sortable,
+    container,
   });
 
   const list =
@@ -576,7 +650,16 @@ export function FramesPanel({
     );
 
   return (
-    <div data-slot="frames-panel" className="flex flex-col">
+    // WHY `isolate` here as well as on PanelShell's scroll body: a dragged
+    // row sets `zIndex: 10` (below), and PanelShell only supplies a stacking
+    // context when the panel is actually INSIDE one. Rendered standalone —
+    // which the stories do, and which nothing forbids a host from doing —
+    // that 10 resolved in the host's own context, where an overlay at
+    // z-index 5 could be painted under a row being dragged. An independent
+    // judge measured exactly that (2026-09-18) after the first fix assumed
+    // the shell was always there. A component that needs internal stacking
+    // owns its own boundary rather than borrowing a parent's.
+    <div data-slot="frames-panel" className="isolate flex flex-col">
       <div className="flex items-start justify-between gap-2 px-3.5 pt-3.5">
         <div className="min-w-0">
           <span className="block text-[10px] font-bold tracking-[0.08em] text-muted-foreground uppercase">
@@ -587,7 +670,7 @@ export function FramesPanel({
             <span className="text-xs text-muted-foreground">{items.length} items</span>
           </div>
         </div>
-        <ModeToggle mode={mode} onModeChange={onModeChange} />
+        <ModeToggle mode={mode} onModeChange={onModeChange} container={container} />
       </div>
       <p className="px-3.5 pt-1.5 pb-3 text-sm text-muted-foreground">
         Frames, regions, and saved camera views in one navigable order.

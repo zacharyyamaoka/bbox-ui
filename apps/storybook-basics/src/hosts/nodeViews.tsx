@@ -306,7 +306,16 @@ export function withProducers(items: PortEdgeItem[], nodeId: string, producers: 
  *  block's own card and a region's CORNER card, because a region's ports
  *  ARE a block's ports (plan §2.A) and a second builder here would be the
  *  first place that stopped being true. */
-function edgeSpecsOf(
+/**
+ * EXPORTED for `scene/portDefaults.test.ts` (2026-09-22), not for hosts.
+ *
+ * WHY: that test used to MIRROR this function's label/state expression in a
+ * local helper, which meant it was checking its own copy — a change here
+ * would have left it green. Exporting the real thing is the cheaper half of
+ * the "the oracle must be independent of the implementation" rule; a test
+ * that re-derives what it checks is not a test.
+ */
+export function edgeSpecsOf(
   scene: HostScene,
   node: SceneNode<HostNodeData>,
   wired: ReadonlySet<string> | undefined,
@@ -327,7 +336,14 @@ function edgeSpecsOf(
                 // name has nothing truer to show than what every edge and
                 // every edit event already calls it (hostScene.ts's
                 // `portLabels`).
-                label: node.data.portLabels?.[id] ?? id,
+                label: node.data.portDefaults?.[id] ?? node.data.portLabels?.[id] ?? id,
+                // An unwired port that owns a default reads as `valueSet`,
+                // never `empty` — the value IS there, it just arrived by
+                // being typed rather than by cable. `withWiredState` runs
+                // AFTER this and overwrites it with `wired` when a cable
+                // lands, which is the right precedence: a default is what
+                // you get in the absence of a value, never instead of one.
+                ...(node.data.portDefaults?.[id] === undefined ? null : { state: "valueSet" as const }),
                 // `portTypes` is deliberately NOT painted here (hostScene.ts:
                 // "Data only — nothing in this family paints it yet"), and
                 // `PyblocksScene.stories.tsx` pins a block rail's label as the
@@ -652,6 +668,13 @@ function RegionNodeView({ scene, node, wired, producers, onSceneChange, decorate
     // No `activeArm` means every arm is active (donor branchModel.ts:11-12).
     active: region.activeArm === undefined || region.activeArm === arm.id,
     ...(arm.data.arm?.h === undefined ? null : { bodyHeight: arm.data.arm.h }),
+    // The arm's OWN operand and its pattern captures. Without these two
+    // lines a scene built by `branchNode`/`matchNode` renders arms with no
+    // dots at all in EVERY canvas host — the ports exist in the scene and
+    // simply never reach the component. Direct `<BlockRegion>` callers were
+    // unaffected, which is exactly what made it easy to miss.
+    ...(arm.data.arm?.test === undefined ? null : { test: arm.data.arm.test }),
+    ...(arm.data.arm?.captures === undefined ? null : { captures: arm.data.arm.captures }),
     // A child of an ARM, not of the region: its `position` is in the ARM's
     // space (scene.ts:60-72), which is the whole reason arms are nodes —
     // folding a sibling arm moves rows, and an arm-relative child does not

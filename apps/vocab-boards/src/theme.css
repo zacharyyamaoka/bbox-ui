@@ -1,0 +1,42 @@
+/* The report's own tokens, so a board and the page around it are one system.
+   Declared on :root AND on the board itself: the report inlines only the
+   `.react-flow__viewport` markup, which must still resolve every var it uses
+   even when it lands in a page that never heard of these names. */
+:root {
+  --bg: #0e0f12;
+  --panel: #15171c;
+  --panel2: #1b1e25;
+  --line: #282d38;
+  --line2: #343b49;
+  --fg: #e6e8ee;
+  --dim: #9aa3b2;
+  --dim2: #6b7383;
+  --accent: #f0883e;
+  --accent2: #5aa9f8;
+  --ok: #3fb950;
+  --warn: #e5534b;
+  --gold: #e8c06a;
+  --purple: #bc8cff;
+  --vb-mono: ui-monospace, Menlo, Consolas, monospace;
+  --vb-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+}
+
+.vb-board,
+.react-flow__viewport {
+  --bg: #0e0f12;
+  --panel: #15171c;
+  --panel2: #1b1e25;
+  --line: #282d38;
+  --line2: #343b49;
+  --fg: #e6e8ee;
+  --dim: #9aa3b2;
+  --dim2: #6b7383;
+  --accent: #f0883e;
+  --accent2: #5aa9f8;
+  --ok: #3fb950;
+  --warn: #e5534b;
+  --gold: #e8c06a;
+  --purple: #bc8cff;
+  --vb-mono: ui-monospace, Menlo, Consolas, monospace;
+  --vb-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+}

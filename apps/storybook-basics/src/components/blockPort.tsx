@@ -82,6 +82,7 @@ import {
   type BlockBands,
   type BlockPortLayout,
   type BlockView,
+  type RailBand,
   type RailPlan,
 } from "./blockPort.layout";
 import { ISOLATED_ROOT_STYLE, paintTier } from "./paintOrder";
@@ -174,6 +175,23 @@ export interface BlockEdgeSpec {
    */
   dividerAfter?: number[];
   onDividerAfterChange?(next: number[]): void;
+  /**
+   * Which of the Block's bands this wall's rail spans. Omitted = the
+   * view's own rule (`railPlanFor`, via `populatedEdges`). `"header"`
+   * mounts the rail on the header strip, and on a hugged header
+   * (`Block`'s `headerFit="hug"`) its right rail rides the TAB's edge,
+   * not the block's (`railBoxFor`'s `headerRight` reading).
+   *
+   * Applied as an override AFTER `railPlanFor` returns — the view rule
+   * still picks distribution/groups/end-margin for the wall; this only
+   * relocates which band the rail's box is measured against, the same
+   * higher-precedence seam `distribution`/`groups` already are on this
+   * type (E-3, above) and for the same reason: a caller occasionally
+   * needs to win over the population-derived default, and `railPlanFor`
+   * itself stays untouched rather than growing a case for every caller
+   * that wants to override just one field.
+   */
+  band?: RailBand;
 }
 
 export interface BlockPortProps {
@@ -268,7 +286,13 @@ function sameBands(a: BlockBands | null, b: BlockBands | null): boolean {
     Math.abs(a.bodyBottom - b.bodyBottom) < BAND_EPSILON_PX &&
     (a.headerTop == null || b.headerTop == null
       ? a.headerTop === b.headerTop
-      : Math.abs(a.headerTop - b.headerTop) < BAND_EPSILON_PX)
+      : Math.abs(a.headerTop - b.headerTop) < BAND_EPSILON_PX) &&
+    // Without this a head tab that RESIZES (its title edited, a badge added)
+    // keeps the stale bands, and its right-wall ports stay at the old edge —
+    // every other band is compared here for exactly that reason.
+    (a.headerRight == null || b.headerRight == null
+      ? a.headerRight === b.headerRight
+      : Math.abs(a.headerRight - b.headerRight) < BAND_EPSILON_PX)
   );
 }
 
@@ -330,6 +354,19 @@ function useBlockBands(wrapperRef: RefObject<HTMLDivElement | null>, layoutKey: 
         bodyTop: ((header ? header.getBoundingClientRect().bottom : blockRect.top) - wrapperRect.top) / scale,
         bodyBottom: ((footer ? footer.getBoundingClientRect().top : blockRect.bottom) - wrapperRect.top) / scale,
         headerTop: header ? (header.getBoundingClientRect().top - wrapperRect.top) / scale : undefined,
+        // The head tab: a header that HUGS is narrower than the block, and a
+        // `header`-band right rail rides ITS right edge rather than the
+        // block's (Zach, 2026-09-22, "Head Tab View" / "With Ports").
+        // MEASURED rather than flagged from a prop, for the same reason
+        // `headerTop` is: the tab hugs a chevron, a title and maybe a badge,
+        // so only the DOM knows where it ended. A FULL-WIDTH header measures
+        // exactly the block's own right edge, which is what `railBoxFor`
+        // would have used anyway — so this is never a second, disagreeing
+        // source of truth for the same line, and an unhugged Block's ports
+        // cannot move because this field appeared.
+        headerRight: header
+          ? (header.getBoundingClientRect().right - wrapperRect.left) / scale
+          : undefined,
       };
       setBands((prev) => (sameBands(prev, next) ? prev : next));
     };
@@ -545,6 +582,9 @@ export function BlockPort({
             ...(spec.distribution ? { distribution: spec.distribution } : null),
             ...(spec.groups !== undefined ? { groups: spec.groups } : null),
             ...(spec.groupMode !== undefined ? { groupMode: spec.groupMode } : null),
+            // `BlockEdgeSpec.band`'s own seam: an explicit per-edge band
+            // always wins over the view rule's derived one.
+            band: spec.band ?? plan.band,
           };
           return <BlockPortRail key={side} edge={side} spec={spec} plan={finalPlan} bands={bands} diameter={diameter} variant={variant} />;
         })}
@@ -1076,6 +1116,23 @@ export function BlockPortRail({
    * same bare dot, with the same `data-collapsed-ports` stamp, is what
    * makes "exactly one dot per wall, carrying every id it stands for" true
    * for EVERY wall in simple view rather than only the crowded ones.
+   *
+   * A HEADER-band item is the third bare-dot case, for a different reason
+   * than the collapsed one above: the header band is chrome, and the
+   * header's own content IS the label — a tab is sized to hug a title, not
+   * to hold a second naming of the same thing underneath it. Zach,
+   * captured live off this story's first render (`hdr-5-tab-with-ports.png`
+   * etc.): "in"/"out" painted directly on top of "Planner", all three
+   * glyphs unreadable, and a bare-header chevron with a label sitting on
+   * top of it. The precedent already exists in this file —
+   * `BlockFunctionPort` below is a `LabeledPort` with `labelSlot={null}`
+   * for exactly this reason, the header-left function port never having
+   * room for a name either. A caller who genuinely needs labels IN the
+   * header band can still get them — supply a `portEdgeProps.renderItem` of
+   * their own (see the reach-past below, at the `<PortEdge>` call) and
+   * inset their own header content with `functionPortHeaderInsetPx()` to
+   * make room — but that is an opt-in, not the default, because one
+   * specimen having room to fit them is not the general case.
    */
   const renderItem: PortEdgeProps["renderItem"] = (item, ctx) =>
     plan.collapsed ? (
@@ -1083,7 +1140,15 @@ export function BlockPortRail({
         <Port state={item.state ?? "empty"} diameter={diameter} variant={variant} diagnostics={item.diagnostics} availability={item.availability} producers={item.producers} selected={item.selected} />
       </span>
     ) : (
-      <span data-slot="block-port-item" data-port-id={item.id} style={{ display: "inline-flex" }}>
+      // `data-editable` (ported from claude/notebook-lab-work-order-472c22
+      // `23ab20e`): marks the port whose label a click will edit, so a host
+      // can tell "click edits the name" from "press starts a cable" without
+      // re-deriving the gate. It mirrors the SAME boolean as `disabled`
+      // below — the P-037 gate, "the host said where the text should go" —
+      // and deliberately not the donor's `ctx.editable` (this edge's
+      // `editing` arming): on a Block the two can disagree, and a DOM flag
+      // that disagreed with the label it describes would be a lie.
+      <span data-slot="block-port-item" data-port-id={item.id} data-editable={spec.onItemsChange ? true : undefined} style={{ display: "inline-flex" }}>
         <LabeledPort
           edge={edge}
           state={item.state ?? "empty"}
@@ -1099,6 +1164,13 @@ export function BlockPortRail({
           typeColor={item.typeColor}
           producers={item.producers}
           selected={item.selected}
+          // Header band: dot only, no label — see this function's own WHY
+          // above. `labelSlot={null}` (not omitting `children`) is what
+          // `BlockFunctionPort` already does for the same reason: it skips
+          // `LabeledPort`'s built-in `DefaultPortLabel` branch entirely
+          // (labeledPort.tsx's own `labelSlot !== undefined` gate) rather
+          // than rendering an empty editable field in its place.
+          labelSlot={plan.band === "header" ? null : undefined}
           // P-037. `LabeledPort`'s built-in label is click-to-edit by DEFAULT
           // (`DefaultPortLabel`'s `disabled = false`) and its `onLabelWrite` is
           // optional, so a rail whose host never wired one opened a real
@@ -1239,7 +1311,17 @@ export function BlockPortRail({
         distribution={plan.distribution}
         groups={plan.groups}
         groupMode={plan.groupMode}
-        renderItem={renderItem}
+        // `BlockEdgeSpec.portEdgeProps`'s own doc already claims `renderItem`
+        // is one of the reach-past overrides a caller can win with — before
+        // this it was a dead claim: the spread above lands first in the
+        // props object and this explicit prop always followed it, so a
+        // caller's own `renderItem` (e.g. one that wants LABELS drawn on a
+        // header-band rail, opting back out of this file's default above)
+        // was silently discarded. A caller's own function, when supplied,
+        // now wins outright — it replaces this component's fill entirely
+        // rather than being merged with it, the same all-or-nothing contract
+        // `PortEdge`'s own `renderItem` prop already has.
+        renderItem={spec.portEdgeProps?.renderItem ?? renderItem}
         renderCollapsed={renderCollapsed}
         dividerAfter={spec.dividerAfter}
         onDividerAfterChange={spec.onDividerAfterChange}

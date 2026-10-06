@@ -8,12 +8,16 @@
 // and would fail typecheck as-is).
 //
 // Stock parts this file is built from (docs/PORT-EDGE-PLAN.md's own
-// table): `useSortable`/`SortableContext`/`arrayMove`/
-// `{horizontal,vertical}ListSortingStrategy` (@dnd-kit/sortable),
-// `CSS.Transform`/`CSS.Translate` (@dnd-kit/utilities), `DndContext`/
-// `useDroppable`/`useDraggable`/`closestCenter`/`PointerSensor`
-// (@dnd-kit/core). The spacing math and the grouping/group-syntax model
-// live in `./portEdge.layout.ts`.
+// table, UPDATED 2026-09-18 for W1 — anchor-space port layout, ported
+// onto this file 2026-09-30 from `claude/w1-anchor-layout` f00fb2b):
+// `arrayMove` (@dnd-kit/sortable) still does the one write a reorder
+// makes; `useSortable`/`SortableContext`/`{horizontal,vertical}List-
+// SortingStrategy` are GONE (see this file's own `AnchorSlotCard` doc —
+// a registered `PortLayoutFn` owns every card's position now, not a flex
+// container plus a sortable strategy). `CSS.Translate` (@dnd-kit/
+// utilities), `DndContext`/`useDroppable`/`useDraggable`/`useDndMonitor`/
+// `PointerSensor` (@dnd-kit/core). The spacing math, the anchor registry,
+// and the grouping/group-syntax model live in `./portEdge.layout.ts`.
 //
 // D6 (this file's own correction — see the final report): the plan named
 // `useDndContext()` as how a PortEdge would detect an ANCESTOR DndContext
@@ -39,27 +43,20 @@
 import {
   DndContext,
   PointerSensor,
-  closestCenter,
   useDndMonitor,
   useDraggable,
   useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
 } from "@dnd-kit/core";
-import {
-  SortableContext,
-  arrayMove,
-  horizontalListSortingStrategy,
-  useSortable,
-  verticalListSortingStrategy,
-  type SortingStrategy,
-} from "@dnd-kit/sortable";
+import { arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { LanguageSupport } from "@codemirror/language";
 import type { CSSProperties, ReactNode, RefObject } from "react";
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { CodeEditor } from "./codeEditor";
 import { captureEditingFocus, reorderDeltaForKey, reorderHintText, type ReorderChord } from "./keyboardReorder";
@@ -68,9 +65,7 @@ import "./keyboardReorder.css";
 // to every default `LabeledPort` this edge draws, the same way
 // `laneLanguage` is; omitted, each port reads the document attribute.
 import type { PortVariantId } from "../skin/portVariants";
-import type { Diagnostic } from "./highlighter";
 import { LabeledPort } from "./labeledPort";
-import type { PortState } from "./port";
 import { PORT_LABEL_GAP, PORT_RING_OVERHANG_PX, inwardTextLayout, type BlockSide, type PortTextLayout } from "./port.layout";
 import { formatPortLane, reconcilePortLane } from "./portLane";
 import { formatRailLane, reconcileRailLane, sameDividers } from "./returnDividers";
@@ -84,80 +79,27 @@ import {
   distributionStyle,
   groupingSetFromText,
   interSlotGapPx,
+  packVariableSlotSpans,
+  portLayout,
+  slotMainSpan,
   splitByMaxVisible,
+  type Anchor,
   type Distribution,
+  type PortEdgeItem,
+  type PortLayoutRail,
   type Size,
   type Slot,
 } from "./portEdge.layout";
 import { MIN_PORT_GAP_PX, autoSlotOffsets, constrainPortPositions, resolveCustomOffsets, type CustomNeighbourMode, type PortSpacingOptions } from "./portSpacing.layout";
 
+export type { PortEdgeItem } from "./portEdge.layout";
+
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
 /* ------------------------------------------------------------------ */
 
-/** One draggable unit on an edge. `state` defaults to `"empty"` when a
- *  caller's story never bothers to set it. */
-export interface PortEdgeItem {
-  id: string;
-  label: string;
-  state?: PortState;
-  /**
-   * The diagnostic axis (docs/INVALID-STATES-PLAN.md §5's PortEdge row):
-   * "nothing on the rail itself" — forwarded straight to the `LabeledPort`
-   * the default render draws for this item; the PORT is the subject, the
-   * rail is furniture. A host's own `renderItem` override is responsible
-   * for forwarding this itself if it wants the mark.
-   */
-  diagnostics?: Diagnostic[];
-  /** Forwarded straight to the `LabeledPort` the default render draws for
-   *  this item — same "nothing on the rail itself, the PORT is the
-   *  subject" rule `diagnostics` follows, one row up. See
-   *  `PortDotPaintInput.availability`'s own doc
-   *  (docs/INVALID-STATES-PLAN.md D5, ruling 5). */
-  availability?: "available" | "unavailable";
-  /**
-   * The port's TYPE — drawn by the default `LabeledPort` as the muted
-   * secondary run after the name (lane `ports`, 2026-09-19: "label small
-   * inside the row, type secondary"), and the source of the by-type
-   * variants' colour. Optional: a port with no type renders the name alone.
-   */
-  type?: string;
-  /** An explicit CSS colour for the type, winning over the palette. */
-  typeColor?: string;
-  /**
-   * How many cables meet this port — the fan-in/fan-out count the
-   * `producers-count` lane computes from the scene and the port renders
-   * as a count circle riding the dot (Zach, 2026-09-19: one attach point
-   * in the centre, plus "the producer circle that has the number").
-   * Forwarded to the default `LabeledPort`; a host `renderItem` forwards
-   * it itself, same rule as `diagnostics`.
-   */
-  producers?: number;
-  /** Host-set selection, forwarded to the default `LabeledPort`. */
-  selected?: boolean;
-  /**
-   * P-056. The line this port contributes to the MULTI-LINE LANE, when that
-   * is not the same string as `label`. Omit — the normal case, and every
-   * story on this file — and the lane shows `label`, exactly as before.
-   *
-   * WHY the two can differ at all, which is not obvious from inside this
-   * component: a host may paint a port's line in two places with two
-   * different amounts of room. SystemSketch's block rail paints only the NAME
-   * HALF of `gain_x: float`, and that is a measured ruling rather than a
-   * shortcut — two annotated labels flowing inward from opposite walls of a
-   * 160px card overlap by 73px of unreadable text
-   * (`apps/systemsketch/src/shapes/block/BlockFace.tsx`'s `labelOf`). The
-   * lane is an overlay beside the rail and has the room, so it is the one
-   * surface that can show — and therefore edit — the whole declaration. With
-   * one field for both, typing `gain_y: int` into the lane would splice a
-   * colon into a name and produce `gain_y: int: float`.
-   *
-   * `formatPortLane`/`reconcilePortLane` (./portLane.ts) are the only readers,
-   * and they write an edited line back into whichever of the two fields the
-   * item actually declared — see `withPortLaneLine` there.
-   */
-  laneLine?: string;
-}
+// PortEdgeItem itself moved to ./portEdge.layout.ts (W1, 2026-09-18) — see
+// that file's own doc for why — and is re-exported above.
 
 /**
  * RULING 7's payload: everything `PortEdge` knows about a `maxVisible` cut,
@@ -210,7 +152,9 @@ export interface PortEdgeProps {
    *  end (`aligned`). */
   distribution?: Distribution;
   /**
-   * Auto = flex-laid-out (distribute/aligned above); Custom = the author
+   * Auto = laid out by a registered `PortLayoutFn` (distribute/aligned
+   * above, or `anchorLayout`; W1 replaced the flex layout, byte-identical
+   * for the built-ins); Custom = the author
    * drags each port along its own wall, positions in `freeOffsets`.
    *
    * WHY Custom is ORDERED and gapped, not free (Zach, 2026-09-22): "in
@@ -293,8 +237,27 @@ export interface PortEdgeProps {
    * no `reorderChord` is armed. The HINT text needs no such seam — it is
    * already drawn as a sibling of whatever this renders
    * (`PortEdgeSlotBox`'s own `reorderHint` span), not by the fill.
+   *
+   * `ctx.editable` / `ctx.onLabelWrite` (ported from
+   * claude/notebook-lab-work-order-472c22 `23ab20e`, 2026-09-19): the SAME
+   * forwarding trap for this edge's own `editing` prop. `editable` is
+   * whether THIS port's label is armed for single-line editing right now —
+   * `editing` on, `editMode` "single", exactly the inverse of the default
+   * fill's `disabled`. `onLabelWrite` commits a new label through this
+   * edge's own `onItemsChange` (`handlePortLabelWrite`), so a custom fill
+   * cannot end up with a second, divergent copy of what a label write
+   * means. A fill that draws its own `LabeledPort` and ignores both leaves
+   * `editing` silently inert for its caller.
    */
-  renderItem?(item: PortEdgeItem, ctx: { textLayout: PortTextLayout; onReorderKey?(event: KeyboardEvent): boolean }): ReactNode;
+  renderItem?(
+    item: PortEdgeItem,
+    ctx: {
+      textLayout: PortTextLayout;
+      onReorderKey?(event: KeyboardEvent): boolean;
+      editable: boolean;
+      onLabelWrite(value: string): void;
+    },
+  ): ReactNode;
   /**
    * D-A7 (docs/BLOCK-PORT-EDGES-PLAN.md §4b·S1): what a COLLAPSED real
    * family draws, when the host needs something other than this component's
@@ -494,6 +457,19 @@ export interface PortEdgeProps {
    */
   dividerAfter?: number[];
   onDividerAfterChange?(next: number[]): void;
+  /**
+   * W1 (docs/WORK-ORDER-2026-09-18.md) — Zach's own generalization of the
+   * registry: "you can kind of set any anchor points for the cards you
+   * want." An escape hatch for a layout that isn't one of the built-in
+   * `Distribution` names — when set (with `mode: "auto"`), it OVERRIDES
+   * `distribution` entirely, looking `name` up via `portLayout` instead
+   * of mapping `distribution.mode`/`scheme` onto a registry key. A story
+   * registers a genuinely non-linear layout (an ellipse, an arc) with
+   * `registerPortLayout` from OUTSIDE this file and asks for it this way
+   * — proof the registry is a real seam, not merely an internal wrapper
+   * around the three built-ins (`PortEdge.AnchorLayouts.stories.tsx`).
+   */
+  anchorLayout?: { name: string; args?: unknown };
 }
 
 /* ------------------------------------------------------------------ */
@@ -504,6 +480,34 @@ export interface PortEdgeProps {
 /* ------------------------------------------------------------------ */
 
 const PortEdgeDndScope = createContext(false);
+
+/**
+ * W1 (docs/WORK-ORDER-2026-09-18.md): dnd-kit's own `closestCenter`
+ * ranks by the DRAGGED element's (translated) rect centre versus each
+ * droppable's rect centre — a rect-vs-rect measure that made sense when
+ * `useSortable` owned the geometry. Now that every card renders at a
+ * point a registered `PortLayoutFn` chose (`AnchorSlotCard`, below), the
+ * more direct question is which anchor the POINTER ITSELF is nearest to
+ * — so this ranks by the raw pointer position instead of the dragged
+ * rect. dnd-kit already measures every registered droppable's live rect
+ * (`droppableContainers[].rect.current`), and since a card's droppable
+ * and its rendered box are the same element, that measured centre IS
+ * the anchor in client space — nothing here has to separately re-derive
+ * anchor -> client-space itself.
+ */
+const nearestAnchor: CollisionDetection = ({ droppableContainers, pointerCoordinates }) => {
+  if (!pointerCoordinates) return [];
+  const collisions = [];
+  for (const container of droppableContainers) {
+    const rect = container.rect.current;
+    if (!rect) continue;
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const distance = Math.hypot(cx - pointerCoordinates.x, cy - pointerCoordinates.y);
+    collisions.push({ id: container.id, data: { droppableContainer: container, value: distance } });
+  }
+  return collisions.sort((a, b) => a.data.value - b.data.value);
+};
 
 export function PortEdgeDndProvider({
   onDragOver,
@@ -516,7 +520,7 @@ export function PortEdgeDndProvider({
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragOver={onDragOver} onDragEnd={onDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={nearestAnchor} onDragOver={onDragOver} onDragEnd={onDragEnd}>
       <PortEdgeDndScope.Provider value={true}>{children}</PortEdgeDndScope.Provider>
     </DndContext>
   );
@@ -656,10 +660,12 @@ interface PortEdgeSlotBoxProps {
   onRequestLaneOpen?(): void;
   /**
    * 2026-09-17 (Lane I, "what does dnd-kit actually use for a grouped
-   * family" — see the report): a real (not collapsed) group's dnd-kit
-   * registration is ONE `useSortable({id: slot.slotId})` on the SLOT's own
-   * wrapping div (`SortableSlotCard`/`FreeSlotCard` below) — never one per
-   * member, measured live via `useDndContext().droppableRects`. Drawing a
+   * family" — see the report; UPDATED 2026-09-18 for W1's
+   * `AnchorSlotCard`): a real (not collapsed) group's dnd-kit
+   * registration is ONE `useDraggable`/`useDroppable({id: slot.slotId})`
+   * pair on the SLOT's own wrapping div (`AnchorSlotCard`/`FreeSlotCard`
+   * below) — never one per member, measured live via
+   * `useDndContext().droppableRects`. Drawing a
    * `showCard` overlay per MEMBER here (the pre-fix behaviour) therefore
    * drew a rectangle dnd-kit never registers — N small boxes with gaps
    * between them, when the thing actually being dragged/collision-tested is
@@ -724,9 +730,16 @@ function PortEdgeSlotBox({ item, edge, showPorts, showCard, slotMainPx, renderIt
   // member box below does the opening instead, before the click can reach
   // anything else. `"single"` mode (the default) is unchanged: `disabled`
   // is simply the inverse of "armed".
-  const singleLineEditable = editingEnabled && editMode === "single";
+  const singleLineEditable = Boolean(editingEnabled) && editMode === "single";
   const port =
-    item == null ? null : renderItem ? renderItem(item, { textLayout, onReorderKey: onReorderKey ? (event) => onReorderKey(item.id, event) : undefined }) : showPorts ? (
+    item == null ? null : renderItem ? (
+      renderItem(item, {
+        textLayout,
+        onReorderKey: onReorderKey ? (event) => onReorderKey(item.id, event) : undefined,
+        editable: singleLineEditable,
+        onLabelWrite: (value: string) => onLabelWrite?.(item.id, value),
+      })
+    ) : showPorts ? (
       <LabeledPort
         edge={edge}
         state={item.state ?? "empty"}
@@ -972,10 +985,12 @@ function GroupSlotBody({ slot, edge, itemsById, showPorts, showCard, axis, slotM
         />
       )}
       {showCard && (
-        // "What does dnd-kit actually use for a grouped family" (Lane I):
-        // ONE rectangle, registered by `SortableSlotCard`/`FreeSlotCard`'s
-        // own `useSortable({id: slot.slotId})` on the div that wraps THIS
-        // component whole — measured live via `useDndContext().droppableRects`
+        // "What does dnd-kit actually use for a grouped family" (Lane I,
+        // UPDATED 2026-09-18 for W1's `AnchorSlotCard`): ONE rectangle,
+        // registered by `AnchorSlotCard`/`FreeSlotCard`'s own
+        // `useDraggable`/`useDroppable({id: slot.slotId})` pair on the div
+        // that wraps THIS component whole — measured live via
+        // `useDndContext().droppableRects`
         // (see the report), not the N per-member boxes the pre-fix overlay
         // drew. `inset-0` of THIS `position:relative` container is exactly
         // that wrapping div's own box (no padding/border sits between them),
@@ -1116,45 +1131,90 @@ function SlotBody(props: SlotRenderProps) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Cards — sortable (Auto mode) and free-draggable (Custom mode).       */
+/* Cards — anchored (Auto mode) and free-draggable (Custom mode).       */
 /* ------------------------------------------------------------------ */
 
 /**
- * B1: `@dnd-kit/sortable`'s `useSortable` returns a `transform` that can
- * carry `scaleX`/`scaleY` — not from this card's OWN drag (that part is a
- * pure translate), but from `useDerivedTransform`'s "squeeze" animation,
- * which fires on any SIBLING card whose rendered rect changes size as the
- * live reorder shifts its index (sortable.cjs.development.js's own
- * `useDerivedTransform`/`verticalListSortingStrategy`). Our cards are NOT
- * uniform width/height — a label's natural size varies, a grouped card used
- * to be taller than a singleton one — so that scale visibly stretched or
- * shrank a card for one animation frame every time the drag passed it.
- * Zeroing scaleX/scaleY here is the same fix `demos/dndkit-lab`'s own
- * history records for the DragOverlay version of this bug (`adjustScale`,
- * see this file's own report) — always pin scale to 1, only ever translate.
+ * AnchorSlotCard — W1's replacement for the old `SortableSlotCard`
+ * (`useSortable` + a flex/`SortableContext` track). Comment B1 and
+ * `neutralizeScale`, deleted with it, existed only because
+ * `@dnd-kit/sortable`'s `useDerivedTransform` computes a SIBLING'S
+ * transform from measured rect deltas as a live reorder shifts its
+ * index, and that derived transform can carry a scale that visibly
+ * squeezed a card for a frame. This card has no such derived transform
+ * to neutralize: `left`/`top` come straight from `PortEdgeBody`'s own
+ * anchor computation (a registered `PortLayoutFn`, run over the tentative
+ * order while a drag is over this rail — see that component's own doc),
+ * and `useDraggable`'s `transform` is nothing but this card's OWN pointer
+ * delta, never a sibling's. One geometry owner makes B1's bug class
+ * impossible instead of neutralized.
+ *
+ * Both draggable (so it can be picked up) and droppable (so `nearestAnchor`
+ * can name it as a drop target) at the SAME id — the manual-sortable
+ * pattern `@dnd-kit/core`'s own docs describe for a custom
+ * `collisionDetection`, used here instead of `useSortable` precisely
+ * because `useSortable` is what carried the B1 coupling.
+ *
+ * WHY (Zach, 2026-09-18, quoted in commit 76e3b92's message): "the port
+ * layout things which support arbitrary layouts and then DND kit basically
+ * just allows us to kind of like modify the data structure." `arrayMove`
+ * on drop is dnd-kit's only write; where a card SITS is the layout
+ * function's answer, never a transform dnd-kit derived. Do not bring
+ * `useSortable` back for its settle animation — that re-opens B1.
+ *
+ * `fixed` — an `anchored` distribution's card (`AnchoredConfig`, ported
+ * from claude/notebook-lab-work-order-472c22 `27b4314`, where it was a
+ * second component, `AnchoredSlotCard`). Same position, same body, but no
+ * gesture: the drag and drop registrations are `disabled` (dnd-kit then
+ * hands back no `listeners`, and `nearestAnchor` never sees this card as
+ * a target), no `attributes` (no `role="button"`/tab stop on a dot a
+ * cable may later drag from), no grab cursor and no `touchAction`
+ * override, so the dot keeps whatever pointer behaviour its own content
+ * declares. WHY one card with a flag, not the donor's second component:
+ * the positioning formula is the one thing both must share byte-for-byte
+ * — a host reasons about one mode from the other only if the same number
+ * lands on the same pixel — and the hooks stay unconditional, so an edge
+ * that switches distribution at runtime keeps each card's hook order.
  */
-function neutralizeScale(transform: Parameters<typeof CSS.Transform.toString>[0]) {
-  if (!transform) return transform;
-  return { ...transform, scaleX: 1, scaleY: 1 };
-}
-
-function SortableSlotCard(props: SlotRenderProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.slot.slotId });
+function AnchorSlotCard(props: SlotRenderProps & { left: number; top: number; fixed?: boolean }) {
+  const { left, top, fixed = false, ...slotProps } = props;
+  const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({ id: props.slot.slotId, disabled: fixed });
+  const { setNodeRef: setDropRef } = useDroppable({ id: props.slot.slotId, disabled: fixed });
+  const setRefs = useCallback(
+    (el: HTMLDivElement | null) => {
+      setDragRef(el);
+      setDropRef(el);
+    },
+    [setDragRef, setDropRef],
+  );
+  const drag = CSS.Translate.toString(transform);
   const style: CSSProperties = {
-    transform: CSS.Transform.toString(neutralizeScale(transform)),
-    transition,
+    position: "absolute",
+    left,
+    top,
+    transform: drag || undefined,
+    // `dragActive` is the one place a gesture leaks into paint order —
+    // same rule `FreeSlotCard` already follows, below.
+    zIndex: isDragging ? paintTier("dragActive") : paintTier("memberContent"),
     opacity: isDragging ? 0.35 : 1,
-    cursor: "grab",
-    touchAction: "none",
+    ...(fixed ? {} : { cursor: "grab", touchAction: "none" }),
     // Re-arms what `blockPort.tsx`'s rail wrapper (`block-port-rail`) turns
     // off at the box level — this card is the one thing in a slot's box
-    // that IS real content (a port, draggable/sortable), so it alone opts
-    // back into hit-testing. See that file's own WHY on the rail style.
+    // that IS real content (a port, draggable), so it alone opts back into
+    // hit-testing. See that file's own WHY on the rail style.
     pointerEvents: "auto",
   };
   return (
-    <div ref={setNodeRef} data-slot="port-edge-card" data-dragging={isDragging || undefined} style={style} {...attributes} {...listeners}>
-      <SlotBody {...props} />
+    <div
+      ref={setRefs}
+      data-slot="port-edge-card"
+      data-anchored={fixed ? "" : undefined}
+      data-dragging={isDragging || undefined}
+      style={style}
+      {...(fixed ? {} : attributes)}
+      {...listeners}
+    >
+      <SlotBody {...slotProps} />
     </div>
   );
 }
@@ -1188,7 +1248,7 @@ function FreeSlotCard(props: SlotRenderProps & { axis: "row" | "column"; x: numb
     opacity: isDragging ? 0.6 : 1,
     cursor: "grab",
     touchAction: "none",
-    // See `SortableSlotCard`'s identical line — re-arms hit-testing that
+    // See `AnchorSlotCard`'s identical line — re-arms hit-testing that
     // `blockPort.tsx`'s rail wrapper turns off at the box level.
     pointerEvents: "auto",
   };
@@ -1396,7 +1456,7 @@ function PortLaneOverlay({
     top: geometry.top,
     left: geometry.dotRight + LANE_GAP_PX,
     zIndex: paintTier("laneOverlay"),
-    // Same re-arm as `SortableSlotCard`/`FreeSlotCard` — the lane is a real
+    // Same re-arm as `AnchorSlotCard`/`FreeSlotCard` — the lane is a real
     // CodeEditor a user types into, so it opts back into hit-testing that
     // `blockPort.tsx`'s rail wrapper turns off at the box level.
     pointerEvents: "auto",
@@ -1533,7 +1593,7 @@ function useMoreIndicatorPosition(trackRef: RefObject<HTMLDivElement | null>, ax
 }
 
 /* ------------------------------------------------------------------ */
-/* PortEdgeBody — the track: droppable + sortable, no opinion about      */
+/* PortEdgeBody — the track: droppable + anchored, no opinion about     */
 /* who owns the surrounding DndContext.                                */
 /* ------------------------------------------------------------------ */
 
@@ -1573,11 +1633,11 @@ function PortEdgeBody({
   reorderChord,
   dividerAfter,
   onDividerAfterChange,
+  anchorLayout,
 }: PortEdgeProps) {
   const containerId = id ?? edge;
   const axis = AXIS_FOR_EDGE[edge];
   const resolvedSize = size ?? DEFAULT_SIZE[axis];
-  const strategy: SortingStrategy = axis === "row" ? horizontalListSortingStrategy : verticalListSortingStrategy;
 
   const itemIds = items.map((i) => i.id);
   const itemsById = new Map(items.map((i) => [i.id, i] as const));
@@ -1808,6 +1868,144 @@ function PortEdgeBody({
     if (!same) onFreeOffsetsChange(customOffsets);
   });
 
+  // W1 (docs/WORK-ORDER-2026-09-18.md) — anchor-space port layout. Auto
+  // mode's cards no longer get their position from flex plus a sortable
+  // strategy: a registered `PortLayoutFn` (portEdge.layout.ts) computes
+  // where every slot sits, looked up by the SAME names `SPACING_SCHEMES`/
+  // `AlignConfig` already use — the 3 SpacingScheme distributions and
+  // `aligned` are registry entries wrapping `mainAxisPositions`, not a
+  // second, parallel implementation (see that file's own doc).
+  //
+  // `anchored` (`AnchoredConfig`, ported from notebook-lab `27b4314`) is
+  // one more registry entry, keyed by its own mode name and handed the
+  // edge's own config — NOT a branch that lays it out as `aligned`. Before
+  // this port the fallback below mapped every non-`distribute` mode to
+  // `"aligned"`, so an anchored edge would have silently packed from the
+  // start (W1h's handoff note named exactly that trap).
+  const layoutName = anchorLayout?.name ?? (distribution.mode === "distribute" ? distribution.scheme : distribution.mode);
+  const layoutFn = portLayout(layoutName);
+  const layoutArgs = anchorLayout ? anchorLayout.args : distribution.mode === "distribute" ? undefined : distribution;
+  /** An `anchored` edge's cards sit where the HOST's numbers put them, so
+   *  they carry no drag (`AnchorSlotCard`'s `fixed`) — see `AnchoredConfig`
+   *  for why a host that derives positions from its own data wants the
+   *  geometry without the gesture. An `anchorLayout` override still wins
+   *  the geometry (it did before this mode existed) and stays draggable. */
+  const fixedCards = !anchorLayout && distribution.mode === "anchored";
+
+  // W1: "the drag preview is the real thing" (the work order's own
+  // words) — while a drag is live over this rail, anchors are computed
+  // for the TENTATIVE reordered slot array (`arrayMove` at the live
+  // `over` index) rather than an animation approximating it, so every
+  // non-dragged card visibly sits where it would actually land, through
+  // the SAME `PortLayoutFn` that renders the resting state.
+  // `useDndMonitor`, not a prop: the owning `DndContext` belongs to
+  // `PortEdgeDndProvider` or `StandalonePortEdge`, either of which may
+  // sit several components above this one, and `useDndMonitor` is
+  // `@dnd-kit/core`'s own supported way for any descendant to observe a
+  // session it doesn't itself own. (Custom mode's own monitor, above, is
+  // separate on purpose: it tracks a constrained DELTA, this tracks an
+  // ORDER, and `visualSlots` ignores a session whenever `mode` is custom.)
+  const [dragSession, setDragSession] = useState<{ activeId: string; overId: string | null } | null>(null);
+  useDndMonitor({
+    onDragStart: ({ active }) => setDragSession({ activeId: String(active.id), overId: null }),
+    onDragOver: ({ active, over }) => setDragSession({ activeId: String(active.id), overId: over ? String(over.id) : null }),
+    onDragEnd: () => setDragSession(null),
+    onDragCancel: () => setDragSession(null),
+  });
+  const visualSlots = useMemo(() => {
+    if (mode !== "auto" || !dragSession?.overId || dragSession.activeId === dragSession.overId) return slots;
+    const oldIndex = slots.findIndex((s) => s.slotId === dragSession.activeId);
+    const newIndex = slots.findIndex((s) => s.slotId === dragSession.overId);
+    if (oldIndex === -1 || newIndex === -1) return slots;
+    return arrayMove(slots, oldIndex, newIndex);
+  }, [slots, mode, dragSession]);
+
+  // W1: the cross-axis position a linear (built-in) `PortLayoutFn` can't
+  // compute itself — it only ever learns this rail's OWN axis length
+  // (`rail.mainSize`), never the perpendicular one (`Anchor`'s own doc,
+  // portEdge.layout.ts, explains why). This is the exact number
+  // flexbox's `align-items: center` used to produce for free; centring
+  // it here once is what keeps the built-ins' RESTING position
+  // byte-identical to before this component stopped laying auto-mode
+  // cards out with flex. `anchorLayout` (a genuinely non-linear
+  // registrant) never needs this — its own `Anchor` already carries a
+  // real point on BOTH axes, which is the whole reason it's a separate
+  // branch below rather than one more `axis`-keyed case.
+  const crossContentPx = (axis === "row" ? resolvedSize.height : resolvedSize.width) - 2 * CONTAINER_BORDER - 2 * CONTAINER_PADDING;
+  const crossCenter = crossContentPx / 2;
+  // Every entry here is the CARD'S CENTRE, in the track's content-box
+  // coordinate frame (the same frame `contentMainPx`/`crossContentPx`
+  // already use) — `AnchorSlotCard`'s renderer, below, subtracts half a
+  // card's footprint uniformly, the one formula every registrant's
+  // output (linear or not) goes through on its way to `left`/`top`.
+  const anchorBySlotId = new Map<string, Anchor>();
+  // Per-slot MAIN-AXIS span, for the one case a card ISN'T the uniform
+  // `slotMainPx` square: a real (not collapsed) group. Absent for every
+  // other slot — the render site below falls back to `slotMainPx`, same
+  // as the cross axis always does (a group only ever widens along its
+  // OWN edge's axis; `GroupSlotBody` never grows the cross dimension).
+  const mainSpanBySlotId = new Map<string, number>();
+  if (mode === "auto" && anchorLayout) {
+    // The escape hatch: a registered layout owns BOTH coordinates
+    // itself — no cross-axis override, since a non-linear layout's
+    // entire point is that "cross" varies too. Its rail still only
+    // states ONE axis length (`rail.mainSize`, `axis`) for a caller that
+    // wants to build an ordinary linear layout against it; a registrant
+    // that ignores `axis` (an ellipse, ordered by ANGLE, not aisle) is
+    // free to.
+    const rail: PortLayoutRail = { mainSize: contentMainPx, cardMain: slotMainPx, axis, gap: gapPx };
+    if (layoutFn) {
+      const pseudoItems: PortEdgeItem[] = visualSlots.map((s) => ({ id: s.slotId, label: "" }));
+      const anchors = layoutFn(pseudoItems, rail, layoutArgs);
+      visualSlots.forEach((s, i) => {
+        const a = anchors[i];
+        if (a) anchorBySlotId.set(s.slotId, { ...a, side: a.side ?? edge });
+      });
+    }
+  } else if (mode === "auto") {
+    // W1: the registry's `PortLayoutFn` only ever learns ONE uniform
+    // `cardMain` — true for every slot except a REAL (not collapsed)
+    // multi-member group, whose on-screen span is wider
+    // (`GroupSlotBody`'s own flex row of members). `PortEdgeItem` has no
+    // member count for a `PortLayoutFn` to read one from, so a real
+    // group is routed around the registry entirely, through
+    // `packVariableSlotSpans` — see that function's own doc.
+    const hasRealGroup = groupMode === "grouped" && visualSlots.some((s) => s.members.length > 1);
+    // Leading-edge position + this slot's own main-axis span (see
+    // `slotMainSpan`), one per visible slot — `axisAnchor`'s own doc
+    // explains why a `PortLayoutFn` reports the leading edge rather than
+    // a centre; this is where that gets turned into one.
+    let leading: number[];
+    let spans: number[];
+    if (hasRealGroup) {
+      spans = visualSlots.map((s) => slotMainSpan(s.members.length, slotMainPx, gapPx));
+      visualSlots.forEach((s, i) => mainSpanBySlotId.set(s.slotId, spans[i]));
+    } else {
+      spans = visualSlots.map(() => slotMainPx);
+    }
+    if (hasRealGroup && distribution.mode !== "anchored") {
+      leading = packVariableSlotSpans(spans, distribution, gapPx, contentMainPx);
+    } else {
+      // A real group on an `anchored` edge still comes through the
+      // registry: the `"anchored"` entry never reads `rail.cardMain` (the
+      // host's offset IS the slot's leading edge, whatever its span), so
+      // the uniform-`cardMain` limit above does not apply to it.
+      const rail: PortLayoutRail = { mainSize: contentMainPx, cardMain: slotMainPx, axis, gap: gapPx };
+      // A `PortLayoutFn` only ever needs identity + count/order — a real
+      // `PortEdgeItem` for every rendered SLOT (not raw `items`; a
+      // singleton or collapsed slot is the actual positionable unit,
+      // same as the old `useSortable({id: slot.slotId})` registration
+      // it replaces).
+      const pseudoItems: PortEdgeItem[] = visualSlots.map((s) => ({ id: s.slotId, label: "" }));
+      leading = layoutFn ? layoutFn(pseudoItems, rail, layoutArgs).map((a) => (axis === "row" ? a.x : a.y)) : visualSlots.map(() => 0);
+    }
+    visualSlots.forEach((s, i) => {
+      const mainCentre = (leading[i] ?? 0) + spans[i] / 2;
+      const anchor: Anchor = axis === "row" ? { x: mainCentre, y: crossCenter, side: edge } : { x: crossCenter, y: mainCentre, side: edge };
+      anchorBySlotId.set(s.slotId, anchor);
+    });
+  }
+
   const { setNodeRef, isOver } = useDroppable({ id: containerId });
   const trackRef = useRef<HTMLDivElement | null>(null);
   // WHY memoized (not an inline arrow in the JSX below): an inline
@@ -1863,127 +2061,144 @@ function PortEdgeBody({
   };
 
   return (
-    <SortableContext id={containerId} items={slots.map((s) => s.slotId)} strategy={strategy}>
-      <div
-        ref={setTrackRef}
-        data-slot="port-edge"
-        data-edge={edge}
-        data-unknown-groups={unknownIds.length > 0 ? unknownIds.join(",") : undefined}
-        style={trackStyle}
-        // D13, restored: starting a drag CLOSES the lane rather than
-        // disabling the sortable — `useSortable({disabled:true})` still
-        // spreads `attributes` (role/tabIndex) and never reaches Custom
-        // mode's `useDraggable` at all, so it doesn't actually stop a drag;
-        // a capture-phase pointerdown on any card does, unconditionally,
-        // and makes the exclusivity legible instead of emergent (see the
-        // codeEditor's OWN capture listener, which this mirrors). Gated on
-        // `laneOpen` alone now, not `editing` — a per-port single-line edit
-        // has nothing shared to protect, only the rail-wide document does.
-        onPointerDownCapture={
-          laneOpen
-            ? (event) => {
-                if (event.target instanceof Element && event.target.closest('[data-slot="port-edge-card"]')) {
-                  setLaneOpen(false);
-                }
+    <div
+      ref={setTrackRef}
+      data-slot="port-edge"
+      data-edge={edge}
+      data-unknown-groups={unknownIds.length > 0 ? unknownIds.join(",") : undefined}
+      style={trackStyle}
+      // D13, restored: starting a drag CLOSES the lane rather than
+      // disabling the sortable — `useSortable({disabled:true})` still
+      // spreads `attributes` (role/tabIndex) and never reaches Custom
+      // mode's `useDraggable` at all, so it doesn't actually stop a drag;
+      // a capture-phase pointerdown on any card does, unconditionally,
+      // and makes the exclusivity legible instead of emergent (see the
+      // codeEditor's OWN capture listener, which this mirrors). Gated on
+      // `laneOpen` alone now, not `editing` — a per-port single-line edit
+      // has nothing shared to protect, only the rail-wide document does.
+      onPointerDownCapture={
+        laneOpen
+          ? (event) => {
+              if (event.target instanceof Element && event.target.closest('[data-slot="port-edge-card"]')) {
+                setLaneOpen(false);
               }
-            : undefined
-        }
-      >
-        {showCenterLine ? <EdgeLineMark axis={axis} /> : null}
-        {laneOpen && (
-          <PortLaneOverlay
-            trackRef={trackRef}
-            visualOrder={visualOrder}
-            onItemsChange={onItemsChange}
-            onClose={() => setLaneOpen(false)}
-            language={laneLanguage}
-            dividerAfter={dividerAfter}
-            onDividerAfterChange={onDividerAfterChange}
+            }
+          : undefined
+      }
+    >
+      {showCenterLine ? <EdgeLineMark axis={axis} /> : null}
+      {laneOpen && (
+        <PortLaneOverlay
+          trackRef={trackRef}
+          visualOrder={visualOrder}
+          onItemsChange={onItemsChange}
+          onClose={() => setLaneOpen(false)}
+          language={laneLanguage}
+          dividerAfter={dividerAfter}
+          onDividerAfterChange={onDividerAfterChange}
+        />
+      )}
+      {hiddenPortCount > 0 && moreIndicatorPos && (
+        // RULING 7's seam, in one element. The POSITION is this
+        // component's (it owns `trackRef`, and the anchor is measured off
+        // the last visible port's real box — `useMoreIndicatorPosition`);
+        // WHAT gets drawn at that position is the caller's, which is how
+        // `editor/portOverflowChip.tsx` supplies chrome that `components/`
+        // is not allowed to import. `pointerEvents` is `auto` only when a
+        // caller actually rendered something interactive — the bare
+        // fallback below is text, and text that eats clicks over a track
+        // would be a new way to miss a port.
+        <span
+          data-slot="port-edge-more"
+          style={{
+            position: "absolute",
+            left: moreIndicatorPos.left,
+            top: moreIndicatorPos.top,
+            transform: axis === "row" ? "translateY(-50%)" : undefined,
+            whiteSpace: "nowrap",
+            // WHY `flex` rather than the default block: as a block, this
+            // box's height is a LINE box, so half-leading pads whatever
+            // sits in it and the thing a reader actually sees ends up a
+            // couple of pixels below the anchor the hook measured — and
+            // on a row edge, `translateY(-50%)` then centres the leading
+            // instead of the content. A flex container blockifies its
+            // child, so the box is exactly the marker's own height and
+            // the measured anchor is the marker's real position. Measured
+            // at 2.125px of drift before this line.
+            display: "flex",
+            alignItems: "center",
+            // Supplied chrome can open something (the chip's own list of
+            // hidden ports), so it rides the same tier the lane overlay
+            // does — above every slot card on the track, walled off by
+            // this root's own `ISOLATED_ROOT_STYLE`. The bare fallback is
+            // inert text and claims no tier at all.
+            ...(renderOverflow
+              ? { pointerEvents: "auto", zIndex: paintTier("laneOverlay") }
+              : { fontSize: 12, fontStyle: "italic", color: "var(--muted-foreground)", pointerEvents: "none" }),
+          }}
+        >
+          {renderOverflow ? renderOverflow({ hiddenCount: hiddenPortCount, hiddenItems, edge, axis }) : `+${hiddenPortCount} more`}
+        </span>
+      )}
+      {drag &&
+        heldPairs.map(([from, to]) => (
+          <MinGapMarker
+            key={`${from}|${to}`}
+            edge={edge}
+            axis={axis}
+            from={drag.offsets[from] + spacing.sizes![from] - slotMainPx / 2}
+            to={drag.offsets[to] + slotMainPx / 2}
+            crossPx={axis === "column" ? resolvedSize.width : resolvedSize.height}
           />
-        )}
-        {hiddenPortCount > 0 && moreIndicatorPos && (
-          // RULING 7's seam, in one element. The POSITION is this
-          // component's (it owns `trackRef`, and the anchor is measured off
-          // the last visible port's real box — `useMoreIndicatorPosition`);
-          // WHAT gets drawn at that position is the caller's, which is how
-          // `editor/portOverflowChip.tsx` supplies chrome that `components/`
-          // is not allowed to import. `pointerEvents` is `auto` only when a
-          // caller actually rendered something interactive — the bare
-          // fallback below is text, and text that eats clicks over a track
-          // would be a new way to miss a port.
-          <span
-            data-slot="port-edge-more"
-            style={{
-              position: "absolute",
-              left: moreIndicatorPos.left,
-              top: moreIndicatorPos.top,
-              transform: axis === "row" ? "translateY(-50%)" : undefined,
-              whiteSpace: "nowrap",
-              // WHY `flex` rather than the default block: as a block, this
-              // box's height is a LINE box, so half-leading pads whatever
-              // sits in it and the thing a reader actually sees ends up a
-              // couple of pixels below the anchor the hook measured — and
-              // on a row edge, `translateY(-50%)` then centres the leading
-              // instead of the content. A flex container blockifies its
-              // child, so the box is exactly the marker's own height and
-              // the measured anchor is the marker's real position. Measured
-              // at 2.125px of drift before this line.
-              display: "flex",
-              alignItems: "center",
-              // Supplied chrome can open something (the chip's own list of
-              // hidden ports), so it rides the same tier the lane overlay
-              // does — above every slot card on the track, walled off by
-              // this root's own `ISOLATED_ROOT_STYLE`. The bare fallback is
-              // inert text and claims no tier at all.
-              ...(renderOverflow
-                ? { pointerEvents: "auto", zIndex: paintTier("laneOverlay") }
-                : { fontSize: 12, fontStyle: "italic", color: "var(--muted-foreground)", pointerEvents: "none" }),
-            }}
-          >
-            {renderOverflow ? renderOverflow({ hiddenCount: hiddenPortCount, hiddenItems, edge, axis }) : `+${hiddenPortCount} more`}
-          </span>
-        )}
-        {drag &&
-          heldPairs.map(([from, to]) => (
-            <MinGapMarker
-              key={`${from}|${to}`}
-              edge={edge}
+        ))}
+      {mode === "custom"
+        ? slots.map((slot) => (
+            <FreeSlotCard
+              key={slot.slotId}
+              slot={slot}
               axis={axis}
-              from={drag.offsets[from] + spacing.sizes![from] - slotMainPx / 2}
-              to={drag.offsets[to] + slotMainPx / 2}
-              crossPx={axis === "column" ? resolvedSize.width : resolvedSize.height}
+              edge={edge}
+              itemsById={itemsById}
+              showPorts={showPorts}
+              showCard={showCard}
+              collapsed={groupMode === "collapsed"}
+              slotMainPx={slotMainPx}
+              gapPx={gapPx}
+              color={colorMap.get(slot.slotId)}
+              x={(drag && customDrag?.id === slot.slotId ? customOffsets : shownOffsets)[slot.slotId] ?? 0}
+              shift={drag && customDrag?.id === slot.slotId ? shownOffsets[slot.slotId] - customOffsets[slot.slotId] : 0}
+              renderItem={renderItem}
+              renderCollapsed={renderCollapsed}
+              textLayoutOverride={resolvedTextLayout}
+              editingEnabled={editingEnabled}
+              onLabelWrite={handlePortLabelWrite}
+              labelLanguage={laneLanguage}
+              variant={variant}
+              editMode={resolvedEditMode}
+              onRequestLaneOpen={() => setLaneOpen(true)}
             />
-          ))}
-        {mode === "custom"
-          ? slots.map((slot) => (
-              <FreeSlotCard
+          ))
+        : slots.map((slot) => {
+            // W1: every anchor above is a CARD CENTRE (built-in or
+            // `anchorLayout`, uniform or grouped) — `CONTAINER_PADDING`
+            // is `FreeSlotCard`'s own compensation for position:absolute
+            // ignoring the track's own CSS padding (that file's doc),
+            // and subtracting half the card's own footprint turns a
+            // centre into the top-left `left`/`top` a box needs. Only
+            // the MAIN axis footprint ever differs from `slotMainPx`
+            // (a real group, wider along its OWN edge's axis —
+            // `mainSpanBySlotId`); the cross footprint is always the
+            // uniform square, on every registrant, linear or not.
+            const anchor = anchorBySlotId.get(slot.slotId) ?? { x: crossCenter, y: crossCenter };
+            const mainSpan = mainSpanBySlotId.get(slot.slotId) ?? slotMainPx;
+            const left = CONTAINER_PADDING + anchor.x - (axis === "row" ? mainSpan : slotMainPx) / 2;
+            const top = CONTAINER_PADDING + anchor.y - (axis === "row" ? slotMainPx : mainSpan) / 2;
+            return (
+              <AnchorSlotCard
                 key={slot.slotId}
-                slot={slot}
-                axis={axis}
-                edge={edge}
-                itemsById={itemsById}
-                showPorts={showPorts}
-                showCard={showCard}
-                collapsed={groupMode === "collapsed"}
-                slotMainPx={slotMainPx}
-                gapPx={gapPx}
-                color={colorMap.get(slot.slotId)}
-                x={(drag && customDrag?.id === slot.slotId ? customOffsets : shownOffsets)[slot.slotId] ?? 0}
-                shift={drag && customDrag?.id === slot.slotId ? shownOffsets[slot.slotId] - customOffsets[slot.slotId] : 0}
-                renderItem={renderItem}
-                renderCollapsed={renderCollapsed}
-                textLayoutOverride={resolvedTextLayout}
-                editingEnabled={editingEnabled}
-                onLabelWrite={handlePortLabelWrite}
-                labelLanguage={laneLanguage}
-                variant={variant}
-                editMode={resolvedEditMode}
-                onRequestLaneOpen={() => setLaneOpen(true)}
-              />
-            ))
-          : slots.map((slot) => (
-              <SortableSlotCard
-                key={slot.slotId}
+                left={left}
+                top={top}
+                fixed={fixedCards}
                 slot={slot}
                 axis={axis}
                 edge={edge}
@@ -2006,9 +2221,9 @@ function PortEdgeBody({
                 onReorderKey={handleReorderKey}
                 reorderHint={reorderHint}
               />
-            ))}
-      </div>
-    </SortableContext>
+            );
+          })}
+    </div>
   );
 }
 
@@ -2049,7 +2264,7 @@ function StandalonePortEdge(props: PortEdgeProps) {
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={nearestAnchor} onDragEnd={handleDragEnd}>
       <PortEdgeBody {...props} />
     </DndContext>
   );

@@ -63,7 +63,19 @@ In this app a stock arrow **cannot bind to a Block, Port, Code or Region**: thei
 bbox-ui uses Zach's global handoff — the **Open it** table with one fenced button per row, the report opened through `/home/bam/.local/bin/open` — **not** the archived SystemSketch's `## Review ·` + `review_runtime.py` form (that was local to `/home/bam/systemsketch`). Two facts about the board row, stated plainly:
 
 - The app has to be serving the tree you changed. `pnpm --dir <abs tree> --filter systemsketch dev` serves :4340 with `--strictPort`; Zach often has one running (`ss -ltnp | grep 4340`), so check before assuming it is yours, and never stop a server you did not start.
-- **Today the new app cannot open a path from a URL**: he opens the board through ☰ → File → Open `.tldr`. State the absolute path of the `.tldr`. The `?board=<abs path>` link exists only on the unmerged `claude/chrome-files-settings-2026-09-19` branch (`apps/systemsketch/src/files/launchConfig.ts`). **Not verified.** Do not hand over a `?board=` link until you have opened it yourself on a tree that has that merged.
+- **Hand over ONE link, never a file chooser.** `?board=<absolute path>` opens the board directly: `main.tsx` boots file-backed on it and the document session reads it (`apps/systemsketch/src/files/launchConfig.ts` `initialBoard`, `src/files/session.tsx`) and loads the file through the app's file host. **The generator prints the exact link when it writes the board**, and returns it as `openUrl` — copy that line; do not assemble one by hand. It is built by the app's own `boardLinkFor` (launchConfig.ts), which keeps the `=` and every `/` literal. It points at :4340, or at `--url`'s origin when the generator attached to a running app; swap only the origin if the app is served elsewhere, never re-encode the path.
+
+  ```
+  http://127.0.0.1:4340/?board=/abs/path/apps/systemsketch/review/<slug>.tldr
+  ```
+
+  Three rules on that link, each of which has already broken once:
+
+  - **Paste it as a bare URL or a code span — never a markdown `[text](url)` link.** A chat client escapes the `=` to `%3D`; `URLSearchParams` then reads one key named `board=/abs/path`, there is no `board` param at all, and the app boots its scratch board as though no link were given.
+  - **The board must sit inside the file host's fence.** The app reads it through `scripts/systemsketch_files.py`, which refuses any board outside its files root (`_resolve_inside_root`) — `$HOME` for both `pnpm dev` on :4340 (`devFileHost.ts`) and the dock's Stable on :4341, unless `SYSTEMSKETCH_FILES_ROOT` narrows it. A board under a worktree's `apps/systemsketch/review/` is inside it: measured 2026-09-30, a cold open of the printed link for a board under `.claude/worktrees/…/apps/systemsketch/review/` put all 12 shapes on the canvas and left the file byte-identical. Never under `~/SystemSketch` — those are Zach's real boards, the app autosaves into whatever board it has open, and the generator refuses to write there.
+  - **Open it yourself before handing it over.** Cold-navigate a real browser to the link, on an app served from the tree that made the board (its shapes must match that code), and check the board is on the canvas.
+
+  Zach, 2026-09-19, rating the handoff that made him open the board by hand **Bad**: *"you should make it so I can open this file directly."*
 
 ## Invariants
 
@@ -71,7 +83,7 @@ bbox-ui uses Zach's global handoff — the **Open it** table with one fenced but
 - Containment is a tree fact, never a geometric one. Every relationship a reviewer can *act on* — parentage, a binding — is a record, not an arrangement that happens to look right.
 - Keep one primary interaction per board; split unrelated ones. Keep the board small enough that the fitted camera leaves labels legible.
 - Never point a generator, smoke test or launched review at Zach's real board.
-- The generator reaches the app through four named seams (top of `create_review_board.mjs`): `window.editor` (dev only), `serializeBoard`, `openBoard`, `createWire`. If a lane moves one, the run fails naming it — update the seam, do not work around it. The chrome/files lane is expected to change `openBoard`.
+- The generator reaches the app through five named seams (top of `create_review_board.mjs`): `window.editor` (dev only), `serializeBoard`, `loadBoardText` (or the older `openBoard`), `createWire`, `boardLinkFor`. If a lane moves one, the run fails naming it — update the seam, do not work around it.
 - The tldraw app is `apps/systemsketch` today and `apps/bbox-tldraw` after the rename. `--app` is the only place the generator names it, so the rename is one flag and one default.
 
 ## Not ported from the archived skill, on purpose

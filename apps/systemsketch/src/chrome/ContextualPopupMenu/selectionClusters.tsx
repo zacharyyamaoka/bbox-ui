@@ -25,11 +25,14 @@ import { PILL_POPOVER } from "@trunk/editor/floatingToolbar";
 import { Input } from "@trunk/components/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@trunk/components/popover";
 import { Slider } from "@trunk/components/slider";
+import { ControlStrip } from "@trunk/editor/controlStrip";
 import { ToolbarButton } from "@trunk/editor/toolbar";
 
 import { traceGeometry } from "@trunk/components/trace";
 
 import { groupSelection, groupableSelection, selectedRegionId, ungroupSelection } from "../../document/grouping";
+import { appearanceGlyphs } from "./appearanceGlyphs";
+import { buildAppearance } from "./appearanceModel";
 import {
   boardTunnelLayers,
   canonicalBoardLayer,
@@ -38,15 +41,12 @@ import {
 } from "../../shapes/wire/wireTunnel";
 import { WIRE_ROUTINGS, setWireLayer, setWireRouting, setWireTunnel, type WireRouting } from "./selectionActions";
 import {
-  activeStyleRows,
   arrangeGroupsFor,
   runArrange,
   selectionOpacityPercent,
   setSelectionOpacityPercent,
   setStyle,
   swatchColorFor,
-  faceLabelFor,
-  type ActiveStyleRow,
 } from "./arrangeActions";
 
 /* ------------------------------------------------- THE FIGJAM CELL FAMILIES
@@ -202,231 +202,66 @@ export function ArrangeCluster() {
   );
 }
 
-/* ----------------------------------------------------------------- opacity */
+/* ------------------------------------------------- appearance (2026-09-24) */
 
-export function OpacityCluster() {
+/**
+ * Four triggers — shape · inside · edge · text — replacing the six style rows
+ * and the inline opacity slider that stood here before.
+ *
+ * Zach, 2026-09-24: "Generally I like a very compact tool bar, 1 for dealing
+ * with the inside, 1 for dealling with the stroke, etc..", then "I would
+ * still keep the shape selection its self as a seperate tab though ... shape
+ * selector, inside, edge, text", and "no need to put the text (inside and
+ * edge) on the drop down menu btw, we can learn to just know it by the icon".
+ *
+ * WHAT WAS DELETED HERE, and why neither is a loss:
+ *
+ *  - `StyleRowControl` / `StyleFace` / `StyleOption` / `StyleCluster` — a
+ *    second, simpler implementation of a renderer the trunk already had. That
+ *    duplication is exactly why this pill's line-style menu printed the WORD
+ *    "dashed" while `@trunk/editor/controlGlyphs` sat two directories away
+ *    with a drawn dashed line in it. The vocabulary now lives in
+ *    `appearanceModel.ts` and the drawing in `appearanceGlyphs.tsx`; the
+ *    renderer is the trunk's.
+ *  - `OpacityCluster` — the inline slider and its `100%` readout. Its own WHY
+ *    argued opacity belongs in the bar's row because you need to see its
+ *    current state while dragging. That is still true, and the readout beside
+ *    the slider inside the panel is what answers it; what the argument never
+ *    justified was spending a permanent slot on the bar for an attribute OF a
+ *    paint. It now renders inside both paint panels, as `ControlPanel`'s
+ *    `ContinuousRow`.
+ *
+ * The applicability rule is UNCHANGED and still `getSharedStyles()`: nothing
+ * here switches on a shape type, so the P-035 property still holds — a new
+ * `StyleProp` on an `ss-*` shape surfaces without touching this file.
+ */
+export function AppearanceCluster() {
   const editor = useEditor();
-  const hasSelection = useValue("ss opacity has selection", () => editor.getSelectedShapeIds().length > 0, [editor]);
-  const percent = useValue("ss opacity percent", () => selectionOpacityPercent(editor), [editor]);
-
-  const onChange = useCallback(
-    (next: number | readonly number[]) => {
-      setSelectionOpacityPercent(editor, Array.isArray(next) ? (next[0] ?? 100) : (next as number));
-    },
-    [editor],
-  );
-
-  if (!hasSelection) return null;
+  // `buildAppearance` reads `getSharedStyles()` and the selection's own
+  // metadata, both reactive, so this re-runs on any change to either.
+  const bundle = useValue("ss appearance", () => buildAppearance(editor), [editor]);
+  if (!bundle) return null;
 
   return (
-    // WHY the slider lives in the pill's ROW rather than behind a trigger
-    // like Arrange does, when "one family one trigger" is the rule: opacity
-    // is one value, not a family, and it is the one control whose CURRENT
-    // state is the thing you need to see while you drag it. Hiding it would
-    // mean opening a popover to find out what the opacity already is. The
-    // donor's pill shows it inline for the same reason (screenshot: a track
-    // and "100%").
-    // `h-10` so this row fills the bar like every cell beside it — without it
-    // an intrinsically-sized flex child sits at whatever height its content
-    // happens to be and reintroduces a second baseline.
-    <div className="flex h-10 shrink-0 items-center gap-2 px-1" data-testid="ss-selection-opacity">
-      <Slider
-        value={[percent]}
-        min={0}
-        max={100}
-        step={1}
-        onValueChange={onChange}
-        aria-label="Opacity"
-        // TWO separate fixes here, and the second one is a real bug in the
-        // stock copy rather than a contrast tweak.
-        //
-        // 1. COLOURS. The stock Slider paints its track `bg-muted` and its
-        //    filled range `bg-primary`, both chosen for a LIGHT surface.
-        //
-        //    The FIRST fix here reached for `bg-background/30` — correct only
-        //    while the pill was `bg-foreground`, i.e. only in light mode. In
-        //    dark mode `--background` is near-BLACK, so the track painted
-        //    solid black on what was then a near-white pill: the fix assumed
-        //    a dark bar and the bar was not one. Now that the pill is a FIXED
-        //    #1e1e1e in both schemes, the track is written against that fixed
-        //    surface literally — white at 30%, a white range, a white thumb
-        //    rim — and there is no theme left for it to be wrong in.
-        //
-        // 2. HEIGHT, which is why fixing the colours alone changed nothing.
-        //    Measured in the running app: the track was 96px wide and **0px
-        //    tall**, with my colours correctly applied to a box of zero
-        //    height. The stock file sizes it with `data-horizontal:h-1`, and
-        //    in Tailwind v4 that variant means an attribute literally named
-        //    `data-horizontal` — but Base UI's slider emits
-        //    `data-orientation="horizontal"`. The selector never matches, so
-        //    the track has no height on ANY surface, light or dark. Pinning
-        //    the heights here keeps the fix local; correcting the vendored
-        //    copy is a trunk change and belongs in its own lane, because
-        //    every other consumer of that file is currently rendering an
-        //    invisible track too.
-        className="w-24 [&_[data-base-ui-slider-control]]:h-4 [&_[data-slot=slider-track]]:h-1 [&_[data-slot=slider-range]]:h-1 [&_[data-slot=slider-track]]:bg-white/30 [&_[data-slot=slider-range]]:bg-white [&_[data-slot=slider-thumb]]:border-white [&_[data-slot=slider-thumb]]:bg-white"
+    // `h-10` for the same reason every other cluster carries it: a wrapper
+    // shorter than 40 puts its whole row on a second baseline no matter how
+    // tall the cells inside it are.
+    <div className="flex h-10 shrink-0 items-center" data-testid="ss-selection-appearance">
+      <ControlStrip
+        aria-label="Appearance"
+        composition={bundle.composition}
+        glyphs={appearanceGlyphs(editor, bundle.faces)}
+        testIdPrefix="ss"
+        // The panels portal out of this subtree, so the pill's ink cannot
+        // reach them through the DOM. `PILL_POPOVER` is the trunk's own
+        // export for exactly this seam.
+        panelClassName={PILL_POPOVER}
+        // The pill's own traced cell: 40 tall, radius 5. The kit's
+        // `ToolbarButton` sizes stop at h-9/rounded-lg, so without this the
+        // four kit triggers sat 32px tall with a 10px radius beside the
+        // app's own 40/5 cells, on one bar.
+        triggerClassName={CELL_TRIGGER}
       />
-      <span className="w-9 text-right text-[11px] tabular-nums" data-testid="ss-selection-opacity-value">
-        {percent}%
-      </span>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------- style */
-
-
-/**
- * The row's face in the pill. Identifies the FAMILY, not the value — see
- * `StyleRow.face`'s own note for the measured reason (five raw enum values in
- * a row, with "Draw" appearing twice). The current value stays in the
- * trigger's `title` and `aria-label`, which is where a tooltip and a screen
- * reader look for it anyway.
- */
-function StyleFace({ row, swatch }: { row: ActiveStyleRow; swatch: string | null }) {
-  const testId = `ss-style-${row.id}-face`;
-  if (row.face === "swatch") {
-    // F1c, traced: an 18px disc centred in a 22x22 box — NOT an 18px cell.
-    // The box is what makes the colour trigger land on 54 rather than 56, and
-    // it is why the disc reads as a swatch rather than as a small button.
-    // `data-testid` stays on the DISC, because selectionPill.smoke.test.tsx
-    // asserts the painted `backgroundColor` of exactly that element against
-    // tldraw's own theme.
-    return (
-      <span className="flex size-[22px] shrink-0 items-center justify-center">
-        <span
-          data-testid={testId}
-          className="size-[18px] rounded-full border border-white/40"
-          // A null swatch means the theme has no entry for this value, or the
-          // selection is mixed — paint nothing rather than guess a colour.
-          style={swatch ? { background: swatch } : undefined}
-        />
-      </span>
-    );
-  }
-  if (row.face === "glyph" && row.icon) {
-    const Icon = row.icon;
-    // 24px, the traced glyph box. Height and glyph size are coupled: a 16px
-    // lucide stroke adrift in a 40px cell reads worse than the 28px cell it
-    // replaced — see the family note at the top of this file.
-    return (
-      <span data-testid={testId} className="flex size-6 shrink-0 items-center justify-center">
-        <Icon className="size-6" aria-hidden="true" />
-      </span>
-    );
-  }
-  // F1t, the text-value combobox. FigJam's is a fixed 144px because its
-  // value is a font size like "Small"; ours are "Medium" and "Aa", so we take
-  // the family's PADDING and height (0 8px 0 12px, 40 tall) and let the width
-  // follow the content. Padding a 30px label out to 144px would copy the
-  // number and lose the shape.
-  return (
-    <span data-testid={testId} className="pl-1 text-[11px] leading-none font-normal whitespace-nowrap">
-      {faceLabelFor(row, row.value)}
-    </span>
-  );
-}
-
-function StyleRowControl({ row }: { row: ActiveStyleRow }) {
-  const editor = useEditor();
-  const swatch = useValue(
-    `ss style swatch ${row.id}`,
-    () => (row.paint === "swatch" && row.value ? swatchColorFor(editor, row.value) : null),
-    [editor, row.paint, row.value],
-  );
-
-  return (
-    <Popover>
-      <PopoverTrigger
-        render={<Button variant="ghost" size="sm" className={CELL_TRIGGER} />}
-        data-testid={`ss-style-${row.id}`}
-        aria-label={`${row.label}${row.value ? `: ${row.value}` : ": mixed"}`}
-        title={row.label}
-      >
-        <StyleFace row={row} swatch={swatch} />
-        <TriggerChevron />
-      </PopoverTrigger>
-      <PopoverContent align="start" className={`w-auto p-2 ${PILL_POPOVER}`} data-testid={`ss-style-${row.id}-panel`}>
-        <div className={row.paint === "swatch" ? "grid grid-cols-6 gap-2" : "flex flex-col gap-1"} role="group" aria-label={row.label}>
-          {row.values.map((value) => (
-            <StyleOption key={value} row={row} value={value} />
-          ))}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function StyleOption({ row, value }: { row: ActiveStyleRow; value: string }) {
-  const editor = useEditor();
-  const swatch = useValue(
-    `ss style option ${row.id} ${value}`,
-    () => (row.paint === "swatch" ? swatchColorFor(editor, value) : null),
-    [editor, row.paint, value],
-  );
-  const selected = row.value === value;
-  const isSwatch = row.paint === "swatch";
-
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      // `aria-pressed` rather than a class alone: "which one is currently set"
-      // has to reach a screen reader and a test without either reading colour.
-      aria-pressed={selected}
-      data-testid={`ss-style-${row.id}-${value}`}
-      aria-label={value}
-      title={value}
-      // The panel now wears the pill's own #1e1e1e surface, so every option's
-      // ink, hover and selected ring are pill-relative too — `ring-ring` and
-      // `border-border` are page tokens and drew a light-theme hairline here.
-      // `#8a38f5` is FigJam's traced selected-cell accent (figjamTokens.ts:24).
-      className={
-        isSwatch
-          ? `${CELL_OPTION} ${selected ? "ring-2 ring-[#8a38f5] ring-offset-2 ring-offset-[#1e1e1e]" : ""}`
-          : `${ON_PILL} h-8 w-full justify-start rounded-[5px] border-0 px-2 text-[11px] font-normal ${selected ? "bg-[#8a38f5] hover:bg-[#8a38f5]" : ""}`
-      }
-      onClick={() => setStyle(editor, row.style, value)}
-    >
-      {isSwatch ? (
-        <span className="size-[18px] rounded-full border border-white/40" style={swatch ? { background: swatch } : undefined} />
-      ) : (
-        <span className="text-[11px]">{row.valueLabels?.[value] ?? value}</span>
-      )}
-    </Button>
-  );
-}
-
-/**
- * The style bar — Zach's ask 2 on 2026-09-20.
- *
- * Which rows appear is `editor.getSharedStyles()`' answer, not a switch on
- * shape type: select an arrow and there is no Fill row, because an arrow has
- * no fill. See `activeStyleRows`' own note for why re-deriving that per kind
- * would get arrows and text subtly wrong.
- *
- * P-035 is the proof that answer was the right one to take. It added `ss:diff`
- * — this app's own `StyleProp` — to `ss-block`, `ss-port` and `ss-wire`, and
- * this component needed NO change to start offering it: `getSharedStyles()`
- * simply began reporting a style for shapes it had never reported one for, and
- * the Diff row appeared. A `isNativeTldrawSelection()` gate here, which was the
- * tempting shortcut while every style happened to be tldraw's, would have had
- * to be found and unpicked instead.
- */
-export function StyleCluster() {
-  const editor = useEditor();
-  // `getSharedStyles()` is already reactive; `useValue` re-reads it whenever
-  // the selection or any selected shape's style changes.
-  const rows = useValue("ss style rows", () => activeStyleRows(editor.getSharedStyles()), [editor]);
-  if (rows.length === 0) return null;
-  return (
-    // `h-10` and `items-center`: this wrapper is itself a flex child of the
-    // bar, and a wrapper shorter than 40 would put its whole row on a second
-    // baseline no matter how tall the cells inside it are.
-    <div className="flex h-10 shrink-0 items-center" data-testid="ss-selection-style">
-      {rows.map((row) => (
-        <StyleRowControl key={row.id} row={row} />
-      ))}
     </div>
   );
 }

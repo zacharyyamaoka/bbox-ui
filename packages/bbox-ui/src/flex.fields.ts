@@ -6,7 +6,7 @@
  * pins the two together. `FLEX_PRESETS` is empty: Flex paints nothing, so
  * there is no semantic ladder for a preset to govern.
  */
-import type { FieldOption, FieldSpec, PresetSpec } from "@bbox-ui/schema";
+import type { FieldOption, FieldSpec, PresetSpec } from "./schema";
 
 import { FLEX_ALIGN_VALUES, FLEX_DIRECTIONS, FLEX_JUSTIFY_VALUES, FLEX_SIZES, type FlexAlign, type FlexDirection, type FlexJustify, type FlexSize } from "./flex";
 

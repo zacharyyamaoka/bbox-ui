@@ -202,6 +202,56 @@ function samePlan(a: CameraGesturePlan | null, b: CameraGesturePlan): boolean {
  * rebinding — and they need the same host-owned listener. Ruling 2 asked for
  * the two conventions, and the two conventions are what this applies.
  */
+/**
+ * Apply `gestures.pasteUnderCursor` to tldraw's own paste placement, and keep
+ * applying it whenever the preference changes. Returns the stop function
+ * `App.tsx`'s `handleMount` collects.
+ *
+ * WHY this is a SECOND installer rather than two more lines inside
+ * `installCameraGestures`: that function early-returns on an unchanged
+ * `CameraGesturePlan` (`samePlan`, so an unrelated preference write does not
+ * re-commit the camera and stop an animation). A paste write folded in there
+ * would be swallowed by exactly the guard that makes the camera cheap — the
+ * switch would then work only when a camera field happened to change with it.
+ * Paste placement is also not a camera option; it is the same stored record,
+ * not the same concern.
+ *
+ * WHICH tldraw hook this attaches to, and why setting one preference is the
+ * WHOLE fix: `isPasteAtCursorMode` is a stock tldraw user preference, and
+ * tldraw's own native paste handler is what reads it —
+ * `useClipboardEvents.ts:959` (tldraw 5.3.2, read 2026-09-22):
+ *
+ *     const point = editor.user.getIsPasteAtCursorMode()
+ *       ? editor.inputs.getCurrentPagePoint()
+ *       : undefined
+ *
+ * `undefined` is what makes tldraw fall back to the viewport centre, so BOTH
+ * sides of this switch are tldraw's own behaviour and neither is hand-rolled
+ * here. That handler is mounted because `App.tsx` renders `<Tldraw>` with its
+ * UI layer intact (`TldrawUi.tsx:87` calls `useNativeClipboardEvents()`); a
+ * `hideUi` host would own its own paste listener and this installer would go
+ * quiet, which is why this read belongs in the app and never in the trunk.
+ *
+ * Ported from /home/bam/systemsketch/src/canvasGestures.ts:144-146
+ * (`applyPasteUnderCursor`) — the donor's setting-DRIVEN form. The older
+ * /home/bam/systemsketch/src/pasteAtCursor.ts:13 pinned the mode on
+ * unconditionally, which is why even the donor's own switch could not turn it
+ * back off.
+ */
+export function installPasteAtCursor(editor: Editor): () => void {
+  let applied: boolean | null = null;
+
+  const apply = () => {
+    const wanted = getGestureSettings().pasteUnderCursor;
+    if (applied === wanted) return;
+    applied = wanted;
+    editor.user.updateUserPreferences({ isPasteAtCursorMode: wanted });
+  };
+
+  apply();
+  return subscribe(apply);
+}
+
 export function installCameraGestures(editor: Editor): () => void {
   let applied: CameraGesturePlan | null = null;
 

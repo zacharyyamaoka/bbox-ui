@@ -41,9 +41,8 @@ import {
   EdgeTypeCluster,
   FocusButton,
   GroupCluster,
-  OpacityCluster,
+  AppearanceCluster,
   PILL_SEPARATOR,
-  StyleCluster,
   TriggerChevron,
   TunnelCluster,
 } from "./selectionClusters";
@@ -338,7 +337,7 @@ export function FloatingSelectionToolbar() {
           the block-view toggle above. Deliberate: marking the block you are
           looking at is the same gesture as changing its view. The six tldraw
           rows still never appear here, because no `ss-*` shape carries them. */}
-      <StyleCluster />
+      <AppearanceCluster />
 
       {/* P-008. Unlike the two rows above, this one is NOT gated on a lone
           selection: routing is a property of a cable, not a face, so selecting
@@ -361,7 +360,6 @@ export function FloatingSelectionToolbar() {
           the selection cannot use it (`arrangeGroupsFor(0)` is empty; opacity
           and Focus need something selected). */}
       <ArrangeCluster />
-      <OpacityCluster />
       <FocusButton />
       {/* P-048. Beside Focus and not behind Arrange: folding a selection into
           a region is a STRUCTURAL edit, not an alignment, and it is the one

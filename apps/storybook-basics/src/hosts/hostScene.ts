@@ -100,6 +100,32 @@ export type HostNodeData = {
   /** Port id → the declared type text, when the producer had one. Data
    *  only — nothing in this family paints it yet. */
   portTypes?: Record<string, string>;
+  /**
+   * Port id → the expression that is in force while NOTHING is wired to it.
+   *
+   * This is what makes a port read as `PortState "valueSet"` — "owns a
+   * default" (`components/port.tsx:60`) — rather than `empty`. A `for`
+   * loop's `Iterable` showing `range(10)`, a `while`'s `Bool` showing
+   * `last_error != ""`: the value is really there, it just arrived by being
+   * typed rather than by cable, and the drawing has to say which.
+   *
+   * WHY it belongs here beside `portLabels` rather than on any one region
+   * kind: an unwired port that owns a default is a fact about PORTS, not
+   * about loops. Arms already carry theirs (`ArmData.test.default`) because
+   * an arm's operand is part of the arm's own identity; every other port in
+   * every host had no seam at all, so a scene-built loop could not show an
+   * inline default while a hand-mounted `BlockRegion` could — measured
+   * 2026-09-22 when the loop stories had to bypass the scene to draw one.
+   *
+   * A CABLE ALWAYS WINS: `withWiredState` runs after this and overwrites
+   * `valueSet` with `wired`, which is the correct precedence — a default is
+   * what you get in the absence of a value, never instead of one.
+   *
+   * Rendered literally, never normalized or clipped
+   * (`feedback_truthful_property_rendering`): `  range(10)  ` keeps its
+   * spaces.
+   */
+  portDefaults?: Record<string, string>;
   /** Control-exit marks. DP - Break & Continue, B5: a mark beside the call,
    *  never a cable — "break is not data flow". Drawn as badges, no wire. */
   marks?: ("break" | "continue" | "pass")[];

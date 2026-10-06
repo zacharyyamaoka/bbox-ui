@@ -32,13 +32,25 @@ import { expect } from "storybook/test";
 import { DomCanvas } from "../hosts/domCanvas";
 import type { HostScene } from "../hosts/hostScene";
 import { ReactFlowHost } from "../hosts/reactFlowHost";
+import { LOOP_PORT_IDS } from "../scene/region.loop";
 import {
   FOR_LOOP_CARRIED,
+  FOR_LOOP_CONTINUE,
   FOR_LOOP_EMPTY,
+  FOR_LOOP_NESTED,
   LOOP_WITH_BREAK,
   LOOP_WITH_TURN,
+  WHILE_LOOP_MUTATES,
   WHILE_LOOP_RECHECK,
 } from "../scene/region.loop.fixtures";
+import { portViewSlotCount, railBandHeightForSlots } from "../scene/fitToContent";
+import { Bar } from "./bar";
+import { Block } from "./block";
+import { BlockPort } from "./blockPort";
+import { BlockRegion, type RegionCornerCard } from "./blockRegion";
+import { REGION_CORNER_WIDTH_PX } from "./blockRegion.layout";
+import { ControlMark } from "./controlMark";
+import type { PortEdgeItem } from "./portEdge";
 import {
   expectControlMark,
   expectCornerPorts,
@@ -51,7 +63,7 @@ import {
 
 const meta = {
   title: "Components/Blocks/BlockRegion/Loop",
-  tags: ["object:region", "host:dom", "host:react-flow", "lane:control-flow"],
+  tags: ["object:region", "host:dom", "host:react-flow", "lane:truthful-branch-viz"],
 } satisfies Meta;
 
 export default meta;
@@ -260,5 +272,272 @@ export const ForLoopReactFlow: Story = {
     await expectRegionExpanded(canvasElement, "loop");
     expectCornerPorts(canvasElement, "loop", { left: ["Iterable"], right: ["Iter"] });
     expectMemberInside(canvasElement, '[data-slot="region-body"]', "merge");
+  },
+};
+
+/* ==================================================================== */
+/* ForLoopNested                                                         */
+/* ==================================================================== */
+
+export const ForLoopNested: Story = {
+  name: "for — a for nested in a for, the inner Iterable fed by the outer's Iter",
+  render: () => <StatefulDomCanvas initial={FOR_LOOP_NESTED} width={920} height={500} />,
+  play: async ({ canvasElement }) => {
+    await expectRegionExpanded(canvasElement, "outer");
+    expectCornerPorts(canvasElement, "outer", { left: ["Iterable"], right: ["Iter"] });
+    // The nesting the scene declares is the nesting the DOM shows, one
+    // level deeper than `ForLoopCarried` ever needed: the INNER LOOP itself
+    // renders inside the outer's body, not as a sibling top-level region —
+    // the same claim `BRANCH_NESTED` proves for branches, made here for the
+    // first time for loops.
+    expectMemberInside(canvasElement, '[data-region-id="outer"] [data-slot="region-body"]', "inner");
+    await expectRegionExpanded(canvasElement, "inner");
+    expectCornerPorts(canvasElement, "inner", { left: ["Iterable"], right: ["Iter"] });
+    // And the inner loop's OWN member lives inside the inner body, not the
+    // outer's — an arm-relative-style nesting check one region deeper.
+    expectMemberInside(canvasElement, '[data-region-id="inner"] [data-slot="region-body"]', "process");
+
+    // The cable that makes this a NESTED loop rather than two independent
+    // ones: the outer's own `Iter` feeds the inner's own `Iterable`,
+    // corner card to corner card.
+    await expectWirePainted(canvasElement, "e-outer-inner");
+  },
+};
+
+/* ==================================================================== */
+/* ForLoopWithContinue                                                   */
+/* ==================================================================== */
+
+export const ForLoopWithContinue: Story = {
+  name: "for — continue is a mark beside the call, never a cable",
+  render: () => <StatefulDomCanvas initial={FOR_LOOP_CONTINUE} width={780} height={340} />,
+  play: async ({ canvasElement }) => {
+    await expectRegionExpanded(canvasElement, "loop");
+    // `continue`'s own proof, the `for` cousin of `LoopWithBreak`'s `while`
+    // one: the mark is a badge ON `skip_if_empty()`, and no wire in the
+    // whole layer originates at `skip/continue`.
+    expectControlMark(canvasElement, "skip", "continue");
+    const skip = required<HTMLElement>(canvasElement, '[data-block-id="skip"]', "the marked block");
+    expect(Array.from(skip.querySelectorAll("[data-port-id]")).map((dot) => dot.getAttribute("data-port-id"))).toEqual(["item"]);
+  },
+};
+
+/* ==================================================================== */
+/* WhileLoopMutates                                                      */
+/* ==================================================================== */
+
+export const WhileLoopMutates: Story = {
+  name: "while — the body mutates the value the re-check reads",
+  render: () => <StatefulDomCanvas initial={WHILE_LOOP_MUTATES} width={920} height={420} />,
+  play: async ({ canvasElement }) => {
+    await expectRegionExpanded(canvasElement, "loop");
+    expectCornerPorts(canvasElement, "loop", { left: ["Bool"] });
+    expectMemberInside(canvasElement, '[data-slot="region-body"]', "mutate");
+    expectMemberInside(canvasElement, '[data-slot="region-body"]', "overLimit");
+
+    // The re-check: `over_limit()`'s own result feeds `Bool` back, one turn
+    // late, badged `z⁻¹` exactly as `WhileLoopRecheck`'s does.
+    await expectWirePainted(canvasElement, "e-recheck");
+    await expectWireBadge(canvasElement, "e-recheck", "z⁻¹");
+
+    // The mutation that makes the re-check MATTER: `mutate`'s own output is
+    // what carries into its own input next turn — the same value
+    // `over_limit` just re-tested, going around `mutate` rather than across
+    // it (`FOR_LOOP_CARRIED`'s own bypass claim, one loop kind over).
+    await expectWireBadge(canvasElement, "e-carry", "z⁻¹ = 0");
+    await expectWireAvoids(canvasElement, "e-carry", '[data-block-id="mutate"] [data-slot="block"]');
+  },
+};
+
+/* ==================================================================== */
+/* ForLoopDefaultIterable                                                */
+/* ==================================================================== */
+
+/** The Iterable's inline default when nothing is wired — leading/trailing
+ *  spaces intact (truthful rendering), kept short on purpose: the corner
+ *  CARD is narrow (`REGION_CORNER_WIDTH_PX`, not an arm header's full-frame
+ *  band), and a long expression here collides with the `Iter` label on the
+ *  opposite wall rather than wrapping. `WHILE_DEFAULT_BOOL` below is where
+ *  this file's quoted-literal case lives — a `while`'s corner has no right
+ *  wall to collide with, so it can afford the longer string. */
+const FOR_DEFAULT_ITERABLE = "  range(10)  ";
+
+/**
+ * `Iterable` UNWIRED, its inline default shown as `PortState "valueSet"`
+ * (`components/port.tsx:60`) — the loop analogue of an inline default, and
+ * the one `for` scenario this file never drew.
+ *
+ * Mounted with `<BlockRegion>` directly, the same way `BlockRegion.stories.
+ * tsx`'s `ArmPortsBench` mounts it directly for `test`/`captures`: the
+ * scene→host pipeline (`nodeViews.tsx`'s `edgeSpecsOf`) rebuilds a corner's
+ * items fresh from `data.ports`' bare id STRINGS on every render (see
+ * `edgeSpecsOf`'s own item builder — `id`, `label`, `availability`,
+ * `diagnostics`, `selected`, and nothing else), so it has no seam for a
+ * per-port `state` or an authored `label` to ride through; only
+ * `region.branch.ts`'s ARM headers get one, through `ArmHeaderRail`, a
+ * bespoke renderer for that one band. `region.loop.ts`'s grammar itself is
+ * UNCHANGED by this: it is still `forLoopNode`'s own `Iterable`/`Iter`
+ * pair (`LOOP_PORT_IDS`), landing on the identical corner-card DOM
+ * `CornerCardView` always renders — only the ITEMS are authored by hand
+ * here instead of derived from `data.ports`.
+ */
+function ForLoopDefaultIterableBoard() {
+  const items: PortEdgeItem[] = [{ id: LOOP_PORT_IDS.iterable, label: FOR_DEFAULT_ITERABLE, state: "valueSet" }];
+  const cornerCard: RegionCornerCard = {
+    header: "For Loop",
+    width: REGION_CORNER_WIDTH_PX,
+    edges: {
+      left: { items },
+      right: { items: [{ id: LOOP_PORT_IDS.iter, label: LOOP_PORT_IDS.iter }] },
+    },
+    bandHeight: railBandHeightForSlots(portViewSlotCount({ leftCount: items.length, rightCount: 1, portLayout: "inline" })),
+  };
+  return (
+    <div style={{ position: "relative", width: 440, height: 240 }}>
+      <BlockRegion id="loop" kind="loop" view="expanded" cornerCard={cornerCard} width={400} height={200} />
+    </div>
+  );
+}
+
+export const ForLoopDefaultIterable: Story = {
+  name: "for — Iterable unwired, its inline default shown as valueSet",
+  render: () => <ForLoopDefaultIterableBoard />,
+  play: async ({ canvasElement }) => {
+    await expectRegionExpanded(canvasElement, "loop");
+    expectCornerPorts(canvasElement, "loop", { left: [LOOP_PORT_IDS.iterable], right: [LOOP_PORT_IDS.iter] });
+
+    // The default expression, verbatim — leading/trailing spaces intact —
+    // and the dot itself in PortState "valueSet", never "empty".
+    const item = required<HTMLElement>(
+      canvasElement,
+      `[data-slot="region-corner"] [data-block-id="loop"] [data-slot="block-port-rail"][data-edge="left"] [data-port-id="${LOOP_PORT_IDS.iterable}"]`,
+      "the Iterable item",
+    );
+    expect(item.textContent).toBe(FOR_DEFAULT_ITERABLE);
+    const dot = required<HTMLElement>(item, '[data-slot="port-dot"]', "the Iterable dot");
+    expect(dot.getAttribute("data-state")).toBe("valueSet");
+  },
+};
+
+/* ==================================================================== */
+/* WhileLoopDefaultBool                                                  */
+/* ==================================================================== */
+
+/** `Bool`'s inline default — spaces and a quoted empty-string literal, the
+ *  same truthful-rendering shape `FOR_DEFAULT_ITERABLE` uses one wall over. */
+const WHILE_DEFAULT_BOOL = '  last_error != ""  ';
+
+/**
+ * `Bool` UNWIRED, its inline default shown as `valueSet` — `while`'s own
+ * version of `ForLoopDefaultIterable`, and the sharper negative test:
+ * because a `while` mints no right wall AT ALL (`region.loop.ts`'s
+ * `whilePorts`), `cornerCard.edges` below carries no `right` key — the
+ * exact "a key that is not there mints no rail" rule `WhileLoopRecheck`
+ * already exercises through `edgeSpecsOf`, here against hand-authored
+ * items instead.
+ */
+function WhileLoopDefaultBoolBoard() {
+  const items: PortEdgeItem[] = [{ id: LOOP_PORT_IDS.bool, label: WHILE_DEFAULT_BOOL, state: "valueSet" }];
+  const cornerCard: RegionCornerCard = {
+    header: "While Loop",
+    width: REGION_CORNER_WIDTH_PX,
+    edges: { left: { items } },
+    bandHeight: railBandHeightForSlots(portViewSlotCount({ leftCount: items.length, rightCount: 0, portLayout: "inline" })),
+  };
+  return (
+    <div style={{ position: "relative", width: 420, height: 220 }}>
+      <BlockRegion id="loop" kind="loop" view="expanded" cornerCard={cornerCard} width={380} height={180} />
+    </div>
+  );
+}
+
+export const WhileLoopDefaultBool: Story = {
+  name: "while — Bool unwired, its inline default shown as valueSet, no right wall",
+  render: () => <WhileLoopDefaultBoolBoard />,
+  play: async ({ canvasElement }) => {
+    await expectRegionExpanded(canvasElement, "loop");
+    expectCornerPorts(canvasElement, "loop", { left: [LOOP_PORT_IDS.bool] });
+
+    const item = required<HTMLElement>(
+      canvasElement,
+      `[data-slot="region-corner"] [data-block-id="loop"] [data-slot="block-port-rail"][data-edge="left"] [data-port-id="${LOOP_PORT_IDS.bool}"]`,
+      "the Bool item",
+    );
+    expect(item.textContent).toBe(WHILE_DEFAULT_BOOL);
+    const dot = required<HTMLElement>(item, '[data-slot="port-dot"]', "the Bool dot");
+    expect(dot.getAttribute("data-state")).toBe("valueSet");
+
+    // The negative half of the header contract, unchanged by hand-authoring
+    // the items: no right RAIL at all.
+    const corner = required<HTMLElement>(
+      canvasElement,
+      '[data-slot="region"][data-region-id="loop"] [data-slot="region-corner"] [data-block-id="loop"]',
+      "the corner block",
+    );
+    expect(corner.querySelector('[data-slot="block-port-rail"][data-edge="right"]')).toBeNull();
+  },
+};
+
+/* ==================================================================== */
+/* WhileTrueBreak                                                        */
+/* ==================================================================== */
+
+const WHILE_TRUE_LITERAL = "True";
+
+/**
+ * `while True:` — the condition is a LITERAL (an unwired `valueSet` `Bool`
+ * reading `True`, never re-evaluated because nothing feeds it), and the
+ * real exit is `check()`'s `break` MARK. The idiom every `while` reaches
+ * for once its real termination lives in the body rather than the header —
+ * and the sharpest proof yet that a mark, not a cable, is what leaves:
+ * this board draws no edges at all, so `expectControlMark`'s wire sweep
+ * finds an empty layer, not a cable it had to rule out.
+ */
+function WhileTrueBreakBoard() {
+  const items: PortEdgeItem[] = [{ id: LOOP_PORT_IDS.bool, label: WHILE_TRUE_LITERAL, state: "valueSet" }];
+  const cornerCard: RegionCornerCard = {
+    header: "While Loop",
+    width: REGION_CORNER_WIDTH_PX,
+    edges: { left: { items } },
+    bandHeight: railBandHeightForSlots(portViewSlotCount({ leftCount: items.length, rightCount: 0, portLayout: "inline" })),
+  };
+  const check = (
+    <BlockPort id="check" view="port" edges={{ left: { items: [{ id: "value", label: "value" }] } }}>
+      <Block header={<Bar size="md" left="check()" right={<ControlMark mark="break" />} />} width={210} height={80} />
+    </BlockPort>
+  );
+  return (
+    <div style={{ position: "relative", width: 480, height: 260 }}>
+      <BlockRegion
+        id="loop"
+        kind="loop"
+        view="expanded"
+        cornerCard={cornerCard}
+        width={440}
+        height={220}
+        members={[{ id: "check", content: check, x: 60, y: 30 }]}
+      />
+    </div>
+  );
+}
+
+export const WhileTrueBreak: Story = {
+  name: "while — while True:, the real exit is check()'s break mark",
+  render: () => <WhileTrueBreakBoard />,
+  play: async ({ canvasElement }) => {
+    await expectRegionExpanded(canvasElement, "loop");
+    expectCornerPorts(canvasElement, "loop", { left: [LOOP_PORT_IDS.bool] });
+
+    const item = required<HTMLElement>(
+      canvasElement,
+      `[data-slot="region-corner"] [data-block-id="loop"] [data-slot="block-port-rail"][data-edge="left"] [data-port-id="${LOOP_PORT_IDS.bool}"]`,
+      "the Bool item",
+    );
+    expect(item.textContent).toBe(WHILE_TRUE_LITERAL);
+    const dot = required<HTMLElement>(item, '[data-slot="port-dot"]', "the Bool dot");
+    expect(dot.getAttribute("data-state")).toBe("valueSet");
+
+    expectMemberInside(canvasElement, '[data-slot="region-body"]', "check");
+    expectControlMark(canvasElement, "check", "break");
   },
 };

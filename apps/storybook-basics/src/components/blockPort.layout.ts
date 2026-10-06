@@ -152,8 +152,26 @@ export function offsetEdgePaddingPx(
 /* railPlanFor — the view→placement table, as PortEdge props           */
 /* ------------------------------------------------------------------ */
 
-/** Which of the Block's bands a rail's content box spans. */
-export type RailBand = "block" | "body";
+/**
+ * Which of the Block's bands a rail's content box spans.
+ *
+ * `"header"` (2026-09-22) is the band between `headerTop` and `bodyTop` —
+ * the header strip itself. Zach, annotating a Block drawn as Header / Body /
+ * Footer: *"Ports on Header, inputs and outputs…"*, and then the same block
+ * with the header shrunk to a tab carrying a port on each of ITS edges
+ * (`Pasted image 20260922184406.png`, `…184423.png`).
+ *
+ * WHY this is a general Block capability and not a region-only one: an arm
+ * row's header, a region's corner card and an ordinary Block that simply
+ * wants its interface on the title bar are the same geometry — a rail boxed
+ * against the header strip instead of the body. Zach's own conclusion from
+ * that sketch is the reason it lives here: *"So everything really is then
+ * just a block, definitely no need for a separate BlockRegion."* WHAT THIS
+ * REJECTS: a `headerPorts` flag on `BlockRegion` (or on an arm), which would
+ * make the same dot mean a different thing depending on who drew it, and
+ * would leave an ordinary Block unable to do it at all.
+ */
+export type RailBand = "block" | "body" | "header";
 
 export interface RailPlanInput {
   view: BlockView;
@@ -373,6 +391,18 @@ export interface BlockBands {
   bodyTop: number;
   bodyBottom: number;
   headerTop?: number;
+  /**
+   * The header strip's own right edge, when it is NARROWER than the block —
+   * the "head tab" (Zach, 2026-09-22, `Pasted image 20260922184414.png`:
+   * *"Head Tab View"*). Undefined means the header spans the full width, so
+   * a `header`-band right rail falls back to the block's right edge and a
+   * full-width header behaves exactly as it always has.
+   *
+   * WHY measured rather than derived from a prop: the tab hugs its content
+   * (a chevron, a title, maybe a badge), so only the DOM knows how wide it
+   * ended up — the same reason `headerTop` is measured and not computed.
+   */
+  headerRight?: number;
 }
 
 export interface RailBox {
@@ -390,12 +420,23 @@ export interface RailBox {
 export function railBoxFor(edge: BlockSide, plan: RailPlan, bands: BlockBands): RailBox {
   const axis = railAxisFor(edge);
 
+  // The header band runs `headerTop`..`bodyTop`, and its right-hand border
+  // line is the TAB's right edge when the header hugs. A block with no
+  // header measures no `headerTop`, so the band degrades to the block band
+  // rather than collapsing to a zero-height rail at the top edge — the same
+  // "nowhere to sit, so do not degrade to some other line" rule the function
+  // port follows, except a wall rail always has the block's own wall to fall
+  // back to.
+  const headerBand = plan.band === "header" && bands.headerTop != null;
+  const headerRightLine = bands.headerRight ?? bands.blockLeft + bands.blockWidth;
+
   if (axis === "column") {
-    const bandStart = plan.band === "body" ? bands.bodyTop : bands.blockTop;
-    const bandEnd = plan.band === "body" ? bands.bodyBottom : bands.blockTop + bands.blockHeight;
+    const bandStart = headerBand ? bands.headerTop! : plan.band === "body" ? bands.bodyTop : bands.blockTop;
+    const bandEnd = headerBand ? bands.bodyTop : plan.band === "body" ? bands.bodyBottom : bands.blockTop + bands.blockHeight;
     const contentStart = bandStart + plan.endMarginPx;
     const contentEnd = bandEnd - plan.endMarginPx;
-    const borderLine = edge === "left" ? bands.blockLeft : bands.blockLeft + bands.blockWidth;
+    const borderLine =
+      edge === "left" ? bands.blockLeft : headerBand ? headerRightLine : bands.blockLeft + bands.blockWidth;
     return {
       left: borderLine - RAIL_CROSS_PX / 2,
       top: contentStart - RAIL_MAIN_INSET_PX,
@@ -404,9 +445,20 @@ export function railBoxFor(edge: BlockSide, plan: RailPlan, bands: BlockBands): 
     };
   }
 
+  // Row axis. In the header band a `top` rail rides the header's own top
+  // line and a `bottom` rail the line the header shares with the body —
+  // and both span the TAB's width, not the block's, so a hugged header's
+  // row rail stops where the tab does.
+  const rowRight = headerBand ? headerRightLine : bands.blockLeft + bands.blockWidth;
   const contentStart = bands.blockLeft + plan.endMarginPx;
-  const contentEnd = bands.blockLeft + bands.blockWidth - plan.endMarginPx;
-  const borderLine = edge === "top" ? bands.blockTop : bands.blockTop + bands.blockHeight;
+  const contentEnd = rowRight - plan.endMarginPx;
+  const borderLine = headerBand
+    ? edge === "top"
+      ? bands.headerTop!
+      : bands.bodyTop
+    : edge === "top"
+      ? bands.blockTop
+      : bands.blockTop + bands.blockHeight;
   return {
     left: contentStart - RAIL_MAIN_INSET_PX,
     top: borderLine - RAIL_CROSS_PX / 2,
@@ -610,7 +662,10 @@ export interface RailBandMetrics {
  */
 function gapCountFor(slotCount: number, distribution?: Distribution): number {
   if (slotCount <= 0) return 0;
-  if (distribution == null || distribution.mode === "aligned") return slotCount - 1;
+  // `anchored` (`AnchoredConfig`) spends no end gaps either — its slots sit
+  // at the host's own offsets — so it floors the band exactly as `aligned`
+  // does; any wider spread the host's offsets need is the host's to size.
+  if (distribution == null || distribution.mode !== "distribute") return slotCount - 1;
   switch (distribution.scheme) {
     case "space-between":
       return slotCount - 1;

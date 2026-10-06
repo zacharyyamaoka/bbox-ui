@@ -1,4 +1,4 @@
-import type { FieldOption, FieldSpec } from "@bbox-ui/schema";
+import type { FieldOption, FieldSpec } from "./schema";
 import {
   APPEARANCE_STATES,
   APPEARANCE_STATE_LABELS,

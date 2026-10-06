@@ -12,6 +12,12 @@
 @source "../../../../packages/glyph-picker/src";
 @source "../../../../packages/adapter-tldraw/src";
 @source "../../../../packages/adapter-reactflow/src";
+/* Same reason, for the trunk (apps/storybook-basics/src): docs demos import its
+   components through the `@trunk/*` alias in tsconfig.json. Its Block draws its
+   border with `border-[length:var(--bbox-skin-stroke-width,1px)]`, a class
+   nothing else here uses, so without this line a trunk Block renders with a
+   0px border (measured headless 2026-09-30, B-DEPS). */
+@source "../../../../apps/storybook-basics/src";
 
 /* The inspector panel (@bbox-ui/panel) is inline-styled and reads these roles
    instead of literal colours. Mapping them onto the site's own tokens is what

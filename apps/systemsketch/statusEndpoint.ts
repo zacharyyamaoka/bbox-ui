@@ -40,7 +40,7 @@ import type { Connect, Plugin } from "vite";
 // cross-surface "same checkout?" answer would read "no" forever.
 const PROJECT_ROOT = realpathSync(fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, ""));
 const PRODUCT = "bbox-ui-systemsketch";
-const DISPLAY_NAME = "SystemSketch";
+const DISPLAY_NAME = "bbox studio";
 
 /**
  * The opaque id for WHICH checkout this is — sha256 of the resolved absolute

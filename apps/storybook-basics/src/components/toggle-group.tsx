@@ -57,7 +57,7 @@ function ToggleGroup({
       // lowers to `[data-vertical]`, which this DOM never has, so the donor's
       // vertical-orientation styling was dead CSS.
       className={cn(
-        "group/toggle-group flex w-fit flex-row items-center gap-[--spacing(var(--gap))] rounded-lg data-[size=sm]:rounded-[min(var(--radius-md),10px)] data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch",
+        "isolate group/toggle-group flex w-fit flex-row items-center gap-[--spacing(var(--gap))] rounded-lg data-[size=sm]:rounded-[min(var(--radius-md),10px)] data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch",
         className,
       )}
       {...props}

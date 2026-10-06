@@ -30,6 +30,35 @@
 //      is a leaf `ControlStrip` composes, never the reverse) and a
 //      six-line pure function is cheaper duplicated than plumbed through a
 //      new shared module outside this lane's write set.
+//   4. THE PANEL PAINTS IN ITS SURFACE'S INK, NEVER IN A PAGE TOKEN
+//      (2026-09-25). The port wrote its colours in shadcn's vocabulary —
+//      `text-foreground`, `hover:bg-muted`, `bg-primary`, `border-border`,
+//      `text-muted-foreground` — every one a PAGE token that flips with
+//      `prefers-color-scheme`. But the panel is skinned by its host
+//      (`ControlStrip`'s `panelClassName`; the pill passes `PILL_POPOVER`),
+//      and the pill's surface is a FIXED #1e1e1e in both schemes. Measured in
+//      the running app, light scheme, the Shape picker Zach photographed:
+//      label #0a0a0a on #1e1e1e, 1.19:1; the list layout's check marks the
+//      same 1.19:1; hover a near-white `oklch(0.97)` chip cut out of the dark
+//      panel; the chosen chip `oklch(0.205)`, a shade darker than the panel
+//      it sat on. Dark scheme read 15.97:1 throughout, which is why nobody
+//      saw it until Zach opened the app in light mode.
+//      The donor hit the identical bug one level up (its `.systemsketch-
+//      appearance__trigger-px` and `__option:hover`, appearance.css:66-73 and
+//      :180-186) and fixed it the same way this does: the panel's contents
+//      INHERIT the surface's ink — `currentColor` — and derive every tint from
+//      it (`color-mix` at 10% for hover, 60% for muted text, 15-20% for
+//      rules), so a host that skins the surface gets readable contents for
+//      free and a host that does not still gets the theme's, because the
+//      unskinned popover's ink IS the theme's `popover-foreground`. The chosen
+//      chip inverts — ink for its fill, the surface for its text, read off
+//      `--bbox-pill-surface` (declared by `PILL_SURFACE`) with the theme's
+//      `--popover` as the unskinned fallback — so its contrast is the panel's
+//      own by construction. The tempting wrong fix was the host's: restate the
+//      colours in `selectionClusters.tsx`'s `ON_PILL` and pass them down as
+//      one more class string. That fixes one host's one skin and leaves the
+//      next host to rediscover it (feedback.md, 2026-09-19: chrome fixes land
+//      in the kit, the host only mounts and configures).
 //
 // Everything else — stacked-modes-outermost-last via `stackModes`
 // (`controlRegistry.ts`), the beside-mode divider, the swatch ring styling,
@@ -47,10 +76,21 @@ import {
   MIXED_LABEL,
   stackModes,
   type BoundControl,
+  type ContinuousBinding,
   type ControlLayout,
   type ControlOption,
   type CustomSizeBinding,
 } from "./controlRegistry";
+
+/**
+ * Secondary text — a rung's px, the Custom cell's words, the slider's label
+ * and readout — as the surface's ink at 60%, never `text-muted-foreground`
+ * (change 4). The donor mutes its trigger px the same way, at 55%
+ * (appearance.css:73); 60% is what keeps 11px tabular digits above 4.5:1 on
+ * both the pill (#a5a5a5 on #1e1e1e, 7.0:1) and an unskinned light popover
+ * (#666 on white, 5.7:1).
+ */
+const MUTED_INK = "text-current/60";
 
 export interface ControlPanelProps<K extends string = string> {
   control: BoundControl<K>;
@@ -97,9 +137,14 @@ export function ControlPanel<K extends string>({
           data-mode-layout={section.layout}
           className={cn(
             "flex flex-wrap items-center gap-2",
+            // The rule between a mode section and the options is the ink at
+            // 15%, not `border-border` — see change 4: in light mode
+            // `--border` is a bright `oklch(0.922)` line across a #1e1e1e
+            // panel. Ink at 15% on the pill is #3a3a3a, FigJam's own traced
+            // #383838 divider to within a shade.
             beside
               ? "min-h-7"
-              : "-mx-2.5 border-b border-border px-2.5 pb-2 first:-mt-0.5",
+              : "-mx-2.5 border-b border-current/15 px-2.5 pb-2 first:-mt-0.5",
           )}
         >
           {section.options.map((option) => (
@@ -118,7 +163,7 @@ export function ControlPanel<K extends string>({
           ))}
         </div>
       ))}
-      {beside ? <div aria-hidden="true" className="-my-2.5 w-px self-stretch bg-border" /> : null}
+      {beside ? <div aria-hidden="true" className="-my-2.5 w-px self-stretch bg-current/15" /> : null}
       <div
         role="group"
         aria-label={control.label}
@@ -144,6 +189,10 @@ export function ControlPanel<K extends string>({
           title) that never wires one gets presets-only, never a dead Custom
           cell. That bug already shipped once in the donor. */}
       {customSize ? <CustomFontSizeCell binding={customSize} /> : null}
+      {/* Same rule as the Custom cell above: renders ONLY when the binding
+          supplied one, so a control with no continuous channel never shows a
+          dead slider. */}
+      {control.continuous ? <ContinuousRow binding={control.continuous} /> : null}
     </div>
   );
 }
@@ -197,10 +246,20 @@ function ControlOptionButton<K extends string>({
       data-value={option.value}
       onClick={() => control.onSelect(option.value)}
       className={cn(
-        "flex shrink-0 cursor-pointer items-center border-0 bg-transparent p-0 text-foreground",
+        // `text-inherit`, and it is the whole of change 4 (file header): the
+        // option paints in whatever ink the surface under it set, never in
+        // the page's `text-foreground` — which is #0a0a0a in light mode and
+        // put every label on the pill's #1e1e1e panel at 1.19:1. Written out
+        // rather than left to preflight's `button { color: inherit }` so the
+        // rule is visible at the seam it protects.
+        "flex shrink-0 cursor-pointer items-center border-0 bg-transparent p-0 text-inherit",
         optionButtonClass(control.layout),
         isCurrent && selectedOptionClass(control.layout),
-        !isCurrent && "hover:bg-muted",
+        // Hover is the ink at 10% — the donor's own rule (appearance.css:186),
+        // and on the pill it lands on #353535, FigJam's traced #383838 to
+        // within a shade. `hover:bg-muted` was `oklch(0.97)` in light mode: a
+        // white chip cut out of the dark panel under the cursor.
+        !isCurrent && "hover:bg-current/10",
       )}
     >
       {list ? (
@@ -214,7 +273,7 @@ function ControlOptionButton<K extends string>({
           aria-hidden="true"
           className={cn(
             "flex size-6 shrink-0 items-center justify-center font-mono text-xs font-extrabold",
-            swatches && isCurrent && "rounded-full ring-2 ring-primary",
+            swatches && isCurrent && "rounded-full ring-2 ring-current",
           )}
         >
           A
@@ -234,7 +293,7 @@ function ControlOptionButton<K extends string>({
       {withLabel && rungPx !== undefined && rungPx !== null ? (
         <span
           data-testid={`control-option-rung-px-${option.value}`}
-          className="text-muted-foreground ml-auto shrink-0 pl-2 text-xs tabular-nums"
+          className={cn("ml-auto shrink-0 pl-2 text-xs tabular-nums", MUTED_INK)}
         >
           {formatPx(rungPx)}
         </span>
@@ -261,16 +320,39 @@ function optionButtonClass(layout: ControlLayout): string {
 /**
  * The chosen state per layout. `swatches` rings the disc rather than filling
  * its cell (FigJam draws the ring two pixels off the swatch's own edge —
- * appearance.css's own comment); every other layout fills with the accent,
- * matching a labelled chip's own selected state.
+ * appearance.css's own comment); every other layout fills, matching a
+ * labelled chip's own selected state.
+ *
+ * WHY the fill is the ink INVERTED rather than `bg-primary` (change 4): on
+ * the pill in light mode `--primary` is `oklch(0.205)`, one shade darker
+ * than the #1e1e1e panel — the chosen chip was there and could not be seen.
+ * Ink for the chip and the surface for its text gives the chip exactly the
+ * panel's own contrast, whatever the skin, and on an unskinned popover it
+ * resolves to the very pair `bg-primary text-primary-foreground` did
+ * (near-black on white in light, near-white on `oklch(0.205)` in dark) — so
+ * nothing moves where the tokens were right. Both colours are read off the
+ * `--bbox-pill-ink` / `--bbox-pill-surface` pair `PILL_SURFACE` declares,
+ * falling back to the theme's own popover pair for an unskinned panel.
+ *
+ * WHY not `bg-current` for the fill, which looks like the obvious "the ink"
+ * spelling: `currentColor` is the element's OWN computed `color`, and this
+ * same class list sets that to the surface — so the chip painted surface on
+ * surface. Measured in the running app: chip `rgb(30,30,30)`, text
+ * `rgb(30,30,30)`, 1:1. The ink has to be named from outside the element.
+ *
+ * WHY the swatch ring needs no `ring-offset`: the button is 24px and the
+ * swatch inside it 20px, so the ring drawn at the button's own edge already
+ * sits two pixels off the swatch — FigJam's gap — with the REAL surface
+ * showing through. `ring-offset-popover` painted a light-mode-white gap
+ * around the chosen swatch on the dark panel.
  */
 function selectedOptionClass(layout: ControlLayout): string {
-  if (layout === "swatches") return "ring-2 ring-primary ring-offset-2 ring-offset-popover";
+  if (layout === "swatches") return "ring-2 ring-current";
   // `list` marks a chosen row with the check mark alone (donor's own WHY,
   // carried forward): filling its background would put the row back on the
   // popover surface's own ink where a check has already said "selected."
   if (layout === "list") return "";
-  return "bg-primary text-primary-foreground";
+  return "bg-[var(--bbox-pill-ink,var(--popover-foreground))] text-[var(--bbox-pill-surface,var(--popover))]";
 }
 
 /**
@@ -325,8 +407,8 @@ function CustomFontSizeCell({ binding }: { binding: CustomSizeBinding }) {
   };
 
   return (
-    <label className="mx-1 mt-1 flex items-center gap-2 rounded-md border border-input px-2 py-1 text-sm">
-      <span className="text-muted-foreground">Custom</span>
+    <label className="mx-1 mt-1 flex items-center gap-2 rounded-md border border-current/20 px-2 py-1 text-sm">
+      <span className={MUTED_INK}>Custom</span>
       <input
         data-testid="control-custom-size-input"
         type="number"
@@ -345,7 +427,62 @@ function CustomFontSizeCell({ binding }: { binding: CustomSizeBinding }) {
         }}
         className="w-full min-w-0 flex-1 bg-transparent text-right outline-none"
       />
-      <span className="text-muted-foreground">px</span>
+      <span className={MUTED_INK}>px</span>
+    </label>
+  );
+}
+
+/**
+ * The continuous channel's row — a slider and its readout, under the
+ * options.
+ *
+ * WHY it lives in the panel rather than on the strip: opacity is an
+ * attribute OF a paint, not a peer of it (Zach, 2026-09-24). The archived
+ * app put it on the pill, arguing its current state is what you need to see
+ * while you drag — true, and the readout beside the slider is what answers
+ * that, without spending a slot on the bar for something that only applies
+ * once you have already opened the paint you are fading.
+ *
+ * WHY `continuous: true` on input and a settling call on release: a range
+ * input fires `input` per pixel. Marking every one of those as its own undo
+ * step would make one drag cost forty presses of ⌘Z.
+ */
+function ContinuousRow({ binding }: { binding: ContinuousBinding }) {
+  const shared = typeof binding.value === "number" ? binding.value : null;
+  const [draft, setDraft] = useState(shared);
+  useEffect(() => setDraft(shared), [shared]);
+  const shown = draft ?? shared;
+
+  return (
+    <label
+      data-slot="control-continuous"
+      className="mx-1 mt-1 flex items-center gap-2 px-1 py-1 text-sm"
+    >
+      <span className={cn("shrink-0", MUTED_INK)}>{binding.label}</span>
+      <input
+        data-testid="control-continuous-input"
+        type="range"
+        min={binding.min}
+        max={binding.max}
+        step={binding.step ?? 1}
+        // A mixed target has no one value to park the thumb at; the readout
+        // says so and the slider sits at the low end rather than inventing a
+        // number the selection does not have.
+        value={shown ?? binding.min}
+        aria-label={binding.label}
+        aria-valuetext={shown === null ? MIXED_LABEL : binding.format(shown)}
+        onChange={(event) => {
+          const next = Number(event.target.value);
+          setDraft(next);
+          binding.apply(next, { continuous: true });
+        }}
+        onPointerUp={(event) => binding.apply(Number(event.currentTarget.value))}
+        onKeyUp={(event) => binding.apply(Number(event.currentTarget.value))}
+        className="min-w-24 flex-1 accent-[var(--bbox-control-accent,currentColor)]"
+      />
+      <output className={cn("w-10 shrink-0 text-right tabular-nums", MUTED_INK)}>
+        {shown === null ? MIXED_LABEL : binding.format(shown)}
+      </output>
     </label>
   );
 }

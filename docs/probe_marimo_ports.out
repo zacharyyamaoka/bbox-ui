@@ -1,0 +1,30 @@
+marimo 0.24.2  ·  public API only  ·  nothing is executed
+
+PORTS — derived from the source, before anything runs
+  load       inlets = —              outlets = df, pd
+  normalise  inlets = df             outlets = norm
+  gap_of     inlets = norm           outlets = gap
+  histogram  inlets = norm           outlets = hist
+  report     inlets = gap            outlets = —
+
+WIRES — one per (name, producer, consumer). 20 lines of set intersection.
+  df     load -> normalise
+  gap    gap_of -> report
+  norm   normalise -> gap_of
+  norm   normalise -> histogram
+
+ORDER — read off the same wires. No thread, no numbering, no stack needed.
+  edit 'load'   -> re-runs ['gap_of', 'histogram', 'normalise', 'report']
+  edit 'gap_of' -> re-runs ['report']
+  'gap_of' and 'histogram' are siblings, so they run IN PARALLEL: True
+
+STACK HONESTY — 'Stack this' is only offerable when the selection is a chain
+  ['load', 'normalise', 'gap_of']                chain? True
+  ['gap_of', 'histogram']                        chain? False
+  ['normalise', 'gap_of', 'histogram']           chain? False
+
+THE SINGLE-DEFINITION RULE — why the df outlet is well-defined
+  added a second binding of df:  c7: df = df.dropna()
+  get_multiply_defined()     -> ['df']
+  get_defining_cells('df')   -> ['c2', 'c7']
+  => the df OUTLET would have two producers. marimo refuses it, and so must a port.

@@ -42,6 +42,9 @@ SURVEYS = DATA["surveys"]
 REFS = DATA["refs"]
 DESIGN = DATA["design"]
 
+JUDGE_PATH = HERE / "menus/data/judge.json"
+JUDGE = json.loads(JUDGE_PATH.read_text()) if JUDGE_PATH.exists() else None
+
 BUILD_PATH = HERE / "menus/data/build.json"
 BUILD = json.loads(BUILD_PATH.read_text()) if BUILD_PATH.exists() else None
 
@@ -317,6 +320,12 @@ section.decisions{position:relative}
 .pill.partial{background:#2a2110;color:#fcd34d}
 .pill.failed{background:#2c1214;color:#fca5a5}
 
+.rounds{display:flex;flex-direction:column;gap:2px;margin:18px 0}
+.round{display:grid;grid-template-columns:44px 1fr;gap:14px;background:var(--card);
+  border:1px solid var(--line);border-radius:9px;padding:13px 16px}
+.rn{font-family:var(--mono);font-size:19px;font-weight:700;color:var(--faint);text-align:right}
+.rb .found{margin:0;font-size:14px}
+.rb .mine{margin:5px 0 0;font-size:13px;color:var(--warn)}
 .note{background:#171308;border:1px solid #3a2f1f;border-left:3px solid var(--warn);
   border-radius:0 10px 10px 0;padding:16px 20px;margin:18px 0;font-size:14px;color:#e8dcc0}
 .note b{color:#fff}
@@ -501,6 +510,31 @@ def decisions_html() -> str:
   <textarea placeholder='Notes (optional)'></textarea>
 </div>""")
     return "".join(out)
+
+
+def judge_html() -> str:
+    """The adversarial loop — what it found, and what it found in MY work."""
+    if not JUDGE:
+        return ""
+    rows = "".join(f"""
+<div class='round'>
+  <div class='rn'>{r['n']}</div>
+  <div class='rb'>
+    <p class='found'>{e(r['headline'])}</p>
+    <p class='mine'>{e(r['mine'])}</p>
+  </div>
+</div>""" for r in JUDGE["rounds"])
+    return f"""
+<h2>Ten rounds of an adversarial judge</h2>
+<p class="lede">Every round ran Codex at xhigh in a read-only sandbox — cross-vendor, and
+mechanically unable to patch what it judges. It reported; I fixed; a FRESH judge re-ran, told
+what changed. The loop ended on its round cap, not on a PASS.</p>
+<div class="note"><b>The pattern worth your attention.</b> The second line of each round is a
+defect in work I had just done, or in a check I had just written. Six of the ten were mine,
+and three were caused by the previous round's own fix. That is the loop paying for itself —
+the most productive single check was mutating the behaviour each of 254 tests names and
+seeing which stayed green.</div>
+<div class="rounds">{rows}</div>"""
 
 
 def build_html() -> str:
@@ -697,7 +731,7 @@ lanes import is a barrier and lands alone; everything else runs in parallel in o
 {waves_html()}
 
 <h2 style="margin-top:48px">Where the build got to</h2>
-{build_html()}
+{build_html()}\n{judge_html()}
 
 <hr>
 

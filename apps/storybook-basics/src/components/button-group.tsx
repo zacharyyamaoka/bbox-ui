@@ -14,7 +14,11 @@ import { cn } from "../lib/utils";
 import { Separator } from "./separator";
 
 const buttonGroupVariants = cva(
-  "has-[>[data-slot=button-group]]:gap-2 has-[select[aria-hidden=true]:last-child]:[&>[data-slot=select-trigger]:last-of-type]:rounded-r-lg flex w-fit items-stretch *:focus-visible:relative *:focus-visible:z-10 [&>[data-slot=select-trigger]:not([class*='w-'])]:w-fit [&>input]:flex-1",
+  // `isolate`: a focused child lifts to z-10, which escaped into the host's
+  // stacking context and could paint over a host overlay at z-5 (judge
+  // sweep, 2026-09-18). Containing it keeps the focus lift working and
+  // stops it competing outside the group.
+  "isolate has-[>[data-slot=button-group]]:gap-2 has-[select[aria-hidden=true]:last-child]:[&>[data-slot=select-trigger]:last-of-type]:rounded-r-lg flex w-fit items-stretch *:focus-visible:relative *:focus-visible:z-10 [&>[data-slot=select-trigger]:not([class*='w-'])]:w-fit [&>input]:flex-1",
   {
     variants: {
       orientation: {

@@ -1,0 +1,23 @@
+/*
+ * src/app.css — this app's stylesheet is the TRUNK's stylesheet.
+ * Same rule as apps/systemsketch/src/app.css: one source of design.
+ */
+@import "../../storybook-basics/src/globals.css";
+
+/*
+ * WHY two `@source` lines, copied deliberately rather than inherited:
+ * CLAUDE.md's first measured trap — "Tailwind v4 only scans the app's own
+ * sources". Every component this app renders lives in the trunk, so without
+ * the first line every utility a trunk component uses is simply never
+ * generated and the window paints invisible. It is the one thing that goes
+ * wrong silently in a new app here (work order §9, trap 1).
+ */
+@source "../../storybook-basics/src";
+@source "./";
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}

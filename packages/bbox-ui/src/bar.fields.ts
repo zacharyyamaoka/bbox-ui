@@ -5,7 +5,7 @@
  * are deliberately absent: the edge follows from which slot the bar fills
  * and the three cells are slots of its own — structural, never a row.
  */
-import type { FieldSpec } from "@bbox-ui/schema";
+import type { FieldSpec } from "./schema";
 
 import { APPEARANCE_FIELDS } from "./appearance.fields";
 import { BAR_LINE_FIELDS } from "./bar.presets";

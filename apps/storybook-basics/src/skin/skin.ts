@@ -4,11 +4,24 @@
 //
 //   • The whole file — vocabulary (`BBOX_SKINS`/`BboxSkin`), labels,
 //     blurbs, the closed `BBOX_SKIN_TOKENS` table, `BBOX_SKIN_ATTR`, and
-//     `bboxSkinAttrs`. The three skins (`default`/`plain`/`sketch`) and
-//     every module-doc WHY (the third orthogonal axis, the
+//     `bboxSkinAttrs`. The token names (13 of the donor's 15 — see point
+//     3 below) and every module-doc WHY (the third orthogonal axis, the
 //     inherited-attribute mechanism, the no-rotate/no-width invariant)
 //     travel unchanged — this app's job was never to redesign the
 //     language, only to bring it to components that never had it.
+//
+// THE SKIN SET IS NO LONGER THE DONOR'S. Zach, 2026-09-17, renamed and
+// grew it from three (`default`/`plain`/`sketch`) to ten — see
+// `BBOX_SKINS` below for the order he specified and skin.css for each
+// skin's own reasoning. The VOCABULARY (the closed token set) is
+// untouched: every one of the seven new styles is made of nothing but
+// values for tokens that already existed, which is the whole claim being
+// tested — "how much room is there inside shadcn's token vocabulary".
+// packages/bbox-ui is frozen v1 and still carries the original three;
+// nothing here edits it. (Ported onto this file's M8 revision on
+// 2026-09-30 from claude/orthogonal-design-styles-8d71d7, which predates
+// M8 — so the new skins declare the 13 tokens, never the retired
+// `crisp`/`outline` pair.)
 //
 // WHAT CHANGED in the port, exhaustively:
 //
@@ -53,20 +66,85 @@
  * union lets the vocabulary and the thing that renders it drift, and every
  * total `Record<BboxSkin, …>` below becomes a compile error until a new
  * skin says what it paints.
+ *
+ * THE ORDER IS THE PRODUCT. This array is what `.storybook/preview.tsx`
+ * maps over to build the toolbar picker and what `Styles.stories.tsx`
+ * maps over to build its columns, so the order here is the order Zach
+ * reads them in — which he specified directly (2026-09-17):
+ *
+ *   1. No skin (today)   <- not a member: the absence of the attribute
+ *   2. Unstyled          3. Sketch            4. Shadcn
+ *   5. No. 1 · Vellum    6. No. 2 · Blueprint 7. No. 3 · Brutal
+ *   8. No. 4 · Terminal  9. No. 5 · Porcelain  10. No. 6 · Notion
+ *   11. No. 7 · Obsidian
+ *
+ * His list starts at 2 because rung 1 is the picker's "No skin (today)"
+ * — the state where no `data-bbox-skin` attribute exists anywhere in
+ * scope. That rung is deliberately NOT a member of this array: it is the
+ * absence of a skin, not an eleventh one, and modelling it as a member is
+ * what would make "switch back to nothing" unexpressible. skin.test.ts
+ * pins this exact order so a reordering edit has to be deliberate.
+ *
+ * WHAT CHANGED from the donor's three (`default`/`plain`/`sketch`):
+ * `default` became `shadcn` (it was always the shadcn/ui look, and
+ * "default" hid that behind a word meaning "whatever is on"); `plain` was
+ * dropped here and survives untouched in the frozen packages/bbox-ui;
+ * `unstyled` and the seven numbered styles are new. skin.css carries the
+ * per-skin reasoning.
  */
-export const BBOX_SKINS = ["default", "plain", "sketch"] as const;
+export const BBOX_SKINS = [
+  "unstyled",
+  "sketch",
+  "shadcn",
+  "vellum",
+  "blueprint",
+  "brutal",
+  "terminal",
+  "porcelain",
+  "notion",
+  "obsidian",
+] as const;
 export type BboxSkin = (typeof BBOX_SKINS)[number];
 
+/**
+ * The picker label. The numbered styles carry Zach's own numbering in their
+ * label, not just their position — a picker shows one item at a time, and
+ * "No. 3" is the name he will use to ask for one of them.
+ */
 export const BBOX_SKIN_LABELS: Record<BboxSkin, string> = {
-  default: "Default",
-  plain: "Plain",
+  unstyled: "Unstyled",
   sketch: "Sketch",
+  shadcn: "Shadcn",
+  vellum: "No. 1 · Vellum",
+  blueprint: "No. 2 · Blueprint",
+  brutal: "No. 3 · Brutal",
+  terminal: "No. 4 · Terminal",
+  porcelain: "No. 5 · Porcelain",
+  notion: "No. 6 · Notion",
+  obsidian: "No. 7 · Obsidian",
 };
 
 export const BBOX_SKIN_BLURBS: Record<BboxSkin, string> = {
-  default: "Today's look, unchanged — what you get when no skin is set.",
-  plain: "Square corners, one hairline, no shadow. The austere reading — a schematic.",
-  sketch: "Hand-drawn: an informal font and corners that are not quite the same on any two sides.",
+  unstyled:
+    "Undecorated, not invisible — the Base UI reading. No fill, no shadow, no corner, the browser's own serif, and the browser's own `ButtonBorder` on every line. The ports and wires keep their colour, because that belongs to state and not to the skin.",
+  sketch:
+    "Hand-drawn: an informal font and corners that are not quite the same on any two sides. The border keeps its 2px and paints nothing; an SVG path draws on top of it.",
+  shadcn:
+    "The stock design system, unmodified — shadcn/ui's own radius, border and card, resolved through globals.css. This is the rung to switch back to.",
+  vellum:
+    "Soft and friendly: a 14px corner, a rounded letterform, a warm paper tint and a line quiet enough to stop shouting. Ambient shadow instead of a hard edge.",
+  blueprint:
+    "Drafting paper. Square everything — pills included — a cyan line on a blue wash, no depth at all, and a condensed technical face.",
+  brutal:
+    "Neo-brutalist: square, a full-strength foreground line, and a 5px hard offset shadow with zero blur. The silhouette changes; the geometry does not.",
+  terminal:
+    "A modern terminal window rather than a CRT — warm charcoal, a 6px corner, an amber-leaning hairline and a real drop shadow. Monospace in every slot, including the ones that ask for sans.",
+  porcelain:
+    "Soft depth and almost no line — a translucent surface with two stacked shadows doing the work the border used to do. Names no hue, so it follows light/dark for free.",
+  notion:
+    "The document, not the app. A 4px corner, a fill one step off the page, a line you have to look for, and no depth at all. Tags are rounded rectangles, not pills.",
+  obsidian:
+    "The vault. One violet accent on an almost-neutral ground, an 8px corner, 4px tags, and elevation done with Obsidian's own three-stop shadow rather than a line.",
 };
 
 /**
@@ -113,8 +191,10 @@ export const BBOX_SKIN_TOKENS: readonly SkinToken[] = [
   { name: "bbox-skin-ink", fallback: "var(--color-foreground)", paints: "stroke (the drawn line, painted at the boundary — see --bbox-ink-state)" },
   { name: "bbox-skin-fg", fallback: null, paints: "color (a component's own text, which a fill-less skin must re-point)" },
   // Lets a skin blank out a border whose COLOUR belongs to another axis
-  // (Port's state rings, a semantic Badge variant). Undefined on every
-  // skin but sketch, so the `var()` fallback is the real colour.
+  // (Port's state rings, a semantic Badge variant). Undefined (`initial`)
+  // on every skin but sketch (`transparent`) and unstyled (`currentColor`,
+  // the primitive's own text colour — still not a colour the skin chose),
+  // so elsewhere the `var()` fallback is the real colour.
   { name: "bbox-skin-line-override", fallback: null, paints: "border-color on state-painted components" },
   { name: "bbox-skin-font-sans", fallback: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif', paints: "font-family for a sans text slot, set inline and so beats inheritance" },
   { name: "bbox-skin-font-mono", fallback: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace', paints: "font-family inside CodeEditor" },

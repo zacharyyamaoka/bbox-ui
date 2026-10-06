@@ -7,7 +7,7 @@
  * `RADIUS_FIELD`. See `region.presets.ts` for why a Region has no `view`
  * selector of its own.
  */
-import type { FieldSpec } from "@bbox-ui/schema";
+import type { FieldSpec } from "./schema";
 
 export const REGION_KINDS = ["for", "while", "if"] as const;
 export type RegionKind = (typeof REGION_KINDS)[number];

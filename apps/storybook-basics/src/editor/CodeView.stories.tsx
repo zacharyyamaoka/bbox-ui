@@ -86,6 +86,27 @@ export const AddedModifiedRemoved: Story = {
     const addedLines = canvas.getAllByTestId("compare-code-added");
     await expect(removedLines.length).toBeGreaterThan(0);
     await expect(addedLines.length).toBeGreaterThan(0);
+
+    // The comment above promises ORDER, and counting both kinds does not
+    // observe it — reversing a replacement pair left this story green (judge
+    // mutation, 2026-09-18).
+    //
+    // Scoped to the MODIFIED panel deliberately: this story renders three
+    // independent CodeViews side by side (a wholly added record, a wholly
+    // removed one, a modified one), so the document-order first "added" and
+    // first "removed" come from DIFFERENT panels and their relative position
+    // says nothing. The donor's guarantee is about a replacement pair inside
+    // ONE record's diff (lineDiff.ts:100: "Removed lines are emitted before
+    // the added lines they were replaced by"), so that is what is asserted.
+    const panels = canvasElement.querySelectorAll("[data-testid='compare-code-view']");
+    const modifiedPanel = panels[panels.length - 1];
+    await expect(modifiedPanel).toBeDefined();
+    const inModified = within(modifiedPanel as HTMLElement);
+    const removedHere = inModified.getAllByTestId("compare-code-removed");
+    const addedHere = inModified.getAllByTestId("compare-code-added");
+    await expect(
+      removedHere[0].compareDocumentPosition(addedHere[0]) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   },
 };
 

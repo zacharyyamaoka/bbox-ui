@@ -272,3 +272,153 @@ describe("the geometry invariant", () => {
     expect(css).not.toMatch(/\brotate\s*\(/);
   });
 });
+
+/* ==================================================================== */
+/* The ten-skin set (Zach, 2026-09-17/18) — order, naming, distinctness. */
+/* ==================================================================== */
+
+/** Every `[data-bbox-skin="…"] { … }` block, as id -> token -> value. The
+ * sibling `skinBlocks()` above deliberately returns names only (it exists
+ * to prove the closed set is closed); these checks need the VALUES. */
+function skinDecls(): Map<string, Map<string, string>> {
+  const found = new Map<string, Map<string, string>>();
+  for (const match of css.matchAll(/\[data-bbox-skin="([\w-]+)"\]\s*\{([^}]*)\}/g)) {
+    const decls = new Map<string, string>();
+    for (const d of match[2].matchAll(/--([\w-]+)\s*:\s*([^;]+);/g)) {
+      decls.set(d[1], d[2].replace(/\s+/g, " ").trim());
+    }
+    found.set(match[1], decls);
+  }
+  return found;
+}
+
+describe("the picker order is the product", () => {
+  // `.storybook/preview.tsx` builds the toolbar by mapping BBOX_SKINS, and
+  // Styles.stories.tsx builds its columns the same way — so this array's
+  // order IS what Zach reads, and he specified it directly:
+  //   1. No skin (today)  2. Unstyled  3. Sketch  4. Shadcn
+  //   5. No. 1  6. No. 2  7. No. 3  8. No. 4  9. No. 5
+  //   then, asked for one at a time: 10. No. 6 (Notion), 11. No. 7 (Obsidian)
+  // Rung 1 is the ABSENCE of the attribute and is deliberately not a
+  // member — see skin.ts's own note on why modelling it as one would make
+  // "switch back to nothing" unexpressible.
+  it("is exactly the order asked for, not merely the same set", () => {
+    expect([...BBOX_SKINS]).toEqual([
+      "unstyled",
+      "sketch",
+      "shadcn",
+      "vellum",
+      "blueprint",
+      "brutal",
+      "terminal",
+      "porcelain",
+      "notion",
+      "obsidian",
+    ]);
+  });
+
+  it("the three named rungs come first and carry no number", () => {
+    for (const skin of BBOX_SKINS.slice(0, 3)) {
+      expect(BBOX_SKIN_LABELS[skin], `label for ${skin}`).not.toMatch(/No\./);
+    }
+  });
+
+  it("each numbered style is labelled with its own number, in position order", () => {
+    const numbered = BBOX_SKINS.slice(3);
+    expect(numbered).toHaveLength(7);
+    numbered.forEach((skin, i) => {
+      expect(BBOX_SKIN_LABELS[skin], `label for ${skin}`).toMatch(new RegExp(`^No\\. ${i + 1} · `));
+    });
+  });
+});
+
+describe("the numbered styles are orthogonal, not shades of one", () => {
+  it("no two skins declare the same token values", () => {
+    // A copy-pasted skin is the failure this catches: it would show up in
+    // the picker, look like a choice, and be a duplicate. The LIVE version
+    // of this claim — distinct `getComputedStyle` signatures in a real
+    // browser — is Styles.stories.tsx's `AllSkins` play function; this is
+    // the cheap source-level half that fails at `vitest` speed.
+    const signatures = new Map<string, string>();
+    for (const [skin, decls] of skinDecls()) {
+      const signature = [...decls.entries()].sort().map(([k, v]) => `${k}:${v}`).join(";");
+      const twin = signatures.get(signature);
+      expect(twin, `${skin} is byte-identical to ${twin}`).toBeUndefined();
+      signatures.set(signature, skin);
+    }
+  });
+
+  it("the set spans its expressive range on every axis it owns", () => {
+    // Not "they differ somewhere" (the check above) — that a skin set can
+    // pass while every skin varies only its font. Each axis below has to
+    // be genuinely used, or the "completely different looks and feels"
+    // claim is nominal.
+    const decls = skinDecls();
+    const distinct = (token: string) => new Set([...decls.values()].map((d) => d.get(token))).size;
+    expect(distinct("bbox-skin-radius"), "corner").toBeGreaterThanOrEqual(6);
+    expect(distinct("bbox-skin-radius-pill"), "the small-thing corner").toBeGreaterThanOrEqual(4);
+    expect(distinct("bbox-skin-surface"), "fill").toBeGreaterThanOrEqual(7);
+    expect(distinct("bbox-skin-stroke"), "line").toBeGreaterThanOrEqual(7);
+    expect(distinct("bbox-skin-shadow"), "depth").toBeGreaterThanOrEqual(5);
+    expect(distinct("bbox-skin-font"), "letterform").toBeGreaterThanOrEqual(8);
+  });
+});
+
+describe("unstyled is undecorated, NOT invisible", () => {
+  // The rung exists because Zach reads layout through it ("I like actually
+  // just seeing things in the unstyled way then its good.. clears away the
+  // distortions"). A stray paint token would quietly put a distortion back
+  // — and so, it turned out, would an ABSENT one: the first pass painted
+  // the border `transparent`, which is the literal reading of "every paint
+  // token off" and the wrong one. Zach, same day: "BUG unstyled doesn't
+  // even show an outline which is bad! unstyled should look like the BASE
+  // UI primatives." A lens you cannot see through is not a lens. Both
+  // halves are pinned below so neither mistake can come back.
+  const OFF: Record<string, string> = {
+    "bbox-skin-radius": "0px",
+    "bbox-skin-radius-pill": "0px",
+    "bbox-skin-surface": "transparent",
+    "bbox-skin-shadow": "none",
+    // No `bbox-skin-outline` row: migration M8 retired that token (see this
+    // file's header, point 3), so "the drawn outline is off" is now simply
+    // "unstyled is not sketch" — the boundary pass only ever runs for
+    // sketch (`.storybook/preview.tsx`, `Styles.stories.tsx`'s `AtEdge`).
+  };
+
+  it.each(Object.entries(OFF))("%s is off (%s)", (token, value) => {
+    expect(skinDecls().get("unstyled")?.get(token)).toBe(value);
+  });
+
+  it("draws a line — the UA's own, not one this repo picked", () => {
+    // `ButtonBorder` is a CSS Color 4 system colour: the paint the browser
+    // puts on a <button> nobody styled. Naming a theme token or a literal
+    // here would make the rung a design decision, which is the one thing
+    // it must not be.
+    expect(skinDecls().get("unstyled")?.get("bbox-skin-stroke")).toBe("ButtonBorder");
+  });
+
+  it("leaves the outline-variant primitives a line too", () => {
+    // The other half of the same bug: blanking `line-override` left a row
+    // of floating words where Base UI would show bordered controls.
+    // `currentColor` is still not a colour the SKIN chose — it is the
+    // element's own text colour — which keeps it on the right side of the
+    // axis boundary the suppression tokens exist to protect.
+    expect(skinDecls().get("unstyled")?.get("bbox-skin-line-override")).toBe("currentColor");
+  });
+
+  it("still leaves the state axis alone — Port's rings are not a skin's to blank", () => {
+    // The point of the rung: the boxes vanish and the wiring does not,
+    // which is only true while the skin keeps its hands off the one token
+    // that would suppress state-owned paint.
+    expect(skinDecls().get("unstyled")?.get("bbox-skin-dot-rings")).toBe("initial");
+  });
+
+  it("reaches the UA font by naming a generic family, never `initial`", () => {
+    // `initial` on a custom property is the guaranteed-invalid value, so
+    // `var(--bbox-skin-font, inherit)` would fall through to `inherit` and
+    // silently keep the body font — the rung would look styled. Naming the
+    // generic family is the only spelling that actually reaches Times.
+    expect(skinDecls().get("unstyled")?.get("bbox-skin-font")).toBe("serif");
+    expect(skinDecls().get("unstyled")?.get("bbox-skin-font-sans")).toBe("serif");
+  });
+});

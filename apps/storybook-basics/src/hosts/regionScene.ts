@@ -73,6 +73,28 @@ export interface ArmData {
   open?: boolean;
   /** Body height while open. Default `REGION_ARM_DEFAULT_BODY_PX`. */
   h?: number;
+  /**
+   * An `if`/`elif` arm's OWN operand — the boolean it is selected by.
+   * `else` has none.
+   *
+   * WHY this lives here and not only in `data.ports.left`: the wall list
+   * carries the port's ID, which is all a wire needs, but NOT the inline
+   * expression a reader sees when nothing is wired (`PortState
+   * "valueSet"` — "owns a default", `components/port.tsx:60`). Storing
+   * only the id dropped `default` on the floor, so a scene round-tripped
+   * through `branchNode` rendered a bare dot and the condition vanished —
+   * the exact "hiding things inside the header" failure this whole change
+   * set exists to end, reintroduced one layer down. Both are written:
+   * `ports.left` so hosts and `wireLayer` resolve the dot, `arm.test` so
+   * the tab can paint the expression verbatim.
+   */
+  test?: { id: string; default?: string };
+  /**
+   * A `match` arm's pattern CAPTURES — the names it binds INTO its body
+   * (`case Point(x=0, y=y)` binds `y`). Mirrored in `data.ports.right`
+   * for the same reason `test` is mirrored in `ports.left`.
+   */
+  captures?: readonly string[];
 }
 
 export function isRegionNode(node: SceneNode<HostNodeData>): boolean {
