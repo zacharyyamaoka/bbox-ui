@@ -18,7 +18,7 @@
 // split across the zoom readout, and keeps grid (a canvas toggle, like the
 // donor's leading item) on the same side as them; dev and help stay
 // trailing, exactly the donor's own order for that pair.
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { CircleHelp, Code2, Frame, Grid3x3, Minus, Plus } from "lucide-react";
 import { useEditor, useValue } from "tldraw";
 
@@ -242,7 +242,18 @@ export function SystemSketchStatusStrip({
     (item): item is StatusStripItem => item !== null,
   );
 
+  // The stacked form's column count (`chrome/overlay.tsx`, STACKED_STRIP_CLASS).
+  // `StatusStrip` puts `Math.ceil(n / 2)` items before the readout, separators
+  // between neighbours: row 1 is `2*mid - 1` children, row 2 (readout first)
+  // is `2*(n - mid) + 1`. The larger of the two, never a bare 5 — grid and
+  // help are conditional (`gridAction`, `stock.openKeyboardShortcuts`).
+  const leadingCount = Math.ceil(items.length / 2);
+  const stackedColumns = Math.max(1, 2 * leadingCount - 1, 2 * (items.length - leadingCount) + 1);
+
   return (
+    // `contents`: the wrapper only carries the custom property down to the
+    // trunk's strip, which stays the flex item of the corner row.
+    <div className="contents" style={{ "--ss-strip-columns": stackedColumns } as CSSProperties}>
     <StatusStrip items={items}>
       {/* The readout slot. Zach, 2026-09-20, reversing the prior "no zoom
           menu" decision recorded here (see the file header): the % is now a
@@ -279,5 +290,6 @@ export function SystemSketchStatusStrip({
         ) : null}
       </span>
     </StatusStrip>
+    </div>
   );
 }
