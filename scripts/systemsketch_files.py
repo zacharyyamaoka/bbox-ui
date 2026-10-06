@@ -20,9 +20,11 @@ for now".
 What changes from the donor, and why:
   * The routes live in ``WorkspaceApi`` — a mixin-free object any
     ``BaseHTTPRequestHandler`` can delegate to — so the SAME code serves the
-    dock's Stable server (``scripts/launch_systemsketch.py`` mounts it on
-    :4341, same origin as the app) and this file's own standalone server (the
-    vite dev proxy and the smoke tests).
+    dock's old Stable server (the retired ``scripts/launch_systemsketch.py``
+    mounted it on :4341) and this file's own standalone server — which is now
+    what Stable runs too (``apps/systemsketch/stable-preview.json``'s
+    ``stable.processes``, proxied same-origin on :4341), besides the vite dev
+    proxy and the smoke tests.
   * ``Desktop`` is injected. The donor shelled out to ``gio trash`` and
     xdg-open directly; a test run must never move a real file to the
     desktop Trash or open a file manager on Zach's screen, so tests pass
@@ -1011,6 +1013,60 @@ def default_lock_root(home: Path) -> Path:
     return home / ".local" / "state" / "systemsketch-next" / "locks" / "workspace"
 
 
+class RootOverrideError(ValueError):
+    """A ``SYSTEMSKETCH_*_ROOT`` override that is not an absolute path."""
+
+
+def _absolute_override(environment: "dict[str, str] | os._Environ[str]", name: str) -> Path | None:
+    """A non-empty override, which must be absolute; empty (or unset) → None."""
+    value = environment.get(name)
+    if not value:
+        return None
+    if not os.path.isabs(value):
+        raise RootOverrideError(f"{name}={json.dumps(value)} is relative; it must be an absolute path (or empty for unset)")
+    return Path(value)
+
+
+def roots_from_environment(
+    environment: "dict[str, str] | os._Environ[str]",
+    files_root: Path,
+    lock_root: Path | None,
+    home: Path,
+) -> tuple[Path, Path]:
+    """``(files_root, lock_root)`` for ``serve --files-root-from-env``.
+
+    The SAME rule ``apps/systemsketch/devFileHost.ts``'s
+    ``resolveDevFileHostRoots`` applies to Preview and ``sps dev`` lanes: a
+    non-empty ``SYSTEMSKETCH_FILES_ROOT`` wins for the files root, with a
+    non-empty ``SYSTEMSKETCH_LOCK_ROOT`` or the shared default for locks;
+    otherwise the explicit ``--files-root`` and ``--lock-root``/the shared
+    default, exactly as without the flag. A relative value of either raises
+    ``RootOverrideError``.
+
+    WHY (Codex audit, 2026-09-29): the dock's Stable now runs this CLI as a
+    process (``apps/systemsketch/stable-preview.json``) with ``--files-root
+    {home}``, so an isolated or agent run of Stable that set
+    ``SYSTEMSKETCH_FILES_ROOT`` — honoured by Preview and by the old launcher —
+    would have written into the real home instead.
+    WHY empty is unset and relative is refused (rounds 2-3): Stable's cwd is
+    its release snapshot, Preview's is the main checkout and a lane's is its
+    worktree, so ``""`` (``Path("")`` is the cwd) or ``locks`` resolved against
+    any per-process base put the channels' locks in different folders — two
+    lock files for one board, no mutual exclusion. No base is shared by all of
+    them; only an absolute path names one place.
+    """
+    # WHY both validated before the precedence picks one (Codex round 4): a relative lock root beside
+    # an unset files root was silently ignored. WHY `Path(value)` and nothing more: the value arrives
+    # here exactly as devFileHost.ts passes it to `--lock-root`/`--files-root` for Preview (it only
+    # validates), so one resolver — this host, and the kernel applying `..` after a symlink — serves
+    # both channels. A lexical collapse on either side split them into two folders.
+    override = _absolute_override(environment, "SYSTEMSKETCH_FILES_ROOT")
+    locks = _absolute_override(environment, "SYSTEMSKETCH_LOCK_ROOT")
+    if override is not None:
+        return override, locks or default_lock_root(home)
+    return files_root, lock_root or default_lock_root(home)
+
+
 # ------------------------------------------------------------------ the routes
 
 def _post_failure_status(cause: BaseException) -> HTTPStatus:
@@ -1468,9 +1524,23 @@ def main(argv: list[str] | None = None) -> int:
     # would change what those tests see 404 on. The vite dev plugin passes it.
     serve_parser.add_argument("--recordings", action="store_true")
     serve_parser.add_argument("--source-root", type=Path, default=None)
+    # WHY opt-in and never a default for --files-root: plain CLI use keeps the
+    # rule above (no root named → refuse). With this flag an environment
+    # override may only REPLACE the root that was named, the way Preview's
+    # devFileHost.ts honours it — see `roots_from_environment`.
+    serve_parser.add_argument("--files-root-from-env", action="store_true")
     arguments = parser.parse_args(argv)
 
-    lock_root = arguments.lock_root or default_lock_root(Path.home())
+    if arguments.files_root_from_env:
+        try:
+            files_root, lock_root = roots_from_environment(
+                os.environ, arguments.files_root, arguments.lock_root, Path.home()
+            )
+        except RootOverrideError as refused:
+            parser.error(str(refused))
+    else:
+        files_root = arguments.files_root
+        lock_root = arguments.lock_root or default_lock_root(Path.home())
     if arguments.desktop == "gio":
         desktop: Desktop = GioDesktop()
     elif arguments.desktop.startswith("record:"):
@@ -1489,7 +1559,7 @@ def main(argv: list[str] | None = None) -> int:
         from systemsketch_recordings import RecordingApi
 
         recordings = RecordingApi(
-            arguments.files_root,
+            files_root,
             source_root=arguments.source_root or Path(__file__).resolve().parents[1],
             channel="dev",
             build="dev",
@@ -1497,7 +1567,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     server = make_server(
-        arguments.files_root,
+        files_root,
         lock_root,
         desktop,
         host=arguments.host,

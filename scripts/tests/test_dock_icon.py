@@ -28,7 +28,6 @@ SCRIPTS = PROJECT_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import dock_icon  # noqa: E402
-import launch_systemsketch  # noqa: E402
 
 import gi  # noqa: E402
 
@@ -257,40 +256,6 @@ class FitInstalledTests(unittest.TestCase):
         fitted = self.svg.read_bytes()
         self.assertEqual(dock_icon.fit_installed("foreign", self.home, notify=False), [])
         self.assertEqual(self.svg.read_bytes(), fitted)
-
-
-class LauncherWiringTests(unittest.TestCase):
-    RECORD = {"build": "0123456789abcdef", "subject": "test", "built": "now"}
-
-    def run_main(self, *argv: str, sync=None) -> list[str]:
-        calls: list[str] = []
-        sync = sync or (lambda: calls.append("sync") or [])
-        with mock.patch.multiple(
-            launch_systemsketch,
-            stable_record=mock.DEFAULT,
-            ensure_server=mock.DEFAULT,
-            legacy=mock.DEFAULT,
-            ensure_storybook=mock.DEFAULT,
-            open_window=mock.DEFAULT,
-        ) as fakes, mock.patch.object(dock_icon, "sync", side_effect=sync), mock.patch.object(sys, "argv", ["launch", *argv]):
-            fakes["stable_record"].return_value = self.RECORD
-            fakes["open_window"].side_effect = lambda url: calls.append("open")
-            self.assertEqual(launch_systemsketch.main(), 0)
-        return calls
-
-    def test_pressing_the_dock_icon_resyncs_it_before_the_window_opens(self) -> None:
-        self.assertEqual(self.run_main("--open"), ["sync", "open"])
-
-    def test_a_double_clicked_board_resyncs_it_too(self) -> None:
-        with tempfile.NamedTemporaryFile(suffix=".bbox") as board:
-            self.assertEqual(self.run_main(board.name), ["sync", "open"])
-
-    def test_a_broken_icon_never_stops_the_window_opening(self) -> None:
-        def explode() -> list[str]:
-            raise RuntimeError("librsvg is missing")
-
-        with mock.patch.object(sys, "stderr"):
-            self.assertEqual(self.run_main("--open", sync=explode), ["open"])
 
 
 if __name__ == "__main__":

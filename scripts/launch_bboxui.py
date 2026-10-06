@@ -9,7 +9,8 @@
            Builds). No local state at all.
 
 Originally copied from SystemSketch's Stable/Preview desktop launcher
-(scripts/launch_systemsketch.py); as of 2026-09-22 this script is itself just
+(scripts/launch_systemsketch.py, deleted 2026-09-29 when the whiteboard moved
+to the shared stable-preview-switcher runtime); as of 2026-09-22 this script is itself just
 a thin, product-named wrapper around bbox_launch_common.run() — see
 scripts/launch_bbox_storybook.py for the Storybook workbench's identical
 interface on the same shared CLI, and bbox_release.py's module docstring for

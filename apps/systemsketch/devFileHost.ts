@@ -5,12 +5,14 @@
 // `src/devFileHost.test.ts` is the acceptance and is off-limits to the builder.
 //
 // WHY the dev server owns this at all: the app reaches its file host SAME
-// ORIGIN — the dock's Stable server mounts `/api/workspace/*` next to the
-// build it serves (scripts/launch_systemsketch.py). `pnpm --filter
-// systemsketch dev` has no such server, so without this plugin Open/Save
-// would work in the dock and fail on :4340 — the two surfaces Zach actually
-// uses, disagreeing. The plugin starts the SAME `scripts/systemsketch_files.py`
-// on an ephemeral port and proxies the same paths to it.
+// ORIGIN — the dock's Stable server proxies `/api/workspace/*` to this same
+// script, run as a Stable process (`stable.processes` + `stable.proxy` in
+// apps/systemsketch/stable-preview.json). Preview (`sps open --preview`), an
+// agent's `sps dev` lane and a bare `pnpm --filter systemsketch dev` all run
+// this Vite config, so without this plugin Open/Save would work in the dock
+// and fail on :4340 — the two surfaces Zach actually uses, disagreeing. The
+// plugin starts the SAME `scripts/systemsketch_files.py` on an ephemeral port
+// and proxies the same paths to it.
 //
 // WHY it refuses to guess a files root under a test runner: a suite that
 // spawned this with the default root would be writing into
@@ -86,12 +88,30 @@ export function resolveSharedLockRoot(home: string, directoryExists: (candidate:
   return directoryExists(archived) ? archived : path.join(home, ...NEXT_LOCK_ROOT);
 }
 
+/** Thrown for a root override that is not absolute — see `resolveDevFileHostRoots`. */
+export class RootOverrideError extends Error {}
+
+/** A non-empty override, which must be absolute; empty means unset. */
+function absoluteOverride(name: "SYSTEMSKETCH_FILES_ROOT" | "SYSTEMSKETCH_LOCK_ROOT", value: string | undefined): string | null {
+  if (!value) return null;
+  if (!path.isAbsolute(value)) {
+    throw new RootOverrideError(`${name}=${JSON.stringify(value)} is relative; it must be an absolute path (or empty for unset)`);
+  }
+  // WHY returned UNCHANGED (Codex round 4): this side only validates. Node's
+  // `path.resolve` collapses `..` lexically while the Python host lets the
+  // kernel apply it after a symlink, so `…/node_modules/<link>/../locks` meant
+  // two folders — one per channel. The Python host is the one resolver, on
+  // both channels.
+  return value;
+}
+
 /**
  * The roots for an environment, or `null` when this dev server must not start
  * a host at all.
  *
- *   - `SYSTEMSKETCH_FILES_ROOT` set → that root (and `SYSTEMSKETCH_LOCK_ROOT`,
- *     or `resolveSharedLockRoot(HOME)`);
+ *   - `SYSTEMSKETCH_FILES_ROOT` set and non-empty → that root (and a non-empty
+ *     `SYSTEMSKETCH_LOCK_ROOT`, or `resolveSharedLockRoot(HOME)`); either one
+ *     relative → `RootOverrideError`;
  *   - otherwise, `VITEST` set → `null`;
  *   - otherwise → `{ filesRoot: HOME, lockRoot: the shared lock root }`, the
  *     same pair the dock's Stable server uses, so a board saved from `vite
@@ -103,10 +123,23 @@ export function resolveDevFileHostRoots(
 ): DevFileHostRoots | null {
   const home = environment.HOME ?? "";
   const sharedLockRoot = resolveSharedLockRoot(home, directoryExists);
-  if (environment.SYSTEMSKETCH_FILES_ROOT) {
+  // WHY both are validated before the precedence picks one (Codex round 4): a
+  // relative lock root beside an unset files root was silently ignored — the
+  // refuse-loudly rule has to hold for every value set, used or not.
+  const filesOverride = absoluteOverride("SYSTEMSKETCH_FILES_ROOT", environment.SYSTEMSKETCH_FILES_ROOT);
+  const lockOverride = absoluteOverride("SYSTEMSKETCH_LOCK_ROOT", environment.SYSTEMSKETCH_LOCK_ROOT);
+  if (filesOverride !== null) {
+    // WHY an empty value means unset and a relative one is REFUSED (Codex
+    // audit, 2026-09-29, rounds 2-3): Stable runs the same host as a process
+    // whose cwd is its release snapshot, and an `sps dev` lane runs this file
+    // from a different worktree — so `""` (→ cwd) or `locks`, resolved against
+    // any per-process base, put two channels' locks in two folders: two lock
+    // files for one board, no mutual exclusion. No base is shared by all of
+    // them, so only an absolute path means one place.
+    // `systemsketch_files.py serve --files-root-from-env` applies the same rule.
     return {
-      filesRoot: environment.SYSTEMSKETCH_FILES_ROOT,
-      lockRoot: environment.SYSTEMSKETCH_LOCK_ROOT ?? sharedLockRoot,
+      filesRoot: filesOverride,
+      lockRoot: lockOverride ?? sharedLockRoot,
     };
   }
   // WHY: a suite that spawned this with the default root would be writing
@@ -206,19 +239,32 @@ export function devFileHostPlugin(roots?: DevFileHostRoots): Plugin {
     name: "systemsketch:dev-file-host",
     apply: "serve",
     configureServer(server) {
-      const resolved = roots ?? resolveDevFileHostRoots(process.env);
+      // WHY a refused override still mounts the proxy (Codex round 3): the
+      // dev server itself must start, and Open/Save must fail LOUDLY — every
+      // file request answers 503 naming the variable, exactly as a host that
+      // failed to spawn does (`respondHostDown`) — never quietly use a root.
+      let refusal: RootOverrideError | null = null;
+      let resolved: DevFileHostRoots | null = null;
+      try {
+        resolved = roots ?? resolveDevFileHostRoots(process.env);
+      } catch (cause) {
+        if (!(cause instanceof RootOverrideError)) throw cause;
+        refusal = cause;
+        server.config.logger.error(`[dev-file-host] ${cause.message}`);
+      }
       // WHY doing nothing rather than registering a no-op middleware: under
       // a test runner with no explicit root (`resolveDevFileHostRoots`
       // returned null), this dev server must never guess a files root — see
       // the module WHY. `/api/workspace/*` simply falls through to Vite's
       // own 404 in that case, exactly as if this plugin were absent.
-      if (!resolved) return;
+      if (!resolved && refusal === null) return;
 
       // WHY lazy: most `vite dev` sessions never touch Open/Save in a given
       // run, and starting a subprocess only on the first real request keeps
       // `pnpm dev` startup unaffected by this plugin existing.
       let hostPromise: Promise<RunningFileHost> | null = null;
       const ensureHost = () => {
+        if (refusal !== null || resolved === null) return Promise.reject(refusal ?? new Error("no file host roots"));
         if (!hostPromise) {
           hostPromise = startFileHost(resolved).catch((cause: unknown) => {
             hostPromise = null; // let the next request retry a fresh spawn

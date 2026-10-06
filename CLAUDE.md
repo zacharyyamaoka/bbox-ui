@@ -503,55 +503,149 @@ answer is still correct, just not rendered anywhere right now) in case a
 future surface wants a "recently changed" view; the story consuming it is
 gone.
 
+## bbox studio's Stable / Preview — one data file, `apps/systemsketch/stable-preview.json`
+
+The whiteboard's release channels come from the shared package at
+`/home/bam/stable_preview_switcher` (its `skill/SKILL.md` is the recipe; its
+`docs/CONTRACT.md` every exact shape). The app holds **data, never code** for them:
+no launcher, release script, Stable server, badge or chip lives in this repo any
+more — `scripts/launch_systemsketch.py` and `assets/bbox-ui.desktop` were deleted
+on 2026-09-29 for it. If a channel seems to need app code, that is a gap in the
+runtime: fix it there, never here.
+
+`sps` finds the app by walking up from the working directory to
+`stable-preview.json`, which lives in `apps/systemsketch/` — so from the repo or
+worktree root it answers "stable-preview.json: none found". Run it from
+`apps/systemsketch`, or pass `--root` as below.
+
+| Want | Run |
+|---|---|
+| where things stand | `sps --root /home/bam/bbox-ui/apps/systemsketch status` |
+| Stable (:4341) / Preview (:4340) | `sps --root /home/bam/bbox-ui/apps/systemsketch open` / `… open --preview` |
+| make Preview the new Stable | `sps --root /home/bam/bbox-ui/apps/systemsketch promote` — Zach's call, never an agent's |
+| undo the last promote | `sps --root /home/bam/bbox-ui/apps/systemsketch rollback` — Zach's call |
+| your own lane (agents) | `sps --root <your worktree>/apps/systemsketch dev` — prints a lane URL; `… dev --stop` when done |
+
+JSON has no comments, so the WHY of each choice in `stable-preview.json` is here:
+
+- **`"app": "bbox-ui"`** — the id is the WM class, the `.desktop` id and the icon
+  name. Zach's pinned dock favourite is `bbox-ui.desktop`; any other id would
+  unpin it and split the window from its icon.
+- **No `icon`** — `Icon=bbox-ui` already resolves to the fitted, outlined tile
+  `scripts/dock_icon.py` installs from `assets/bbox-ui.svg`. The contract only
+  reaches an icon inside the app dir, and `sps install-desktop` would copy the raw
+  artwork over the fitted one. After an artwork change run
+  `python3 scripts/dock_icon.py` by hand (the old launcher re-synced it on every press).
+- **Ports 4341 (Stable) / 4340 (Preview)** — the old launcher's and the app's own
+  `dev` script's ports, so muscle memory does not move.
+- **`stable.processes` `files` on 4342 + `stable.proxy`** — the old Stable server
+  mounted `/api/workspace/*` and `/api/recordings/*` in-process; now Stable runs the
+  same `scripts/systemsketch_files.py serve` the Vite plugin (`devFileHost.ts`)
+  starts, over the real home as files root, and proxies both prefixes to it
+  same-origin. `--files-root-from-env` makes it resolve its roots exactly as
+  `devFileHost.ts` does for Preview: `SYSTEMSKETCH_FILES_ROOT` (with
+  `SYSTEMSKETCH_LOCK_ROOT`, or the shared lock root) wins when set, so an isolated or
+  agent run of Stable never writes into the real home; the runtime hands a Stable
+  process the environment of whoever started it (its contract §9.20). On BOTH sides an
+  empty value counts as unset and a relative one is refused loudly (Stable's host exits
+  naming the variable; `devFileHost.ts` answers every file request 503 with it): Stable
+  runs from its release snapshot, Preview from the main checkout and an `sps dev` lane
+  from its worktree, so no relative base names one folder for all three, and two lock
+  folders mean no mutual exclusion on a board. Both variables are validated even when
+  the precedence ignores one. `devFileHost.ts` only validates and hands the absolute
+  strings to the Python host unchanged: the host (and the kernel, applying `..` after a
+  symlink) is the one resolver for both channels — Node's lexical `path.resolve` once put
+  `…/node_modules/<link>/../locks` in a different folder than Stable did. Both routes set `rewriteOrigin` (the package's contract §6): the file
+  host refuses any write whose `Origin` is not its own `Host`, and behind the proxy the
+  `Host` is the backend's, so without it every save from Stable came back 403. The
+  rewrite touches only the Stable page's own `Origin` — a foreign page is still refused,
+  the same rule `devFileHost.ts`'s `crossOriginRefusal` applies in Preview. No
+  `--lock-root`: the script's default IS `resolveSharedLockRoot`
+  (pinned by `src/devFileHost.test.ts`). `--source-root {root}/../..` keeps the
+  recorder reading the main checkout's sources, as the old Stable did. Preview needs
+  no process — `devFileHostPlugin` spawns its own.
+- **`snapshot.include` + the `../storybook-basics/node_modules` link** — the build
+  reaches outside the app (`@trunk` = `../storybook-basics/src`, the tsconfig's
+  `../../tsconfig.base.json`, the trunk's `@bbox-ui/glyph-content`) and Stable's
+  backend is a repo-root script. A snapshot of the app dir alone cannot build or run
+  it, so those paths are copied into Stable's snapshot and fingerprinted (a trunk
+  change reads "Stable is behind"). The lockfile and root `package.json` are in the
+  fingerprint for the same reason the old launcher refused a dirty build over them.
+- **`snapshot.exclude`** — seeded review boards, the README and test files cannot
+  change what Stable serves, so a commit touching only them keeps "Stable matches".
+- **`chip.avoid` = `[data-slot="status-strip"]`** — the bottom-right cluster (grid ·
+  frames · problems · dev · help · zoom). The chip floats above it, never on it.
+
+**Migration differences** — what the old launcher (`scripts/launch_systemsketch.py`)
+did that is gone now, so nobody hunts for it:
+
+- **`/api/health` on Stable.** The Stable server answers none, so the ☰ site rows
+  cannot say "differs from this board" there; the chip carries Stable's commit and
+  relation instead. Preview and lanes still answer it (`statusEndpoint.ts`).
+- **Auto-start of :4321 and :5421.** Nothing starts the archived SystemSketch or
+  Storybook any more. "Switch to old SystemSketch" works while
+  `systemsketch.desktop` has :4321 up; "Open Storybook" is probed dead and disabled
+  while :5421 is down.
+- **The shared Chrome profile with the archived app.** sps windows use their own
+  profile (`~/.local/state/stable-preview-switcher/bbox-ui/browser`), so the old
+  origin opens without its own storage after the switch row.
+- **The recording header.** Recordings made on Stable say channel `dev`, build `dev`
+  (the file host's CLI), where the old in-process mount said `stable` and the commit.
+- **The dock's site actions.** "Open bbox-ui.com (deployed)" and "Open the site's
+  local Preview (HMR)" are gone; the right-click menu is the three sps actions. The
+  ☰ "Open bbox-ui.com" row remains.
+- **Automatic dock-icon refresh.** Run `python3 scripts/dock_icon.py` by hand after
+  an artwork change.
+- **The private-Xvfb `--headless` capture/hold workflow.** Use `sps dev` + headless
+  Chrome (below).
+- **Clean-tree-only promotion.** `sps promote` snapshots uncommitted edits too and
+  records them as `dirty`.
+- **`<file>` argument routing.** No live caller (the entry had no MimeType); a board
+  still opens by URL, `?board=/abs/path.bbox`.
+- **Chrome singleton recovery and visible-window confirmation on a dock press.**
+  Owed to the shared runtime (Codex audit P1 #5, 2026-09-29), handled there.
+
 ## Open the app HEADLESS — never on Zach's display
 
 Zach, 2026-09-23, mid-session, while agents were driving the whiteboard on his
 screen: *"why do you keep on opening the application? its distrbuting me while I
 work. can You test it headless?"*
 
-So: **every agent-driven launch of the whiteboard is headless.** One line, and it
-needs no display of its own from you:
+So: **every agent-driven launch of the whiteboard is headless.** From your
+worktree:
 
 ```bash
-python3 /home/bam/bbox-ui/scripts/launch_systemsketch.py --headless --screenshot /tmp/app.png
+SPS_NO_WINDOW=1 sps --root <your worktree>/apps/systemsketch dev
 ```
 
-It brings the pinned Stable build up on a **private Xvfb**, opens the window with
-a **throwaway Chrome profile** and a **free DevTools port**, waits until the page
-has really rendered (non-zero exit if it never does), writes the PNG, prints a
-DevTools endpoint you can attach CDP to, and tears the whole lot down. Add
-`--hold <seconds>` to keep it up while you drive it. `SYSTEMSKETCH_NEXT_HEADLESS=1`
-sets it for a whole session so no individual call can forget.
+It starts your own lane (the app's own Vite, this worktree's files) on a port of
+its own and prints the URL; the chip there reads `Dev · <branch> · …`. Drive that
+URL with headless Chrome or Playwright on a **throwaway profile** — never Zach's
+profile, never a visible window. `sps --root <your worktree>/apps/systemsketch dev
+--stop` when you are done. Never run
+`sps open` yourself: it opens a visible app window in the `bbox-ui` profile, and
+never bind :4340/:4341/:4342 — those are Zach's.
 
 **WHY this is a rule and not a courtesy — it is also a correctness bug.** A Chrome
-`--user-data-dir` is a machine-wide mutex, and so is a fixed
-`--remote-debugging-port`; this launcher shares both with the archived app by
-design (`launch_systemsketch.py`, `PROFILE = LEGACY_PROFILE`), which means it
-shares them with every agent session too. An agent holding that profile makes
-Zach's next dock press print *"Opening in existing browser session"*, hand its
-command line to the agent's browser and exit 0 — his window opens on a hidden
-Xvfb and the launcher reports success. That is not a story: it is what killed
-the bbox-ui dock icon, recorded in `journalctl --user` as three presses in twenty
-seconds that each printed their URL and opened nothing. **A visible agent launch
-breaks the very thing it is verifying.** The guards that now refuse to hand a
-press to a browser with no window on this display live under "the shared Chrome
-singleton" in that file; `scripts/tests/test_window_guard_integration.py` stands
-up a real second browser and reproduces the failure, so it cannot silently rot.
+`--user-data-dir` is a machine-wide mutex. An agent whose browser holds the app
+window's profile makes Zach's next dock press print *"Opening in existing browser
+session"*, hand its command line to the agent's browser and exit 0 — his window
+opens on a hidden Xvfb. That is what killed the bbox-ui dock icon on 2026-09-23,
+recorded in `journalctl --user` as three presses in twenty seconds that each
+printed their URL and opened nothing. **A visible agent launch breaks the very
+thing it is verifying.**
 
 Two traps worth knowing before you debug anything Chrome-shaped here, both
-measured 2026-09-23 and both recorded at the seam:
+measured 2026-09-23:
 
 - **Chrome rewrites its own `/proc/<pid>/cmdline`**, replacing the NUL separators
   with spaces. `split("\0")` returns one giant string and every `--flag in argv`
-  test silently answers False — a holder scan reports zero holders against a
-  browser that is demonstrably holding.
+  test silently answers False.
 - **That same rewrite clobbers `/proc/<pid>/environ`**, so a live Chrome reads
-  back with no `DISPLAY` at all. The X socket route is a dead end too (only the
-  server side of the connection carries the `@/tmp/.X11-unix/X<n>` name). Ask the
-  display which windows exist instead.
+  back with no `DISPLAY` at all. Ask the display which windows exist instead.
 
-The same rule and the same one-line flag exist in `/home/bam/pyblocks` — its icon
-died of the identical cause first.
+The same rule exists in `/home/bam/pyblocks` — its icon died of the identical
+cause first.
 
 ## Seed the review board before handoff
 
