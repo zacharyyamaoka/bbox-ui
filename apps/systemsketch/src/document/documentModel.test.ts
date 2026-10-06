@@ -10,6 +10,17 @@
 // Each `describe` names the lane that turns it green (L0 block, L1 code,
 // L2 port, L3 wire, L5 region). A lane may not edit this file; if a contract
 // line here is wrong the lane reports it and the dispatcher decides.
+//
+// AMENDED 2026-10-06 by B-SCHEMA's acceptance author (docs/lanes/
+// finish-B-SCHEMA.md), before its builder existed — "documentModel.test pins
+// the new defaults exactly" is that barrier's own acceptance line. Schema v2
+// adds every new persisted prop of the finish run in ONE migration per kind;
+// each `B-SCHEMA` comment below names the item it serves, and
+// docs/finish-2026-09-29/schema-inventory.md is the long form (type, default,
+// item, owning lane). The `toEqual` on each WHOLE default bag stays the rule
+// it always was: a persisted field cannot appear without someone stating its
+// default HERE. After B-SCHEMA merges the schema is frozen — a lane that needs
+// a prop stops and reports, and the dispatcher adds it here, alone.
 import { createShapeId, createTLStore, getSnapshot, loadSnapshot, createBindingId, type TLShape, type TLShapeId } from "tldraw";
 import { describe, expect, it } from "vitest";
 
@@ -122,6 +133,57 @@ describe("ss-block (L0)", () => {
       diff: "normal",
       ports: { left: [], right: [], top: [], bottom: [] },
       anchors: [],
+      // ---- B-SCHEMA (schema v2). Every value paints today's pixels.
+      // P-015/P-212: no view has a remembered size until the user leaves it.
+      viewSizes: { simple: null, port: null, expanded: null, value: null },
+      // P-141: the authored box (today's port/expanded behaviour); `hug` is
+      // opt-in, and Fit-to-content is a COMMAND, never automatic (Q-P166).
+      sizeMode: "fixed",
+      // Cluster 14 P-255: `null` = the skin's own radius.
+      cornerRadius: null,
+      // P-133 — buildBlockMenu's four toggles. All shown: a block today has a
+      // header and its divider; it has no footer yet, and `showFooter: true`
+      // means "paint it once the face has one" (Q-P146's footer, and the
+      // donor's own default, systemsketch blockModel.ts:619).
+      showHeader: true,
+      showHeaderDivider: true,
+      showFooter: true,
+      showFooterDivider: true,
+      // P-130: the trunk's own default (portEdge.tsx:1614 `showCard = false`).
+      showCard: false,
+      // P-177 / cluster 15: `null` = today's face (BLOCK_TITLE_FONT_PX and
+      // the inherited family). A number is px; the s/m/l/xl ladder labels it.
+      titleSizePx: null,
+      titleFont: null,
+      // P-107: BlockPort's own default.
+      portLayout: "inline",
+      // P-134: off, the trunk's own default.
+      functionPort: false,
+      // P-118 + cluster 8 (P-356 enable/parking, P-269 spacing): every wall
+      // live, laid out by the view's own rule, no custom offsets.
+      rails: {
+        left: { enabled: true, mode: "auto", spacing: null, freeOffsets: {} },
+        right: { enabled: true, mode: "auto", spacing: null, freeOffsets: {} },
+        top: { enabled: true, mode: "auto", spacing: null, freeOffsets: {} },
+        bottom: { enabled: true, mode: "auto", spacing: null, freeOffsets: {} },
+      },
+      // P-119 + clusters 7/8 for RAIL ports (fill override, hidden, freeze
+      // lock, slot origins), keyed by port id. Empty = every port as today.
+      portOptions: {},
+      // P-188 (+ P-161, P-226): the trunk's own member defaults
+      // (block.tsx membersLayout/memberGap/memberGutter, blockMembers.tsx
+      // inset/width/insetBackground).
+      membersLayout: "free",
+      memberInset: "inset",
+      memberWidth: "fill",
+      memberGap: 12,
+      memberGutter: 12,
+      insetBackground: "none",
+      expandedWeights: {},
+      blockType: "",
+      // P-074/P-109: no identity until linking mints one; canonical, not a draft.
+      definitionId: "",
+      draftOrdinal: null,
     });
   });
 
@@ -165,9 +227,74 @@ describe("ss-block (L0)", () => {
           { portId: "pose", x: 240, y: 40, side: "right" },
           { portId: "gain", x: 0, y: 64, side: null },
         ],
+        // ---- B-SCHEMA: every v2 prop, each at a NON-default value, so the
+        // round trip proves a value survives and not just that a default does.
+        viewSizes: { simple: { w: 180, h: 64 }, port: { w: 240, h: 120 }, expanded: null, value: { w: 168, h: 56 } },
+        sizeMode: "hug",
+        cornerRadius: 0,
+        showHeader: false,
+        showHeaderDivider: false,
+        showFooter: false,
+        showFooterDivider: false,
+        showCard: true,
+        titleSizePx: 24.5,
+        titleFont: "mono",
+        portLayout: "offset",
+        functionPort: true,
+        rails: {
+          left: { enabled: true, mode: "custom", spacing: null, freeOffsets: { frame: 12.5, gain: 40 } },
+          right: { enabled: true, mode: "auto", spacing: "space-evenly", freeOffsets: {} },
+          top: { enabled: false, mode: "auto", spacing: null, freeOffsets: {} },
+          bottom: { enabled: true, mode: "auto", spacing: "space-around", freeOffsets: {} },
+        },
+        portOptions: {
+          frame: { fill: "filled", hidden: false, frozen: true, labelOrigin: "top", secondaryOrigin: "bottom" },
+          gain: { fill: "empty", hidden: true, frozen: false, labelOrigin: null, secondaryOrigin: "left" },
+        },
+        membersLayout: "stack",
+        memberInset: "edge-to-edge",
+        memberWidth: "own",
+        memberGap: 8,
+        memberGutter: 0,
+        insetBackground: "soft-gray",
+        expandedWeights: { "g:frame": 0.25, "b:body": 0.75 },
+        blockType: "model",
+        definitionId: "def-estimate",
+        draftOrdinal: 2,
       }),
     ]);
     roundTrip(s);
+  });
+
+  it("B-SCHEMA: the block's closed vocabularies take every value they name and refuse what they do not", () => {
+    const s = store();
+    const good = { ...defaultsOf(BLOCK_SHAPE_TYPE), view: "value" };
+    // P-059: `value` is the fourth view. Accepted FIRST, so this case cannot
+    // pass by refusing everything.
+    s.put([shapeRecord(s, createShapeId("v2-value"), BLOCK_SHAPE_TYPE, good)]);
+    expect((s.get(createShapeId("v2-value")) as unknown as { props: { view: string } }).props.view).toBe("value");
+    const rail = { enabled: true, mode: "auto", spacing: null, freeOffsets: {} };
+    const option = { fill: "auto", hidden: false, frozen: false, labelOrigin: null, secondaryOrigin: null };
+    const bad: Record<string, unknown>[] = [
+      { sizeMode: "auto" },
+      { titleFont: "comic" },
+      { titleSizePx: "xl" },
+      { portLayout: "stacked" },
+      { rails: { left: { ...rail, mode: "free" }, right: rail, top: rail, bottom: rail } },
+      { rails: { left: { ...rail, spacing: "space-random" }, right: rail, top: rail, bottom: rail } },
+      { rails: { left: rail, right: rail, top: rail } },
+      { portOptions: { frame: { ...option, fill: "half" } } },
+      { portOptions: { frame: { ...option, labelOrigin: "center" } } },
+      { membersLayout: "grid" },
+      { memberInset: "flush" },
+      { memberWidth: "auto" },
+      { insetBackground: "white" },
+      { viewSizes: { simple: null, port: null, expanded: null } },
+      { draftOrdinal: "1" },
+    ];
+    for (const [index, change] of bad.entries()) {
+      expect(() => s.put([shapeRecord(s, createShapeId(`v2-bad-${index}`), BLOCK_SHAPE_TYPE, { ...good, ...change })]), JSON.stringify(change)).toThrow();
+    }
   });
 
   it("rejects a port without the {id,name,type} triple and a view outside the enum", () => {
@@ -188,7 +315,9 @@ describe("ss-block (L0)", () => {
 
 describe("ss-code (L1)", () => {
   it("defaults match the contract, origin reserved as null (docs/SOURCE-CODE-VIEW-PLAN.md §3.1)", () => {
-    expect(defaultsOf(CODE_SHAPE_TYPE)).toEqual({ w: 320, h: 120, code: "", language: "python", origin: null });
+    // B-SCHEMA (P-127): line numbers ON and 13px, exactly what CodeFace
+    // hard-codes today (`lineNumbers`, CodeEditor's own `fontSizePx = 13`).
+    expect(defaultsOf(CODE_SHAPE_TYPE)).toEqual({ w: 320, h: 120, code: "", language: "python", origin: null, lineNumbers: true, fontSizePx: 13 });
   });
 
   it("validates code with an origin and round-trips it", () => {
@@ -200,6 +329,9 @@ describe("ss-code (L1)", () => {
         code: "gain = clamp(x * k, 0, 1)\n",
         language: "python",
         origin: { uri: "stereo.py", anchor: "Pipeline.run", contentHash: "sha256:" + "0".repeat(64) },
+        // B-SCHEMA (P-127), non-default.
+        lineNumbers: false,
+        fontSizePx: 15.5,
       }),
     ]);
     roundTrip(s);
@@ -215,7 +347,25 @@ describe("ss-port (L2)", () => {
   it("defaults match the contract", () => {
     // ONE stored string, not a name beside a type (ruling 8).
     // P-035 adds `diff` — a port is born unmarked, like a block and a cable.
-    expect(defaultsOf(PORT_SHAPE_TYPE)).toEqual({ w: 120, h: 32, declaration: "port", direction: "out", diff: "normal", anchors: [] });
+    // B-SCHEMA: cluster 7 (P-399 fill derived unless overridden, P-408
+    // hidden), P-119 (slot origins: `null` = the direction's own layout), and
+    // P-201/P-208 (both slots are REAL member slots: the label slot holds the
+    // declaration as painted today, the secondary slot the producers badge
+    // P-250 paints). "Frozen" on a free port is tldraw's own `isLocked`; a
+    // prop beside it would be two answers to one question.
+    expect(defaultsOf(PORT_SHAPE_TYPE)).toEqual({
+      w: 120,
+      h: 32,
+      declaration: "port",
+      direction: "out",
+      diff: "normal",
+      anchors: [],
+      fill: "auto",
+      hidden: false,
+      labelOrigin: null,
+      secondaryOrigin: null,
+      slots: { label: [{ kind: "builtin", id: "label" }], secondary: [{ kind: "builtin", id: "producers" }] },
+    });
   });
 
   it("validates a measured floating port whose one anchor is FLOATING_PORT_ID", () => {
@@ -231,9 +381,43 @@ describe("ss-port (L2)", () => {
         // just that the default does.
         diff: "added",
         anchors: [{ portId: FLOATING_PORT_ID, x: 6, y: 16, side: null }],
+        // B-SCHEMA, non-default, including a DELETED default member (the
+        // producers badge is gone from `secondary`) and a slot holding three
+        // child shapes instead of its label (P-201/P-208: "it could be three
+        // input boxes"). A deletion that did not survive this round trip would
+        // be the bug P-201 names.
+        fill: "filled",
+        hidden: true,
+        labelOrigin: "top",
+        secondaryOrigin: "right",
+        slots: {
+          label: [
+            { kind: "shape", id: "shape:input-a" },
+            { kind: "shape", id: "shape:input-b" },
+            { kind: "shape", id: "shape:input-c" },
+          ],
+          secondary: [],
+        },
       }),
     ]);
     roundTrip(s);
+  });
+
+  it("B-SCHEMA: the port's closed vocabularies take what they name and refuse what they do not", () => {
+    const s = store();
+    const good = { ...defaultsOf(PORT_SHAPE_TYPE), fill: "empty", labelOrigin: "bottom" };
+    s.put([shapeRecord(s, createShapeId("p-v2"), PORT_SHAPE_TYPE, good)]);
+    const bad: Record<string, unknown>[] = [
+      { fill: "half" },
+      { hidden: "no" },
+      { labelOrigin: "center" },
+      { secondaryOrigin: "left-offset" },
+      { slots: { label: [{ kind: "widget", id: "x" }], secondary: [] } },
+      { slots: { label: [] } },
+    ];
+    for (const [index, change] of bad.entries()) {
+      expect(() => s.put([shapeRecord(s, createShapeId(`p-v2-bad-${index}`), PORT_SHAPE_TYPE, { ...good, ...change })]), JSON.stringify(change)).toThrow();
+    }
   });
 });
 
@@ -252,7 +436,71 @@ describe("ss-wire + ss-wire-binding (L3)", () => {
     // default here.
     // P-035 adds `diff`, on the same rule as `pins`/`tunnel`/`layer` above: a
     // cable is born unmarked.
-    expect(defaultsOf(WIRE_SHAPE_TYPE)).toEqual({ diff: "normal", variant: "data", routing: "elbow", color: "", start: { x: 0, y: 0 }, end: { x: 120, y: 0 }, pins: [], tunnel: false, layer: "" });
+    // B-SCHEMA: P-156/P-171 (`label` "" = no badge; `labelFraction` 0.5 =
+    // the trunk's LABEL_POSITION_DEFAULT, which the delayed z⁻¹ pill of P-137
+    // rides too), P-096 (both ends `none`: 4b49cd4 made data traces
+    // arrow-less), P-121/P-187 (`animated` off), cluster 11 P-364
+    // (`strokeWidth` null = the variant's own weight), P-137/P-187
+    // (`delayValue` "" = a bare z⁻¹), P-081 (`bend` null = no control point on
+    // a straight/curved cable). A cable is born plain, the same rule as
+    // `pins: []`.
+    expect(defaultsOf(WIRE_SHAPE_TYPE)).toEqual({
+      diff: "normal",
+      variant: "data",
+      routing: "elbow",
+      color: "",
+      start: { x: 0, y: 0 },
+      end: { x: 120, y: 0 },
+      pins: [],
+      tunnel: false,
+      layer: "",
+      label: "",
+      labelFraction: 0.5,
+      startMarker: "none",
+      endMarker: "none",
+      animated: false,
+      strokeWidth: null,
+      delayValue: "",
+      bend: null,
+    });
+  });
+
+  it("B-SCHEMA: a fully-populated v2 cable validates and round-trips, and its closed vocabularies refuse what they do not name", () => {
+    const s = store();
+    s.put([
+      shapeRecord(s, createShapeId("w-v2"), WIRE_SHAPE_TYPE, {
+        diff: "modified",
+        variant: "delayed",
+        routing: "curved",
+        color: "#e11d48",
+        start: { x: 0, y: 0 },
+        end: { x: 200, y: 40 },
+        pins: [],
+        tunnel: false,
+        layer: "",
+        label: "frames · 30 Hz",
+        labelFraction: 0.375,
+        startMarker: "arrow",
+        endMarker: "arrow",
+        animated: true,
+        strokeWidth: 3.5,
+        delayValue: "1.0",
+        bend: { dx: 12.5, dy: -40 },
+      }),
+    ]);
+    roundTrip(s);
+    const good = { ...defaultsOf(WIRE_SHAPE_TYPE) };
+    const bad: Record<string, unknown>[] = [
+      { startMarker: "diamond" },
+      { endMarker: "dot" },
+      { animated: "yes" },
+      { strokeWidth: "thick" },
+      { bend: { x: 1, y: 2 } },
+      { labelFraction: "middle" },
+    ];
+    for (const [index, change] of bad.entries()) {
+      expect(() => s.put([shapeRecord(s, createShapeId(`w-v2-bad-${index}`), WIRE_SHAPE_TYPE, { ...good, ...change })]), JSON.stringify(change)).toThrow();
+    }
   });
 
   it("a wire bound at both ends to two blocks validates and round-trips with its bindings", () => {
@@ -304,7 +552,9 @@ describe("ss-wire + ss-wire-binding (L3)", () => {
 
 describe("ss-region (L5)", () => {
   it("defaults match the contract", () => {
-    expect(defaultsOf(REGION_SHAPE_TYPE)).toEqual({ w: 480, h: 320, kind: "plain", name: "", cornerBlockId: "", arms: [] });
+    // B-SCHEMA (P-183): the blackbox toggle's state. `expanded` is the frame
+    // RegionFace draws today, unconditionally (RegionFace.tsx `view="expanded"`).
+    expect(defaultsOf(REGION_SHAPE_TYPE)).toEqual({ w: 480, h: 320, kind: "plain", name: "", cornerBlockId: "", arms: [], view: "expanded" });
   });
 
   it("a for-region with its corner block as a CHILD validates and round-trips (everything is a block)", () => {
@@ -312,7 +562,7 @@ describe("ss-region (L5)", () => {
     const region = createShapeId("r");
     const corner = createShapeId("corner");
     s.put([
-      shapeRecord(s, region, REGION_SHAPE_TYPE, { w: 480, h: 320, kind: "for", name: "For Loop", cornerBlockId: corner, arms: [] }),
+      shapeRecord(s, region, REGION_SHAPE_TYPE, { w: 480, h: 320, kind: "for", name: "For Loop", cornerBlockId: corner, arms: [], view: "opaque" }),
       shapeRecord(
         s,
         corner,
@@ -341,9 +591,12 @@ describe("ss-region (L5)", () => {
           { id: "if", title: "if", open: true, h: 180 },
           { id: "else", title: "else", open: true, h: 180 },
         ],
+        view: "expanded",
       }),
     ]);
     expect(() => s.put([shapeRecord(s, createShapeId("bad"), REGION_SHAPE_TYPE, { ...defaultsOf(REGION_SHAPE_TYPE), kind: "switch" })])).toThrow();
+    // B-SCHEMA (P-183): two views, closed.
+    expect(() => s.put([shapeRecord(s, createShapeId("bad-view"), REGION_SHAPE_TYPE, { ...defaultsOf(REGION_SHAPE_TYPE), view: "collapsed" })])).toThrow();
   });
 
   it("a region is frame-like and is never a wire target", () => {

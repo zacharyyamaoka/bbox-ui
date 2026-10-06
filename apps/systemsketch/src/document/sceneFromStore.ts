@@ -31,6 +31,7 @@ import type { BlockScene, SceneEdge, SceneNode } from "@trunk/scene/scene";
 import type { WireStyleData } from "@trunk/scene/sceneWires";
 
 import type { BlockShape } from "../shapes/block";
+import { trunkBlockViewOf } from "../shapes/block/BlockShapeUtil";
 import type { WireBinding } from "../shapes/wire/WireBindingUtil";
 import type { WireShape } from "../shapes/wire/WireShapeUtil";
 import {
@@ -104,7 +105,7 @@ function blockData(shape: BlockShape): DocNodeData {
       if (declared !== undefined) portTypes[port.id] = declared;
     }
   }
-  return { kind: "block", name: shape.props.name, view: shape.props.view, ports, portTypes };
+  return { kind: "block", name: shape.props.name, view: trunkBlockViewOf(shape.props.view), ports, portTypes };
 }
 
 function dataOf(shape: TLShape): DocNodeData | null {

@@ -10,6 +10,10 @@
 // the other.
 import { T } from "tldraw";
 
+import type { SlotOrigin } from "@trunk/components/port.layout";
+import type { SpacingScheme } from "@trunk/components/portEdge.layout";
+import type { PortEdgeArrangeMode } from "@trunk/components/portEdge";
+
 /**
  * One declared port. A PAIR, not a triple: `id` is what a wire binding names,
  * and `declaration` is the one line the port's CodeEditor edits — `frame` or
@@ -82,3 +86,116 @@ export const ElbowPinV = T.object({
   t: T.number,
   offset: T.number,
 });
+
+/* ------------------------------------------------------------------ */
+/* Schema v2 (B-SCHEMA, docs/finish-2026-09-29/schema-inventory.md)   */
+/* ------------------------------------------------------------------ */
+//
+// The validators below are the shared halves of the v2 props. Each one copies
+// its vocabulary from the trunk type it names, value for value — the TS type
+// is IMPORTED from the trunk, and `RecordProps<…>` on each ShapeUtil's
+// `static props` is what fails `tsc` if the literal spelled here and the
+// trunk's union ever disagree. The literals are spelled out (rather than
+// spread from the trunk's runtime arrays) for the reason a shipped migration
+// is frozen: a validator is what a SAVED board is judged by, so narrowing a
+// trunk constant must not silently start refusing files that opened yesterday.
+//
+// Nothing in this lane READS any of these; the first reader of each is named
+// in the inventory's "reads / writes" column.
+
+/**
+ * Where a port's label / secondary slot sits relative to its dot (P-119).
+ * WHY these four and not P-119's "Left offset"/"Right offset" too: the trunk's
+ * `SlotOrigin` (`components/port.layout.ts:250`) has four; two more need a
+ * trunk design first (inventory §3). Widening needs no migration.
+ */
+export const SlotOriginV = T.literalEnum("top", "bottom", "left", "right");
+export type { SlotOrigin };
+
+/**
+ * A remembered size for ONE block view (P-015/P-212). `null` = "never left
+ * this view, so nothing is remembered" — `w`/`h` on the shape stay the live
+ * box. WHY a nullable pair rather than numbers defaulting to the live box:
+ * a default number would be a size the user never chose, and the first view
+ * switch would "restore" it.
+ */
+export const ViewSizeV = T.nullable(T.object({ w: T.number, h: T.number }));
+export interface ViewSize {
+  w: number;
+  h: number;
+}
+
+/** The fill override of one port (cluster 7 P-399): `auto` = derived from the
+ *  bindings, exactly as `PortFace` / the rail paint it today. */
+export const PortFillV = T.literalEnum("auto", "filled", "empty");
+export type PortFill = "auto" | "filled" | "empty";
+
+/**
+ * One WALL of a block's port rail (P-118, cluster 8 P-356/P-269).
+ *
+ * `mode` is the trunk's own `PortEdgeArrangeMode` (`components/portEdge.tsx:122`)
+ * and `spacing` its `SpacingScheme` (`components/portEdge.layout.ts:118`), with
+ * `null` = "the view's own rule" (`railPlanFor`). `freeOffsets` is keyed by
+ * port id — the trunk `PortEdge`'s own `freeOffsets` map — and is read only in
+ * `custom` mode. WHY per wall: `PortEdge` is per wall, so "custom" is too.
+ */
+export const BlockRailV = T.object({
+  enabled: T.boolean,
+  mode: T.literalEnum("auto", "custom"),
+  spacing: T.nullable(T.literalEnum("space-between", "space-evenly", "space-around")),
+  freeOffsets: T.dict(T.string, T.number),
+});
+export interface BlockRail {
+  enabled: boolean;
+  mode: PortEdgeArrangeMode;
+  spacing: SpacingScheme | null;
+  freeOffsets: Record<string, number>;
+}
+
+/**
+ * The per-port options of a RAIL port — a port declared on a block wall
+ * (P-119; clusters 7 and 8: fill override, hidden, freeze lock, slot origins).
+ *
+ * WHY a block-level map keyed by port id (`ss-block.portOptions[id]`) and not
+ * five more fields on `PortSpecV`: rail ports are not shapes, and `PortSpecV`
+ * is the one port literal every writer in the app mints (`railLabel.ts`,
+ * `cornerBlock.ts`, `edgeDropCatalog.ts`, the pyblocks backend). Growing it
+ * would make every one of those literals invalid until it carried five
+ * defaults; a keyed map leaves them all valid, and an ABSENT entry is the port
+ * exactly as painted today. It is the same keyed pattern as the trunk's
+ * `freeOffsets` above.
+ */
+export const RailPortOptionsV = T.object({
+  fill: PortFillV,
+  hidden: T.boolean,
+  frozen: T.boolean,
+  labelOrigin: T.nullable(SlotOriginV),
+  secondaryOrigin: T.nullable(SlotOriginV),
+});
+export interface RailPortOptions {
+  fill: PortFill;
+  hidden: boolean;
+  frozen: boolean;
+  labelOrigin: SlotOrigin | null;
+  secondaryOrigin: SlotOrigin | null;
+}
+
+/**
+ * One member of a free port's label or secondary slot (P-201/P-208).
+ *
+ * - `builtin` names a part the face paints itself: `"label"` (the declaration,
+ *   today's `RestingLabel`) or `"producers"` (P-250's badge).
+ * - `shape` names a CHILD shape by id — "it could be three input boxes" is
+ *   three `shape` members.
+ *
+ * A deleted default member is simply ABSENT from its list, which is what makes
+ * the deletion survive a reload; there is no "deleted" flag to forget.
+ */
+export const SlotMemberV = T.object({
+  kind: T.literalEnum("builtin", "shape"),
+  id: T.string,
+});
+export interface SlotMember {
+  kind: "builtin" | "shape";
+  id: string;
+}

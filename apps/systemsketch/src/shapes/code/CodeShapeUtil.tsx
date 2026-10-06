@@ -51,6 +51,11 @@ export interface CodeShapeProps {
   code: string;
   language: CodeLanguage;
   origin: CodeOrigin | null;
+  /** Schema v2 (B-SCHEMA, P-127): CodeFace passes `lineNumbers` unconditionally
+   *  today, so `true` is today's face. */
+  lineNumbers: boolean;
+  /** Schema v2 (B-SCHEMA, P-127): CodeEditor's own `fontSizePx` default, 13. */
+  fontSizePx: number;
 }
 
 declare module "@tldraw/tlschema" {
@@ -75,15 +80,40 @@ export class CodeShapeUtil extends ShapeUtil<CodeShape> {
     code: T.string,
     language: T.literalEnum("python", "javascript", "json", "plaintext"),
     origin: T.nullable(T.object({ uri: T.string, anchor: T.string, contentHash: T.string })),
+    lineNumbers: T.boolean,
+    fontSizePx: T.number,
   };
 
-  // Version 0, declared now for the reason BlockShapeUtil records: the
+  // Version 0 was declared empty for the reason BlockShapeUtil records: the
   // sequence is what gives these props a version number in a saved file, and
-  // it cannot be retrofitted once boards exist in the wild.
-  static override migrations = createShapePropsMigrationSequence({ sequence: [] });
+  // it cannot be retrofitted once boards exist in the wild. Schema v2 is its
+  // first step.
+  static override migrations = createShapePropsMigrationSequence({
+    sequence: [
+      {
+        id: `com.tldraw.shape.${CODE_SHAPE_TYPE}/1`,
+        // SCHEMA V2 (B-SCHEMA, P-127): line numbers and font size.
+        //
+        // WHY — the P-028 empty-migration incident: P-028 added `props.pins`
+        // to `ss-wire` with an EMPTY sequence, every board saved before it
+        // REFUSED TO OPEN, and the committed fixture `two-blocks.tldr` went
+        // down with it. `T.boolean`/`T.number` reject `undefined`, so without
+        // this step every code cell saved before v2 would do the same.
+        //
+        // FILLS, NEVER RESETS (`??=`), with LITERALS that paint today's face
+        // (never `getDefaultProps` — a shipped migration is frozen). `origin`
+        // is not touched: stream 4's slot stays byte-identical
+        // (`src/source/originResolution.test.ts`).
+        up: (props: Record<string, unknown>) => {
+          props.lineNumbers ??= true;
+          props.fontSizePx ??= 13;
+        },
+      },
+    ],
+  });
 
   override getDefaultProps(): CodeShapeProps {
-    return { w: 320, h: 120, code: "", language: "python", origin: null };
+    return { w: 320, h: 120, code: "", language: "python", origin: null, lineNumbers: true, fontSizePx: 13 };
   }
 
   // WHY editable at all, when the face is always live: tldraw gates its own

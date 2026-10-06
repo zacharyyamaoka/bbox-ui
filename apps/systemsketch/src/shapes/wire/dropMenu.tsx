@@ -30,6 +30,7 @@ import { validateConnectionAtLevel } from "@trunk/scene/validationLevel";
 
 import { sceneFromRecords, type DocNodeData, type DocumentScene } from "../../document/sceneFromStore";
 import type { BlockShape } from "../block";
+import { trunkBlockViewOf } from "../block/BlockShapeUtil";
 import { InFlightWire } from "./WireFace";
 import { BLOCK_SHAPE_TYPE } from "../types";
 import { createWire } from "./createWire";
@@ -90,7 +91,7 @@ function EdgeDropOffer() {
       const data: DocNodeData = {
         kind: "block",
         name: entry.label,
-        view: entry.view,
+        view: trunkBlockViewOf(entry.view),
         // The SAME table `onPick` mints the real ports from, in the
         // id-only spelling the scene speaks — so what the judge examined
         // and what gets created cannot drift, whatever the preset's arity.

@@ -22,7 +22,10 @@ import {
   type TLShapeUtilCanBindOpts,
 } from "tldraw";
 
-import { PortAnchorV, PortSpecV } from "../shared/props";
+import type { BlockInsetBackground, BlockMemberInset, BlockMembersLayout, BlockMemberWidth } from "@trunk/components/blockMembers";
+import type { BlockPortLayout, BlockView as TrunkBlockView } from "@trunk/components/blockPort.layout";
+
+import { BlockRailV, PortAnchorV, PortSpecV, RailPortOptionsV, ViewSizeV, type BlockRail, type RailPortOptions, type ViewSize } from "../shared/props";
 import { DiffMarkStyle, type DiffMark } from "../shared/diffMark";
 import { BLOCK_SHAPE_TYPE, WIRE_BINDING_TYPE, WIRE_SHAPE_TYPE, type PortSide } from "../types";
 import { BlockFace } from "./BlockFace";
@@ -42,7 +45,30 @@ export interface BlockPortAnchor {
   side: PortSide | null;
 }
 
-export type BlockView = "simple" | "port" | "expanded";
+/** P-059 adds `value`, the fourth view. The trunk's own `BlockView`
+ *  (`components/blockPort.layout.ts:45`) still has three — see
+ *  `trunkBlockViewOf` for how the app hands a `value` block to it. */
+export type BlockView = "simple" | "port" | "expanded" | "value";
+
+/**
+ * The trunk view a block of this app's `view` is drawn with.
+ *
+ * WHY `value` → `port`: the trunk has no `value` face until L-BLOCK-VIEWS
+ * mounts `components/block.value.tsx` (P-059), and of the three it has, `port`
+ * is the one that keeps a value's outlet WIREABLE — `simple` folds the rails
+ * away and `expanded` makes the block a frame that adopts drops. This is type
+ * plumbing, not behaviour: no stored block can be `value` until a lane writes
+ * one, and this mapping disappears the day L-BLOCK-VIEWS renders a real value
+ * face.
+ */
+export function trunkBlockViewOf(view: BlockView): TrunkBlockView {
+  return view === "value" ? "port" : view;
+}
+
+/** P-177 / cluster 15's typeface vocabulary (P-404 names them Simple /
+ *  Bookish / Technical / Scribbled). `null` on the prop = the inherited
+ *  family, i.e. today's face. */
+export type BlockTitleFont = "sans" | "serif" | "mono" | "draw";
 
 export interface BlockShapeProps {
   w: number;
@@ -104,6 +130,56 @@ export interface BlockShapeProps {
   /** MEASURED shape-local dot centres, written back by the host. A writer
    *  (pyblocks) leaves this `[]` and the first render fills it. */
   anchors: BlockPortAnchor[];
+
+  // ---- Schema v2 (B-SCHEMA). STORAGE ONLY: nothing in this commit reads any
+  // of these, and every default paints today's pixels. Type, default, item and
+  // owning lane for each: docs/finish-2026-09-29/schema-inventory.md §1.1.
+
+  /** P-015/P-212: the size each view was last left at; `null` = never left. */
+  viewSizes: Record<BlockView, ViewSize | null>;
+  /** P-141: `fixed` keeps the authored box (today's port/expanded); `hug` is
+   *  opt-in. Fit-to-content is a COMMAND, never a mode (Q-P166). */
+  sizeMode: "fixed" | "hug";
+  /** Cluster 14 P-255: `null` = the skin's own radius. */
+  cornerRadius: number | null;
+  /** P-133: `buildBlockMenu`'s four toggles, stored. */
+  showHeader: boolean;
+  showHeaderDivider: boolean;
+  /** `true` = "paint the footer once the face has one" (Q-P146; inventory §5 Q1). */
+  showFooter: boolean;
+  showFooterDivider: boolean;
+  /** P-130: forwarded to the trunk `BlockPort`'s `showCard`. */
+  showCard: boolean;
+  /** P-177 / cluster 15: px, `null` = `BLOCK_TITLE_FONT_PX`. A number, so a
+   *  size ladder only LABELS numbers and never prints two sizes for one name. */
+  titleSizePx: number | null;
+  titleFont: BlockTitleFont | null;
+  /** P-107: the trunk `BlockPort`'s `layout`. */
+  portLayout: BlockPortLayout;
+  /** P-134: the trunk `BlockPort`'s function port. */
+  functionPort: boolean;
+  /** P-118 + cluster 8: one entry per wall. */
+  rails: Record<PortSide, BlockRail>;
+  /** P-119 + clusters 7/8 for RAIL ports, keyed by port id — see
+   *  `RailPortOptionsV` for why a map here and not fields on `PortSpecV`. An
+   *  absent entry is the port as painted today. */
+  portOptions: Record<string, RailPortOptions>;
+  /** P-188 (+ P-161, P-226): the trunk `Block`'s member vocabulary
+   *  (`components/blockMembers.tsx:64-73`), donor fields renamed to it
+   *  (inventory §2; donor systemsketch `blockModel.ts:487-522`). */
+  membersLayout: BlockMembersLayout;
+  memberInset: BlockMemberInset;
+  memberWidth: BlockMemberWidth;
+  memberGap: number;
+  memberGutter: number;
+  insetBackground: BlockInsetBackground;
+  expandedWeights: Record<string, number>;
+  blockType: string;
+  /** P-074/P-109: linking's identity. `""` = none minted yet; the trunk's
+   *  `definitionKey` is DERIVED from it (`scene/linking.ts:52-56`), never stored. */
+  definitionId: string;
+  /** P-109: `null` = canonical, a number = the n-th draft. */
+  draftOrdinal: number | null;
 }
 
 declare module "@tldraw/tlschema" {
@@ -149,7 +225,7 @@ export class BlockShapeUtil extends BaseFrameLikeShapeUtil<BlockShape> {
     w: T.number,
     h: T.number,
     name: T.string,
-    view: T.literalEnum("simple", "port", "expanded"),
+    view: T.literalEnum("simple", "port", "expanded", "value"),
     description: T.string,
     showDescription: T.boolean,
     // Deliberately `T.string` and not a validator that enforces the grammar:
@@ -172,6 +248,32 @@ export class BlockShapeUtil extends BaseFrameLikeShapeUtil<BlockShape> {
       bottom: T.arrayOf(PortSpecV),
     }),
     anchors: T.arrayOf(PortAnchorV),
+    // ---- Schema v2 (B-SCHEMA). Vocabularies copied from the trunk types the
+    // interface above imports; `RecordProps` makes `tsc` hold the two together.
+    viewSizes: T.object({ simple: ViewSizeV, port: ViewSizeV, expanded: ViewSizeV, value: ViewSizeV }),
+    sizeMode: T.literalEnum("fixed", "hug"),
+    cornerRadius: T.nullable(T.number),
+    showHeader: T.boolean,
+    showHeaderDivider: T.boolean,
+    showFooter: T.boolean,
+    showFooterDivider: T.boolean,
+    showCard: T.boolean,
+    titleSizePx: T.nullable(T.number),
+    titleFont: T.nullable(T.literalEnum("sans", "serif", "mono", "draw")),
+    portLayout: T.literalEnum("inline", "offset"),
+    functionPort: T.boolean,
+    rails: T.object({ left: BlockRailV, right: BlockRailV, top: BlockRailV, bottom: BlockRailV }),
+    portOptions: T.dict(T.string, RailPortOptionsV),
+    membersLayout: T.literalEnum("free", "stack"),
+    memberInset: T.literalEnum("inset", "edge-to-edge"),
+    memberWidth: T.literalEnum("fill", "own"),
+    memberGap: T.number,
+    memberGutter: T.number,
+    insetBackground: T.literalEnum("none", "soft-gray"),
+    expandedWeights: T.dict(T.string, T.number),
+    blockType: T.string,
+    definitionId: T.string,
+    draftOrdinal: T.nullable(T.number),
   };
 
   // Version 0 was an empty sequence, declared so that a later lane could add a
@@ -243,6 +345,57 @@ export class BlockShapeUtil extends BaseFrameLikeShapeUtil<BlockShape> {
           props.diff ??= "normal";
         },
       },
+      {
+        id: `com.tldraw.shape.${BLOCK_SHAPE_TYPE}/5`,
+        // SCHEMA V2 (B-SCHEMA): every prop the finish run adds to a block, in
+        // ONE step (docs/finish-2026-09-29/schema-inventory.md §1.1).
+        //
+        // WHY this step exists at all — the P-028 empty-migration incident:
+        // P-028 added `props.pins` to `ss-wire` and left its sequence EMPTY,
+        // so every board saved before it failed validation and REFUSED TO
+        // OPEN, and the committed fixture `two-blocks.tldr` went down with it.
+        // Every prop below is rejected as `undefined` by its validator, so
+        // without this step the same thing happens to every board saved
+        // before v2. `src/document/schemaV2Migration.test.ts` opens a real
+        // one (`fixtures/legacy-v1.bbox`), and its pixels are pinned too.
+        //
+        // FILLS, NEVER RESETS: `??=`, so a writer that already sent a v2 prop
+        // to a pre-v2 board (pyblocks, a newer host) keeps it. Each default
+        // paints today's pixels, and they are written out as LITERALS, never
+        // via `getDefaultProps`: a shipped migration is frozen (`/1`'s WHY),
+        // so a later change of a new-shape default must not rewrite the past.
+        up: (props: Record<string, unknown>) => {
+          props.viewSizes ??= { simple: null, port: null, expanded: null, value: null };
+          props.sizeMode ??= "fixed";
+          props.cornerRadius ??= null;
+          props.showHeader ??= true;
+          props.showHeaderDivider ??= true;
+          props.showFooter ??= true;
+          props.showFooterDivider ??= true;
+          props.showCard ??= false;
+          props.titleSizePx ??= null;
+          props.titleFont ??= null;
+          props.portLayout ??= "inline";
+          props.functionPort ??= false;
+          props.rails ??= {
+            left: { enabled: true, mode: "auto", spacing: null, freeOffsets: {} },
+            right: { enabled: true, mode: "auto", spacing: null, freeOffsets: {} },
+            top: { enabled: true, mode: "auto", spacing: null, freeOffsets: {} },
+            bottom: { enabled: true, mode: "auto", spacing: null, freeOffsets: {} },
+          };
+          props.portOptions ??= {};
+          props.membersLayout ??= "free";
+          props.memberInset ??= "inset";
+          props.memberWidth ??= "fill";
+          props.memberGap ??= 12;
+          props.memberGutter ??= 12;
+          props.insetBackground ??= "none";
+          props.expandedWeights ??= {};
+          props.blockType ??= "";
+          props.definitionId ??= "";
+          props.draftOrdinal ??= null;
+        },
+      },
     ],
   });
 
@@ -263,6 +416,42 @@ export class BlockShapeUtil extends BaseFrameLikeShapeUtil<BlockShape> {
       diff: "normal",
       ports: { left: [], right: [], top: [], bottom: [] },
       anchors: [],
+      // ---- Schema v2 (B-SCHEMA). Each value paints today's pixels; the same
+      // literals `/5` fills an old board with, so a fresh block and a migrated
+      // one cannot paint differently. `documentModel.test.ts` pins this bag.
+      viewSizes: { simple: null, port: null, expanded: null, value: null },
+      // WHY `fixed`: Fit-to-content is a command, never automatic (Q-P166).
+      sizeMode: "fixed",
+      cornerRadius: null,
+      showHeader: true,
+      showHeaderDivider: true,
+      // WHY `true`: the donor's default (systemsketch blockModel.ts:619) and
+      // P-133's own words — "hide footer" is the action. A call Zach may
+      // reverse (inventory §5 Q1); nothing paints a footer yet.
+      showFooter: true,
+      showFooterDivider: true,
+      showCard: false,
+      titleSizePx: null,
+      titleFont: null,
+      portLayout: "inline",
+      functionPort: false,
+      rails: {
+        left: { enabled: true, mode: "auto", spacing: null, freeOffsets: {} },
+        right: { enabled: true, mode: "auto", spacing: null, freeOffsets: {} },
+        top: { enabled: true, mode: "auto", spacing: null, freeOffsets: {} },
+        bottom: { enabled: true, mode: "auto", spacing: null, freeOffsets: {} },
+      },
+      portOptions: {},
+      membersLayout: "free",
+      memberInset: "inset",
+      memberWidth: "fill",
+      memberGap: 12,
+      memberGutter: 12,
+      insetBackground: "none",
+      expandedWeights: {},
+      blockType: "",
+      definitionId: "",
+      draftOrdinal: null,
     };
   }
 
