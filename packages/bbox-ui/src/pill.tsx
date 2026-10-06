@@ -1,5 +1,5 @@
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
-import { governedFieldIds, resolveField } from "@bbox-ui/schema";
+import { governedFieldIds, resolveField } from "./schema";
 
 import { cn } from "./lib/utils";
 import { SketchOutline } from "./sketchOutline";

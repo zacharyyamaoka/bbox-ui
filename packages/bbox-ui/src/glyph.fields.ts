@@ -6,7 +6,7 @@
  * `./glyph.layout.ts`. docs/GLYPH-PLAN.md's contract table is the source;
  * `test/glyph.fields.test.ts` pins every default to the component's own.
  */
-import type { FieldOption, FieldSpec, PresetSpec } from "@bbox-ui/schema";
+import type { FieldOption, FieldSpec, PresetSpec } from "./schema";
 
 import { GLYPH_SIZES, GLYPH_SIZE_NAMES, type GlyphSize } from "./glyph.layout";
 

@@ -11,7 +11,7 @@
  * is the empty-array shape every consumer (the generic story generator,
  * the generic inspector) can still `.map()` over without a null check.
  */
-import type { FieldOption, FieldSpec, PresetSpec } from "@bbox-ui/schema";
+import type { FieldOption, FieldSpec, PresetSpec } from "./schema";
 
 import {
   BLOCK_SIDES,

@@ -16,7 +16,7 @@
  * real diameter with the largest text ("xl", 44px) rather than inventing
  * a fourth dot size nothing else on the board uses.
  */
-import type { PresetSpec } from "@bbox-ui/schema";
+import type { PresetSpec } from "./schema";
 
 import {
   PORT_SIZE_RUNGS,

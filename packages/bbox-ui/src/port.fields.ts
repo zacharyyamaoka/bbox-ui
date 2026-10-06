@@ -13,7 +13,7 @@
  * `test/port.fields.test.ts` pins every default/option against the real
  * component and layout module — never a retyped literal.
  */
-import type { FieldOption, FieldSpec } from "@bbox-ui/schema";
+import type { FieldOption, FieldSpec } from "./schema";
 
 import { APPEARANCE_FIELDS } from "./appearance.fields";
 import {

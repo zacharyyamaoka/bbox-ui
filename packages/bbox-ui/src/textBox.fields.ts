@@ -13,7 +13,7 @@
  * real consumer needs per-side padding yet, so it stays local rather than
  * being promoted to its own shared file pre-emptively.
  */
-import type { FieldSpec, PresetSpec } from "@bbox-ui/schema";
+import type { FieldSpec, PresetSpec } from "./schema";
 
 import {
   TEXT_BOX_FONTS,

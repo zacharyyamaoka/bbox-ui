@@ -21,7 +21,7 @@
  * here, `"state"` inside the chip's own `Pill`) never collide —
  * `assertDisjointPresets` only ever sees this file's own selector.
  */
-import type { PresetSpec } from "@bbox-ui/schema";
+import type { PresetSpec } from "./schema";
 import { BLOCK_VIEWS, BLOCK_VIEW_DEFAULT_SIZES, BLOCK_VIEW_LABELS, type BlockView } from "./block.view";
 import type {
   BlockHeaderMode,
