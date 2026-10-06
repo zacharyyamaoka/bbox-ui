@@ -1,24 +1,26 @@
 // src/chrome/Toolbar/dock.tsx — the toolbar, mounted as `components.Toolbar`.
 //
-// This is `@trunk/components/toolDock` — the trunk's own FigJam-style dock —
-// with tldraw wired into its four seams: which tool is live, which geo variant
-// it is showing, what a press should arm, and where the remembered member is
-// stored. The dock imports no engine; this file is the whole adapter. The
-// archive mounted its own toolbar in the same slot
-// (tests/test_stock_boundary.py:38, `Toolbar: SystemSketchFigmaToolbar`), so
-// replacing the Toolbar is a seam tldraw documents, not a fork of its chrome.
-import { useCallback, useMemo, useState } from "react";
+// Since B-SHELL-P1 the dock WINDOW is the shell's (`@trunk/shell/shellToolDock`,
+// lifted from this file at 75991ce): it reads which tool is live and arms one
+// through `HostPort.tools()` / `setTool()`. What stays here is the host half —
+// the catalogue (this app's families and their rows), the variant → engine
+// translation the port's `setTool` runs (`selectDockTool`), the A-key arrow
+// cycle, and the seat: tldraw's own `Toolbar` slot, the same seam the archive
+// used (tests/test_stock_boundary.py:38, `Toolbar: SystemSketchFigmaToolbar`),
+// so replacing the Toolbar is a seam tldraw documents, not a fork of its chrome.
 import {
   ArrowShapeKindStyle,
   GeoShapeGeoStyle,
   useEditor,
-  useValue,
   type Editor,
   type TLArrowShape,
   type TLUiToolsContextType,
 } from "tldraw";
 
-import { ToolDock, type FamilyDeclaration, type LibrarySlotProps, type SimpleToolItem } from "@trunk/editor/toolDock";
+import type { FamilyDeclaration, ToolItem } from "@trunk/editor/toolDock";
+import { HostPortScope } from "@trunk/shell/BboxShell";
+import type { ToolDescriptor } from "@trunk/shell/hostPort";
+import { ShellToolDock } from "@trunk/shell/shellToolDock";
 import {
   arrowPresetForActivation,
   arrowPresetFromToolId,
@@ -35,6 +37,7 @@ import {
   updateDockPreferences,
   useDockPreferences,
 } from "../ShareMenu";
+import { tldrawHostPortFor } from "../tldrawHostPort";
 
 /**
  * THE headline of this rebuild. Zach, 2026-09-18, looking at
@@ -58,31 +61,31 @@ const SYSTEM_FAMILY: FamilyDeclaration = {
   isMember: (toolId) => SYSTEM_FAMILY_ITEMS.some((item) => item.id === toolId),
 };
 
+/** Every value tldraw's geo style can take — wider than the four rows the
+ *  popout offers, because a board or a keyboard shortcut can arm any of them. */
+const GEO_STYLE_VALUES: ReadonlySet<string> = new Set(GeoShapeGeoStyle.values);
+
 /**
- * The shape family, rebuilt whenever the remembered arrow preset changes.
+ * The shape family.
  *
- * `line` names one shape; `geo` and `arrow` never do — exactly the split
- * `resolveCurrentTool`'s cases 1 and 2 exist for. Geo's live member is a real
- * tldraw style (`GeoShapeGeoStyle`); the arrow's is NOT (Straight and Curved
- * are both `kind: "arc"` in tldraw), so `variantOf` closes over the
- * REMEMBERED preset instead — the case toolDock.tsx's own `variantOf` WHY
- * describes, and the donor's `current = arrow-${lastArrowPreset}`
- * (SystemSketchToolbar.tsx:307).
+ * `line` names one shape; `geo` and `arrow` never do. Since B-SHELL-P1 the
+ * dock reads the armed tool from the port, whose `tools().active` is already
+ * the VARIANT — the geo style while `geo` is armed, the remembered preset
+ * (`arrow-curve`, …) while `arrow` is (`../tldrawHostPort.ts`). So the
+ * arrow presets are plain members here, and any geo style resolves to itself
+ * through `variantOf`, which is exactly what the old pair read —
+ * `activeToolId === "geo"` → the live `GeoShapeGeoStyle`, `"arrow"` → the
+ * remembered preset (donor `current = arrow-${lastArrowPreset}`,
+ * SystemSketchToolbar.tsx:307) — now resolved once, in the port.
  */
-function shapeFamily(lastArrowPreset: ArrowPreset): FamilyDeclaration {
-  return {
-    id: "shape",
-    label: "Shape",
-    sections: [{ heading: "Shapes", items: GEO_VARIANTS }, { heading: "Lines", items: LINE_TOOLS }, ARROW_PRESET_SECTION],
-    prefKey: "lastShapeTool",
-    isMember: (toolId) => LINE_TOOLS.some((tool) => tool.id === toolId),
-    variantOf: (activeToolId, activeVariant) => {
-      if (activeToolId === "geo") return activeVariant;
-      if (activeToolId === "arrow") return arrowPresetToolId(lastArrowPreset);
-      return undefined;
-    },
-  };
-}
+const SHAPE_FAMILY: FamilyDeclaration = {
+  id: "shape",
+  label: "Shape",
+  sections: [{ heading: "Shapes", items: GEO_VARIANTS }, { heading: "Lines", items: LINE_TOOLS }, ARROW_PRESET_SECTION],
+  prefKey: "lastShapeTool",
+  isMember: (toolId) => LINE_TOOLS.some((tool) => tool.id === toolId) || arrowPresetFromToolId(toolId) !== undefined,
+  variantOf: (activeToolId) => (GEO_STYLE_VALUES.has(activeToolId) ? activeToolId : undefined),
+};
 
 const DRAW_FAMILY: FamilyDeclaration = {
   id: "draw",
@@ -91,6 +94,9 @@ const DRAW_FAMILY: FamilyDeclaration = {
   prefKey: "lastDrawTool",
   isMember: (toolId) => DRAW_TOOLS.some((tool) => tool.id === toolId),
 };
+
+/** The dock's three families, in dock order. */
+const FAMILIES: readonly FamilyDeclaration[] = [SYSTEM_FAMILY, SHAPE_FAMILY, DRAW_FAMILY];
 
 /* ------------------------------------------------------------------ */
 /* The arrow preset — multi-press A                                    */
@@ -187,76 +193,61 @@ export function installArrowPresets(editor: Editor): () => void {
 }
 
 /* ------------------------------------------------------------------ */
+/* The catalogue and the translation the port's setTool runs           */
+/* ------------------------------------------------------------------ */
+
+/** A dock row as a `ToolDescriptor`; `family` is the dock face it sits
+ *  under (HOST-PORT.md: "groups variants under one face in the dock"). */
+function descriptor(item: Pick<ToolItem, "id" | "label" | "shortcutHint">, family?: string): ToolDescriptor {
+  const kbd = item.shortcutHint && item.shortcutHint.length === 1 ? item.shortcutHint.toLowerCase() : undefined;
+  return { id: item.id, label: item.label, ...(kbd ? { kbd } : {}), ...(family ? { family } : {}) };
+}
+
+/** Every id the dock can arm, in dock order — `HostPort.tools().catalogue`
+ *  for this host. A geo style or an arrow preset is an id like any other
+ *  (HOST-PORT.md "a variant is just a tool id"). */
+export const DOCK_CATALOGUE: readonly ToolDescriptor[] = [
+  ...SIMPLE_TOOLS.map((tool) => descriptor(tool)),
+  ...SYSTEM_FAMILY_ITEMS.map((item) => descriptor(item, SYSTEM_FAMILY.id)),
+  ...GEO_VARIANTS.map((item) => descriptor(item, SHAPE_FAMILY.id)),
+  ...LINE_TOOLS.map((item) => descriptor(item, SHAPE_FAMILY.id)),
+  ...ARROW_PRESET_SECTION.items.map((item) => descriptor(item, SHAPE_FAMILY.id)),
+  ...DRAW_TOOLS.map((item) => descriptor(item, DRAW_FAMILY.id)),
+];
+
+/**
+ * Arm a dock id on tldraw: the body of the port's `setTool`. Moved verbatim
+ * from this file's `selectTool` at 75991ce — a dock id is not always a tool
+ * id (HOST-PORT.md "a variant is just a tool id").
+ */
+export function selectDockTool(editor: Editor, toolId: string): void {
+  // An arrow row is not a tool id either: it names a PRESET of the one
+  // `arrow` tool. Arm it (remember + style) and switch — no cycling here;
+  // only the A key advances.
+  const preset = arrowPresetFromToolId(toolId);
+  if (preset) {
+    armArrowPreset(editor, preset);
+    editor.setCurrentTool("arrow");
+    return;
+  }
+  // A geo variant is not a tool id: set the style first, then arm `geo` —
+  // which is how tldraw itself expresses "draw an ellipse next".
+  if (GEO_VARIANT_IDS.has(toolId)) {
+    editor.setStyleForNextShapes(GeoShapeGeoStyle, toolId as never);
+    editor.setCurrentTool("geo");
+    return;
+  }
+  editor.setCurrentTool(toolId);
+}
+
+/* ------------------------------------------------------------------ */
 /* The dock                                                            */
 /* ------------------------------------------------------------------ */
 
 export function SystemSketchDock() {
   const editor = useEditor();
+  const port = tldrawHostPortFor(editor);
   const preferences = useDockPreferences();
-  const lastArrowPreset = arrowPresetOf(preferences);
-  const families = useMemo<readonly FamilyDeclaration[]>(
-    () => [SYSTEM_FAMILY, shapeFamily(lastArrowPreset), DRAW_FAMILY],
-    [lastArrowPreset],
-  );
-
-  const activeToolId = useValue("ss current tool", () => editor.getCurrentToolId(), [editor]);
-  // The LIVE sub-variant of the geo family; every other family ignores it.
-  const activeVariant = useValue("ss geo style", () => editor.getStyleForNextShape(GeoShapeGeoStyle), [editor]);
-
-  const selectTool = useCallback(
-    (toolId: string) => {
-      // An arrow row is not a tool id either: it names a PRESET of the one
-      // `arrow` tool. Arm it (remember + style) and switch — no cycling here;
-      // only the A key advances.
-      const preset = arrowPresetFromToolId(toolId);
-      if (preset) {
-        armArrowPreset(editor, preset);
-        editor.setCurrentTool("arrow");
-        return;
-      }
-      // A geo variant is not a tool id: set the style first, then arm `geo` —
-      // which is how tldraw itself expresses "draw an ellipse next".
-      if (GEO_VARIANT_IDS.has(toolId)) {
-        editor.setStyleForNextShapes(GeoShapeGeoStyle, toolId as never);
-        editor.setCurrentTool("geo");
-        return;
-      }
-      editor.setCurrentTool(toolId);
-    },
-    [editor],
-  );
-
-  const simpleTools: SimpleToolItem[] = SIMPLE_TOOLS.map((tool) => ({
-    ...tool,
-    active: activeToolId === tool.id,
-    onSelect: () => editor.setCurrentTool(tool.id),
-  }));
-
-  /**
-   * The dock's trailing "+" (Zach's reference screenshot). `ToolDock` omits
-   * the cell entirely when `librarySlot` is `undefined` — "never a disabled
-   * row for a feature that does not exist" — so mounting it here is itself
-   * the honest claim that pressing it opens SOMETHING, even though this app
-   * has no shape/component library surface to open yet. WHY a placeholder
-   * popover rather than inventing one: a library (saved shapes, a symbol
-   * palette, importable blocks) is real, unbuilt product work with its own
-   * design questions, not a one-line stub this lane should improvise. The
-   * placeholder says exactly that instead of faking a feature — a future
-   * lane replaces `children` here with the real surface and this comment
-   * comes out.
-   */
-  const [libraryOpen, setLibraryOpen] = useState(false);
-  const librarySlot: LibrarySlotProps = {
-    title: "Library",
-    eyebrow: "Coming soon",
-    open: libraryOpen,
-    onOpenChange: setLibraryOpen,
-    children: (
-      <p className="text-muted-foreground text-sm">
-        Nothing here yet — SystemSketch has no saved-shape or component library surface to open.
-      </p>
-    ),
-  };
 
   return (
     // WHY the wrapper: tldraw's UI layer is `.tlui-layout { pointer-events:
@@ -268,6 +259,11 @@ export function SystemSketchDock() {
     // class=tl-background> … intercepts pointer events". The centring and
     // the bottom gap mirror `.tlui-main-toolbar--horizontal` so the dock sits
     // where tldraw's own toolbar would.
+    //
+    // WHY a `HostPortScope` and not the shell's container: the dock keeps the
+    // seat tldraw lays its toolbar out in (`corner.smoke` and
+    // `chromeSize.smoke` measure its box there, and interface scale zooms that
+    // layer), so it is the one shell window mounted outside `BboxShell`.
     <div
       style={{
         display: "flex",
@@ -277,20 +273,16 @@ export function SystemSketchDock() {
         pointerEvents: "all",
       }}
     >
-      <ToolDock
-        activeToolId={activeToolId}
-        activeVariant={activeVariant}
-        families={families}
-        simpleTools={simpleTools}
-        preferences={preferences}
-        onPreferencesChange={updateDockPreferences}
-        // Press-arms-then-menu-keeps-focus: the face fires `onArm` with the tool
-        // it is currently SHOWING, off the same press that opens its popout.
-        onArm={selectTool}
-        onSelectItem={selectTool}
-        librarySlot={librarySlot}
-        testIdPrefix="ss-dock"
-      />
+      <HostPortScope port={port}>
+        <ShellToolDock
+          families={FAMILIES}
+          simpleTools={SIMPLE_TOOLS}
+          preferences={preferences}
+          onPreferencesChange={updateDockPreferences}
+          appName="SystemSketch"
+          testIdPrefix="ss-dock"
+        />
+      </HostPortScope>
     </div>
   );
 }

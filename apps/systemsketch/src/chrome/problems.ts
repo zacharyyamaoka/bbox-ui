@@ -5,8 +5,10 @@
 // edge"): the archive's `diagnostics/diagnosticsModel.ts` walked a live
 // tldraw `Editor` end to end and kept its own model in step with the
 // document; every drift bug it ever had came from that second copy. Here the
-// chain is one direction only — store → `useDocumentScene` (L3's projection)
-// → `lintScene` (the trunk's pure rule engine) → rows. Nothing is written,
+// chain is one direction only — store → the HostPort's cached `scene()` (L3's
+// projection, `./portScene.ts`; since B-SHELL-P1 it only re-derives when
+// a shape or a binding changes) → `lintScene` (the trunk's pure rule engine)
+// → rows. Nothing is written,
 // nothing is cached across edits, and a finding cannot outlive the fact that
 // produced it.
 //
@@ -25,9 +27,10 @@ import { type LintFinding, type PortsOf } from "@trunk/scene/lint";
 import { lintSceneAtLevel, type ValidationLevel } from "@trunk/scene/validationLevel";
 import { findCycles, type SceneEdgeEnds } from "@trunk/scene/scene";
 
-import { useDocumentScene, type DocNodeData, type DocumentScene } from "../document/sceneFromStore";
+import type { DocNodeData, DocumentScene } from "../document/sceneFromStore";
 import { portTypesOfScene } from "../document/sceneVocabulary";
 import { useValidationLevel } from "./ShareMenu/validationLevelHost";
+import { usePortScene } from "./portScene";
 import { FLOATING_PORT_ID, PORT_SIDES } from "../shapes/types";
 
 /**
@@ -280,7 +283,7 @@ export interface BoardProblems {
  *     has the vocabulary.
  */
 export function useProblems(editor: Editor): BoardProblems {
-  const scene = useDocumentScene(editor);
+  const scene = usePortScene();
   // Ruling 3, the read side. `useValidationLevel` is a live module store, not
   // this component's state: the Settings dialog that WRITES the level unmounts,
   // and this panel never does, so a hook local to either would leave the board

@@ -1,27 +1,22 @@
-// src/chrome/ContextualPopupMenu/floatingToolbar.tsx — the FigJam-style pill that follows the
-// selection, and the placement LOOP the kit deliberately refuses to own.
+// src/chrome/ContextualPopupMenu/floatingToolbar.tsx — the FigJam-style pill
+// that follows the selection: this app's HOST half.
 //
-// `@trunk/components/floatingToolbar` is paint only: it takes `x`, `y`,
-// `side`, `visible` and draws them. Everything that makes those four values
-// true — measuring the rendered pill, reading the selection and viewport in
-// screen space, deciding when a drag means "get out of the way", and keeping
-// an async placement from landing out of order — is the host's job, spelled
-// out step by step in docs/menus/MENU-KIT-DESIGN.md §4 ("Floating toolbar:
-// host runs the loop the kit refuses to own"). THIS FILE IS THAT HOST. The
-// seven steps below are numbered against that list.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Copy, Trash2 } from "lucide-react";
+// Since B-SHELL-P1 the placement LOOP — measuring the rendered pill, reading
+// the selection and viewport in screen space, hiding while a drag runs,
+// keeping an async placement from landing out of order — and the two universal
+// rows (Duplicate, Delete) are the shell's (`@trunk/shell/shellSelectionPill`,
+// lifted from this file at 75991ce), driven by the port's
+// `selection().screenBounds`, `viewport()` and `interaction()`. What stays here
+// is this app's content: the block-view toggle, the code language, appearance,
+// edge type, tunnel, arrange, focus and group clusters (L-PILL owns them
+// next), plus the three tldraw-side numbers the loop is fed — the selection
+// overlay inset, the dock's obstacle height and the interface scale.
+import { useCallback } from "react";
 import { useEditor, useValue } from "tldraw";
 
 import { Button } from "@trunk/components/button";
-import { FloatingToolbar, PILL_POPOVER } from "@trunk/editor/floatingToolbar";
-import {
-  SELECTION_OVERLAY_INSET,
-  floatingToolbarMaxWidth,
-  isSelectionOnScreen,
-  placeFloatingToolbar,
-  type SelectionMenuSide,
-} from "@trunk/editor/floatingToolbar.placement";
+import { PILL_POPOVER } from "@trunk/editor/floatingToolbar";
+import { SELECTION_OVERLAY_INSET } from "@trunk/editor/floatingToolbar.placement";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,11 +27,11 @@ import {
   DropdownMenuTrigger,
 } from "@trunk/components/dropdown-menu";
 import { ToggleGroup, ToggleGroupItem } from "@trunk/components/toggle-group";
-import { ToolbarButton, ToolbarSeparator } from "@trunk/editor/toolbar";
+import { ToolbarSeparator } from "@trunk/editor/toolbar";
+import { ShellSelectionPill } from "@trunk/shell/shellSelectionPill";
 
 import {
   ArrangeCluster,
-  CELL_ICON,
   CELL_TRIGGER,
   EdgeTypeCluster,
   FocusButton,
@@ -52,8 +47,6 @@ import {
   BLOCK_VIEWS,
   CODE_LANGUAGES,
   type BlockView,
-  deleteSelection,
-  duplicateSelection,
   selectionSubjectOf,
   setBlockView,
   setCodeLanguage,
@@ -74,132 +67,11 @@ import { BLOCK_VIEW_HOTKEY } from "./viewHotkeys";
  */
 const DOCK_OBSTACLE_HEIGHT = 96;
 
-/** The pill's own resolved placement. `null` = nothing has been placed for
- *  the current selection yet, which is NOT the same as "placed off-screen". */
-interface Placement {
-  x: number;
-  y: number;
-  side: SelectionMenuSide;
-}
-
 export function FloatingSelectionToolbar() {
   const editor = useEditor();
-  // The pill is placed by a MEASURED loop and writes its position as an
-  // inline transform, so it cannot be scaled from a stylesheet — see
-  // `FloatingToolbarProps.scale`. The factor rides in as a prop and is
-  // composed into that same transform.
   const interfaceScale = useInterfaceScale();
-  const pill = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ w: 0, h: 0 });
-  const [placement, setPlacement] = useState<Placement | null>(null);
-  /**
-   * STEP 5 — the monotonic pass counter, ported in spirit from the donor's
-   * `placementPass` (/home/bam/systemsketch/src/chrome/SelectionContextualMenu.tsx).
-   * `placeFloatingToolbar` resolves in a microtask, so two passes started in
-   * the same tick can settle in either order; without this guard the LOSER
-   * writes last and the pill lands where the selection used to be.
-   */
-  const pass = useRef(0);
 
   const subject = useValue("ss selection subject", () => selectionSubjectOf(editor), [editor]);
-
-  /**
-   * STEP 2 — selection and viewport, in screen space, translated into the
-   * coordinate space this pill is actually positioned in.
-   *
-   * `getSelectionRotatedScreenBounds()` is in DOCUMENT space: `pageToScreen`
-   * adds `screenBounds.x/y`, the editor container's own offset in the page
-   * (Editor.mjs `pageToScreen`). The pill is absolutely positioned inside
-   * `.tl-canvas__in-front`, which is `inset: 0` of that same container — so
-   * subtracting the container's offset is exactly the conversion, and it is
-   * a no-op only in the full-bleed case.
-   */
-  const geometry = useValue(
-    "ss selection screen geometry",
-    () => {
-      const bounds = editor.getSelectionRotatedScreenBounds();
-      if (!bounds) return null;
-      const viewport = editor.getViewportScreenBounds();
-      return {
-        x: bounds.x - viewport.x,
-        y: bounds.y - viewport.y,
-        w: bounds.w,
-        h: bounds.h,
-        vw: viewport.w,
-        vh: viewport.h,
-      };
-    },
-    [editor],
-  );
-
-  /**
-   * STEP 4 — the manipulation gate. A pill that follows the shape you are
-   * dragging is a pill that is always under your cursor; FigJam hides it for
-   * the length of the gesture and brings it back where the shape landed.
-   */
-  const manipulating = useValue(
-    "ss manipulating",
-    () => editor.isIn("select.translating") || editor.isIn("select.resizing") || editor.isIn("select.brushing"),
-    [editor],
-  );
-
-  /**
-   * STEP 1 — measure the RENDERED pill. The kit's component takes a `ref` for
-   * exactly this and measures nothing itself (its own "no self-measurement"
-   * rule). The guard keeps an identical measurement from re-rendering.
-   */
-  useLayoutEffect(() => {
-    const node = pill.current;
-    if (!node) return;
-    const measure = () => {
-      const rect = node.getBoundingClientRect();
-      setSize((previous) =>
-        previous.w === rect.width && previous.h === rect.height ? previous : { w: rect.width, h: rect.height },
-      );
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, []);
-
-  const selected = subject.ids.length > 0 && geometry !== null;
-
-  /** STEP 3 + 6 — place, and re-place on every input that can change it:
-   *  camera, selection, the pill's own size, the viewport's size. Each one of
-   *  those is a dependency below, so React re-runs this for free rather than
-   *  this file subscribing to four things by hand. */
-  useEffect(() => {
-    if (!selected || !geometry || manipulating || size.w === 0 || size.h === 0) {
-      setPlacement((previous) => (previous === null ? previous : null));
-      return;
-    }
-    const ticket = ++pass.current;
-    void placeFloatingToolbar({
-      selection: { x: geometry.x, y: geometry.y, w: geometry.w, h: geometry.h },
-      menu: { w: size.w, h: size.h },
-      viewport: { w: geometry.vw, h: geometry.vh },
-      bottomObstacleTop: geometry.vh - DOCK_OBSTACLE_HEIGHT,
-      // tldraw's own measured stand-off — its handles sit on the box corners,
-      // 5px outside. The kit refuses to assume it (its own module header).
-      overlayInset: SELECTION_OVERLAY_INSET,
-    }).then((next) => {
-      if (ticket !== pass.current) return;
-      setPlacement((previous) =>
-        previous && previous.x === next.x && previous.y === next.y && previous.side === next.side ? previous : next,
-      );
-    });
-  }, [selected, geometry, manipulating, size.w, size.h]);
-
-  const visible =
-    selected
-    && !manipulating
-    && placement !== null
-    && geometry !== null
-    && isSelectionOnScreen(
-      { x: geometry.x, y: geometry.y, w: geometry.w, h: geometry.h },
-      { w: geometry.vw, h: geometry.vh },
-    );
 
   const onView = useCallback(
     (view: BlockView) => {
@@ -218,25 +90,15 @@ export function FloatingSelectionToolbar() {
   );
 
   return (
-    <FloatingToolbar
-      ref={pill}
-      x={placement?.x ?? 0}
-      y={placement?.y ?? 0}
-      side={placement?.side ?? "above"}
-      visible={visible}
+    <ShellSelectionPill
       scale={interfaceScale}
-      maxWidth={geometry ? floatingToolbarMaxWidth({ w: geometry.vw, h: geometry.vh }, interfaceScale) : undefined}
-      aria-label="Selection actions"
-      // WHY the pointer-events class is conditional rather than always on:
-      // `.ss-chrome` is `pointer-events: none` so the canvas stays clickable
-      // through the chrome layer, and each surface opts itself back in. The
-      // kit already sets `pointer-events-none` on the hidden pill, and a
-      // permanent `pointer-events-auto` here would win the cascade and leave
-      // an invisible pill answering hit tests over the canvas — the exact
-      // failure `floatingToolbar.tsx`'s own "opacity, never display:none"
-      // comment describes from the other side.
-      className={visible ? "pointer-events-auto" : undefined}
-    >
+      // tldraw draws its selection outline this far outside the bounds; the
+      // pill clears the outline, not just the shape.
+      overlayInset={SELECTION_OVERLAY_INSET}
+      bottomObstacleHeight={DOCK_OBSTACLE_HEIGHT}
+      testIdPrefix="ss-selection"
+      content={
+        <>
       {subject.blockView !== null ? (
         <ToggleGroup
           // The block's three faces. `ss-selection-view` is the test id the
@@ -368,29 +230,8 @@ export function FloatingSelectionToolbar() {
           32px whichever way the selection reads. */}
       <GroupCluster />
 
-      {/* A rule on the bar's FULL height, `rgb(56,56,56)` — traced. The kit's
-          own `ToolbarSeparator` defaults to `bg-border`, a page token, which
-          on a fixed dark pill draws a light-theme hairline. */}
-      <ToolbarSeparator className={PILL_SEPARATOR} />
-
-      <ToolbarButton
-        data-testid="ss-selection-duplicate"
-        aria-label="Duplicate"
-        title="Duplicate"
-        className={CELL_ICON}
-        onClick={() => duplicateSelection(editor)}
-      >
-        <Copy />
-      </ToolbarButton>
-      <ToolbarButton
-        data-testid="ss-selection-delete"
-        aria-label="Delete"
-        title="Delete"
-        className={CELL_ICON}
-        onClick={() => deleteSelection(editor)}
-      >
-        <Trash2 />
-      </ToolbarButton>
-    </FloatingToolbar>
+        </>
+      }
+    />
   );
 }

@@ -217,7 +217,7 @@ export function setWireLayer(editor: Editor, ids: readonly TLShapeId[], layer: s
 
 /** Offset of a duplicate from its original, in page units. Small enough to
  *  read as "a copy of that", big enough that the copy is grabbable. */
-const DUPLICATE_OFFSET = { x: 24, y: 24 };
+export const DUPLICATE_OFFSET = { x: 24, y: 24 };
 
 export function duplicateSelection(editor: Editor): void {
   const ids = editor.getSelectedShapeIds();

@@ -6,13 +6,27 @@
 // can be built, reviewed and driven here, with an in-memory fake behind it and
 // no canvas at all, then it cannot secretly depend on an engine.
 //
-// P0 mounts the shell skeleton (I3 — no windows yet). P1 fills it.
+// P0 mounted the shell skeleton. P1 (B-SHELL-P1) fills it with the SAME
+// windows the tldraw studio mounts — chrome bar, dock, status strip, right
+// rail, selection pill — on `createFakeHost`, with the content a fake host can
+// honestly supply: no frames (it has no regions), problems from the trunk's
+// own `lintScene` over the port's scene, no Inspector.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { BboxShell } from "@trunk/shell/BboxShell";
 import { createFakeHost } from "@trunk/shell/fakeHost";
-import { HOST_CAPABILITIES, type HostCapability } from "@trunk/shell/hostPort";
+import { HOST_CAPABILITIES, type HostCapability, type HostPort } from "@trunk/shell/hostPort";
+
+import { NoHostWindows } from "./windows";
+
+/** The live port, for a console or a driver script — the way the studio
+ *  exposes `window.editor` (apps/systemsketch/src/main.tsx). Dev only. */
+declare global {
+  interface Window {
+    bboxNoHost?: { port: HostPort | null };
+  }
+}
 
 /**
  * A capability picker, right there in the app.
@@ -29,6 +43,11 @@ export function App() {
   // Re-created when the capability set changes: a host's capabilities are
   // fixed for its lifetime, which is honest — a real host cannot grow one.
   const port = useMemo(() => (connected ? createFakeHost({ capabilities: enabled }) : null), [connected, enabled]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    window.bboxNoHost = { port };
+  }, [port]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -66,7 +85,9 @@ export function App() {
         ))}
       </header>
       <main style={{ flex: 1, minHeight: 0 }}>
-        <BboxShell port={port} />
+        <BboxShell port={port}>
+          <NoHostWindows />
+        </BboxShell>
       </main>
     </div>
   );

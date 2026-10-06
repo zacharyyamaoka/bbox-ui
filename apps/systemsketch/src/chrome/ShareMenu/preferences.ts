@@ -114,7 +114,9 @@ export function updateDockPreferences(update: DockPreferences): DockPreferences 
   return next;
 }
 
-function subscribe(listener: () => void): () => void {
+/** Exported for the tldraw HostPort (`../tldrawHostPort.ts`), which mirrors
+ *  the remembered arrow preset into a signal so `tools().active` follows it. */
+export function subscribeDockPreferences(listener: () => void): () => void {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
@@ -122,5 +124,5 @@ function subscribe(listener: () => void): () => void {
 }
 
 export function useDockPreferences(): DockPreferences {
-  return useSyncExternalStore(subscribe, getDockPreferences, getDockPreferences);
+  return useSyncExternalStore(subscribeDockPreferences, getDockPreferences, getDockPreferences);
 }

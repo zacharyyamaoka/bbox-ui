@@ -2,11 +2,23 @@
 // fanned out to whichever kits brought something to paint there, plus THIS
 // app's editor chrome.
 //
+// Since B-SHELL-P1 this file is the SLOT ADAPTER for the host-less shell
+// (docs/lanes/finish-B-SHELL-P1.md §4.2, `overlay.tsx` row): it mounts
+// `@trunk/shell/BboxShell` here, over tldraw's own canvas (`background={null}`
+// — the engine paints the board behind the shell), hands it this editor's
+// `HostPort` (`./tldrawHostPort.ts`), and fills its windows layer with the
+// shell's windows plus this app's host-supplied content. It keeps what only a
+// tldraw host needs: the kits' overlays, `usePassThroughWheelEvents`, and the
+// corner placement against tldraw's licence watermark.
+//
 // WHY a fan-out rather than a list in App.tsx: L3 paints a wire's in-flight
 // terminal and L4 mounts the chrome bar and the floating toolbar. Both arrive
 // through their own directory; neither should have to edit App.tsx to be seen.
-import { useCallback, useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useId, useLayoutEffect, useRef, useState, type MutableRefObject, type RefObject } from "react";
 import { useEditor, usePassThroughWheelEvents } from "tldraw";
+
+import { BboxShell } from "@trunk/shell/BboxShell";
+import { useShellPanel } from "@trunk/shell/shellPanelRail";
 
 import {
   CORNER_INSET,
@@ -27,8 +39,9 @@ import { FocusLens } from "./FocusLens";
 import { useInspectorFollowsSelection } from "./inspectorFollowsSelection";
 import { SystemSketchPanel } from "./panels";
 import { useProblems } from "./problems";
-import { SystemSketchStatusStrip, type ChromePanel } from "./statusStrip";
+import { SystemSketchStatusStrip } from "./statusStrip";
 import { VariantSwitch } from "./DevMenu";
+import { tldrawHostPortFor } from "./tldrawHostPort";
 
 export function Overlay() {
   return (
@@ -77,15 +90,15 @@ function rectOf(el: Element): CornerRect {
  * WHY the selectors read the trunk's own `data-slot`s and `role`, never its
  * class names, and why this lives here and not in the trunk: the stacked form
  * is app-side styling of a trunk part, not a trunk prop. The column count is
- * `--ss-strip-columns`, set by `statusStrip.tsx` from the `items` array it
- * already builds, so the 3 | readout | 2 split follows one array and a new item
+ * `--shell-strip-columns`, set by the shell's strip
+ * (`@trunk/shell/shellStatusStrip`) from the `items` array it already builds, so the 3 | readout | 2 split follows one array and a new item
  * updates one place. The separator that sits before the readout is hidden
  * because the readout starts row 2 (`col-start-1`), where that hairline would
  * otherwise dangle at the end of row 1.
  */
 const STACKED_STRIP_CLASS = [
   "[&[data-corner-form=stacked]_[data-slot=status-strip]]:grid",
-  "[&[data-corner-form=stacked]_[data-slot=status-strip]]:[grid-template-columns:repeat(var(--ss-strip-columns),auto)]",
+  "[&[data-corner-form=stacked]_[data-slot=status-strip]]:[grid-template-columns:repeat(var(--shell-strip-columns),auto)]",
   "[&[data-corner-form=stacked]_[data-slot=status-strip]]:justify-items-center",
   "[&[data-corner-form=stacked]_[data-slot=status-strip]]:items-center",
   "[&[data-corner-form=stacked]_[data-slot=status-strip]>[role=separator]:has(+[data-slot=status-strip-readout])]:hidden",
@@ -282,14 +295,8 @@ function useCornerPlacement(cluster: RefObject<HTMLDivElement | null>): CornerPl
  */
 function SystemSketchChrome() {
   const editor = useEditor();
-  const [open, setOpen] = useState<ChromePanel | null>(null);
-  const panelId = useId();
-  const problems = useProblems(editor);
-  // The dev panel's own boolean, deliberately separate from `open`/`toggle`
-  // above — see `statusStrip.tsx`'s `devPanelOpen` doc for why a third
-  // `ChromePanel` value would be the wrong shape for a modal dialog.
-  const [devPanelOpen, setDevPanelOpen] = useState(false);
-  const toggleDevPanel = useCallback(() => setDevPanelOpen((current) => !current), []);
+  // One port per editor, shared with the dock in tldraw's `Toolbar` slot.
+  const port = tldrawHostPortFor(editor);
 
   /**
    * STEP 7 of docs/menus/MENU-KIT-DESIGN.md §4 — "the host attaches wheel
@@ -323,41 +330,51 @@ function SystemSketchChrome() {
   const chrome = useRef<HTMLDivElement>(null);
   usePassThroughWheelEvents(chrome);
 
+  return (
+    <div ref={chrome} className="ss-chrome pointer-events-none absolute inset-0 z-[1]">
+      {/* The shell over tldraw's canvas. Its root and windows layer do not
+          hit-test (A1.4 pass-through, `shellLift.smoke.test.tsx`); every
+          window below opts back in itself. */}
+      <BboxShell port={port} background={null}>
+        <StudioWindows />
+      </BboxShell>
+    </div>
+  );
+}
+
+/**
+ * The windows the shell shows on this host, with this host's content in them.
+ * Mounted INSIDE `BboxShell`, so every window and every host reader here sees
+ * the port through the shell's context.
+ */
+function StudioWindows() {
+  const editor = useEditor();
+  const panelId = useId();
+  const problems = useProblems(editor);
+  // The dev panel's own boolean, deliberately separate from the rail — see
+  // `statusStrip.tsx`'s `devPanelOpen` doc for why a third rail surface
+  // would be the wrong shape for a modal dialog.
+  const [devPanelOpen, setDevPanelOpen] = useState(false);
+  const toggleDevPanel = useCallback(() => setDevPanelOpen((current) => !current), []);
+
+  // The rail's one-at-a-time state is the shell's. A click on an inspectable
+  // object opens the Inspector; deselecting closes it again only when that
+  // click is what opened it. The policy and its WHYs live in
+  // `./inspectorFollowsSelection.ts`; every user-driven rail change hands the
+  // rail back to the user by clearing its provenance (`onUserChange`).
+  const follows = useRef<MutableRefObject<boolean> | null>(null);
+  const panel = useShellPanel({
+    onUserChange: () => {
+      if (follows.current) follows.current.current = false;
+    },
+  });
+  follows.current = useInspectorFollowsSelection(editor, panel.open, panel.setOpen);
+
   const corner = useRef<HTMLDivElement>(null);
   const { placement, watermarkCover, form } = useCornerPlacement(corner);
 
-  // A click on an inspectable object opens the Inspector; deselecting closes
-  // it again only when that click is what opened it. The policy and its WHYs
-  // live in `./inspectorFollowsSelection.ts`; every user-driven rail change
-  // below hands the rail back to the user by clearing its provenance.
-  const openedBySelection = useInspectorFollowsSelection(editor, open, setOpen);
-
-  const toggle = useCallback(
-    (panel: ChromePanel) => {
-      // One at a time: pressing the open one closes it, pressing the other
-      // swaps. The kit's `StatusStripItem.active` is already the toggle's
-      // `aria-pressed`, so this is the whole policy.
-      openedBySelection.current = false;
-      setOpen((current) => (current === panel ? null : panel));
-    },
-    [openedBySelection],
-  );
-
-  const switchSurface = useCallback(
-    (panel: ChromePanel) => {
-      openedBySelection.current = false;
-      setOpen(panel);
-    },
-    [openedBySelection],
-  );
-
-  const close = useCallback(() => {
-    openedBySelection.current = false;
-    setOpen(null);
-  }, [openedBySelection]);
-
   return (
-    <div ref={chrome} className="ss-chrome pointer-events-none absolute inset-0 z-[1]">
+    <>
       {/*
         Top-LEFT, and it genuinely covers the canvas underneath: measured in
         the running app at 1400x900 the cluster occupies x 8-416, y 8-50, and
@@ -404,7 +421,7 @@ function SystemSketchChrome() {
         status strip bottom-right.
       */}
       <FocusLens />
-      <SystemSketchPanel open={open} onClose={close} onSurfaceChange={switchSurface} problems={problems} id={panelId} />
+      <SystemSketchPanel open={panel.open} onClose={panel.close} onSurfaceChange={panel.switchSurface} problems={problems} id={panelId} />
       {/* Quick switcher, dev panel and recorder: all three portal to
           `document.body` through their own stock Dialog/Popover, so this
           component paints nothing here itself — it only needs to be
@@ -490,14 +507,14 @@ function SystemSketchChrome() {
             corner" exactly like the offset Zach objected to. */}
         <VariantSwitch />
         <SystemSketchStatusStrip
-          open={open}
-          onToggle={toggle}
+          open={panel.open}
+          onToggle={panel.toggle}
           problemCount={problems.total}
           panelId={panelId}
           devPanelOpen={devPanelOpen}
           onToggleDevPanel={toggleDevPanel}
         />
       </div>
-    </div>
+    </>
   );
 }

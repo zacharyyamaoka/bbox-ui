@@ -36,10 +36,14 @@
 // ("Copy Absolute Path copies the open board's path") and, for the host half,
 // `scripts/tests/test_systemsketch_files_http.py`.
 //
-// SCOPE: this app's own `src/`, deliberately not the trunk. A trunk component
-// takes its callbacks as props and a `() => {}` there is a story's default,
-// not a dead control — it is THIS app's wiring that decides what Zach can
-// actually click.
+// SCOPE: this app's own `src/` and the trunk's `shell/` — deliberately not
+// the rest of the trunk. A trunk component takes its callbacks as props and a
+// `() => {}` there is a story's default, not a dead control — it is the
+// WIRING that decides what Zach can actually click. `shell/` is the one
+// exception because it IS that wiring: B-SHELL-P1 lifted the chrome's wiring
+// out of this app into the engine-free shell (`apps/storybook-basics/src/
+// shell/`), so a scan that stopped at `src/` would lose the depth arrows the
+// moment they moved. Shell files are keyed `@trunk/shell/<path>`.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 
@@ -59,8 +63,8 @@ const QUARANTINE: Record<string, string> = {
   // make Back mean something different here than in the surface they were
   // ported from; wiring them to undo/redo would make two controls that look
   // like navigation do document surgery.
-  "chrome/TitleBar/chromeBar.tsx :: onBack": "needs a depth model (drill-in); honestly disabled until there is a level to go back to",
-  "chrome/TitleBar/chromeBar.tsx :: onForward": "needs a depth model (drill-in); honestly disabled until there is a level to go back to",
+  "@trunk/shell/shellChromeBar.tsx :: onBack": "needs a depth model (drill-in); honestly disabled until there is a level to go back to",
+  "@trunk/shell/shellChromeBar.tsx :: onForward": "needs a depth model (drill-in); honestly disabled until there is a level to go back to",
   // These three are the depth BADGE, and unlike the arrows it is not honestly
   // disabled — it renders as an ordinary enabled control reading "0" and
   // opens a menu. `atRoot` in the trunk is `crumbs.length === 0`
@@ -68,14 +72,14 @@ const QUARANTINE: Record<string, string> = {
   // permanently `disabled`: a live-looking control whose popup can never say
   // anything. It is the one entry here Zach should decide about rather than
   // inherit — see the handoff.
-  "chrome/TitleBar/chromeBar.tsx :: onJumpToLevel": "needs a depth model; no crumb can be clicked while crumbs is empty",
-  "chrome/TitleBar/chromeBar.tsx :: crumbs": "needs a depth model; empty makes the trunk's atRoot always true",
-  "chrome/TitleBar/chromeBar.tsx :: depth": "needs a depth model; the badge reads 0 forever",
+  "@trunk/shell/shellChromeBar.tsx :: onJumpToLevel": "needs a depth model; no crumb can be clicked while crumbs is empty",
+  "@trunk/shell/shellChromeBar.tsx :: crumbs": "needs a depth model; empty makes the trunk's atRoot always true",
+  "@trunk/shell/shellChromeBar.tsx :: depth": "needs a depth model; the badge reads 0 forever",
   // The dock's library cell. Honest about itself in words, which is why it is
   // quarantined rather than treated as the rename-class bug: it says "Coming
   // soon" on the cell and "Nothing here yet" inside.
-  "chrome/Toolbar/dock.tsx :: Coming soon": "needs a saved-shape/component library surface to open",
-  "chrome/Toolbar/dock.tsx :: Nothing here yet": "needs a saved-shape/component library surface to open",
+  "@trunk/shell/shellToolDock.tsx :: Coming soon": "needs a saved-shape/component library surface to open",
+  "@trunk/shell/shellToolDock.tsx :: Nothing here yet": "needs a saved-shape/component library surface to open",
 };
 
 /** Block comments first, then line comments — prose is not evidence. */
@@ -116,10 +120,16 @@ function sourceFiles(root: string): string[] {
   return out;
 }
 
-const FILES = sourceFiles(HERE).map((file) => ({
-  file: path.relative(HERE, file),
-  raw: readFileSync(file, "utf8"),
-  code: codeOnly(readFileSync(file, "utf8")),
+/** The engine-free shell the chrome was lifted into (B-SHELL-P1). */
+const SHELL = path.resolve(HERE, "../../storybook-basics/src/shell");
+
+const FILES = [
+  ...sourceFiles(HERE).map((file) => ({ file: path.relative(HERE, file), path: file })),
+  ...sourceFiles(SHELL).map((file) => ({ file: `@trunk/shell/${path.relative(SHELL, file)}`, path: file })),
+].map(({ file, path: full }) => ({
+  file,
+  raw: readFileSync(full, "utf8"),
+  code: codeOnly(readFileSync(full, "utf8")),
 }));
 
 /** Every inert control the scan can see, as `<file> :: <name>`. */

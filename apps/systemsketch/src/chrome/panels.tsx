@@ -8,15 +8,13 @@
 // launcher toggles, and a click on a block opens the Inspector
 // (`./inspectorFollowsSelection.ts`). The state itself lives in `./overlay.tsx`, which is the
 // one component that both the strip and this panel are rendered from.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Box, Frame, GitBranch, Repeat, RotateCw, SlidersHorizontal, Square, TriangleAlert } from "lucide-react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Box, GitBranch, Repeat, RotateCw, Square } from "lucide-react";
 import { useEditor, useValue, type Editor } from "tldraw";
 
-import { FramesPanel, type FramesPanelMode, type FramesPanelProps } from "@trunk/editor/framesPanel";
-import { PanelShell } from "@trunk/editor/panelShell";
-import { ToggleGroup, ToggleGroupItem } from "@trunk/components/toggle-group";
-import { ProblemsPanel } from "@trunk/editor/problemsPanel";
+import type { FramesPanelProps } from "@trunk/editor/framesPanel";
 import { InspectorPanel } from "@trunk/editor/inspectorPanel";
+import { ShellPanelRail, type ShellFramesContent, type ShellProblemsContent } from "@trunk/shell/shellPanelRail";
 
 import { createGestureMark, type GestureMark } from "../document/gestureHistory";
 import { BLOCK_SHAPE_TYPE } from "../shapes/types";
@@ -44,56 +42,6 @@ const FRAME_KINDS: FramesPanelProps["kinds"] = {
   plain: { icon: <Square />, caption: "Region" },
   [EXPANDED_BLOCK_KIND]: { icon: <Box />, caption: "Expanded block" },
 };
-
-const PANEL_TITLE: Record<ChromePanel, string> = {
-  frames: "Frames",
-  problems: "Problems",
-  inspector: "Inspector",
-};
-
-function FramesSurface({ editor }: { editor: Editor }) {
-  const frames = useFrames(editor);
-  const [mode, setMode] = useState<FramesPanelMode>("cards");
-  return (
-    <FramesPanel
-      items={frames.items}
-      kinds={FRAME_KINDS}
-      mode={mode}
-      onModeChange={setMode}
-      onFocus={frames.focus}
-      onRename={frames.rename}
-      onDelete={frames.remove}
-      // No `saveView` and no `reorder`, and both absences are the document
-      // model talking rather than a shortcut: a saved camera view would be a
-      // new persisted concept, and a stored row order would be new persisted
-      // metadata — the plan's document-model contract (§3) has neither, and
-      // this lane does not get to mint a persisted field from a panel. The
-      // order shown is the page's own shape order.
-      notices={["Ordered as the page orders its shapes. Saved camera views are not part of this document yet."]}
-    />
-  );
-}
-
-function ProblemsSurface({ problems }: { problems: BoardProblems }) {
-  const [filter, setFilter] = useState("all");
-  return (
-    <ProblemsPanel
-      groups={problems.groups}
-      counts={problems.counts}
-      severities={PROBLEM_SEVERITIES}
-      filter={filter}
-      onFilterChange={setFilter}
-      onActivate={problems.reveal}
-      // `ss` → the kit stamps `ss-problems-panel` on its root
-      // (problemsPanel.tsx:234), which is the id the acceptance suite names.
-      testIdPrefix="ss"
-      emptyCopy={{
-        clear: ["No problems", "Add and connect Blocks; this view updates as the board changes."],
-        filtered: ["No problems", "Choose another severity filter to see the remaining problems."],
-      }}
-    />
-  );
-}
 
 /**
  * RULING 9's host half — the right-hand inspector, wired to the ONE selected
@@ -186,64 +134,6 @@ function InspectorSurface({ editor }: { editor: Editor }) {
       // carries (`statusStrip.tsx`'s `idTag`).
       testIdPrefix="ss-inspector"
     />
-  );
-}
-
-/**
- * The rail's own surface switcher — Frames · Problems · Inspector, inside the
- * panel rather than out in the status strip.
- *
- * WHY it is here and not a sixth launcher beside Frames and Problems, which
- * is where the other two live and is the obvious seat for a third: MEASURED
- * in the running app at 1400x900, keyless, 2026-09-21. A sixth strip cell
- * takes the strip from 301.7px to 339.7px wide, and the bottom-right corner
- * row has ~7px of slack between the dock (right edge 870.5) and tldraw's
- * licence watermark (left edge 1296). With the cell added, `placeCornerCluster`
- * (chrome/overlay.tsx) reported `above-licence` and the whole cluster lifted
- * off the corner row — clearance -31.1px. That is the placement Zach rejected
- * by name on 2026-09-19, and `src/corner.smoke.test.tsx` /
- * `src/chromeSize.smoke.test.tsx` are the committed acceptance for it.
- *
- * So the third surface costs the corner nothing. What it costs instead, said
- * plainly: opening the Inspector BY HAND takes two presses (a launcher, then
- * this row), and while the Inspector is showing neither strip launcher is lit.
- * The panel's own header says "Inspector", which is the signal that replaces
- * the lit button. The common path no longer pays that: clicking a block (or a
- * region with a corner card) opens the Inspector by itself —
- * `./inspectorFollowsSelection.ts`, Zach 2026-09-21.
- */
-function SurfaceSwitch({ open, onSurfaceChange }: { open: ChromePanel; onSurfaceChange(panel: ChromePanel): void }) {
-  return (
-    <div
-      data-slot="ss-panel-surfaces"
-      // Sticky, because `PanelShell`'s body is the scroll region: a Frames
-      // list long enough to scroll must not carry the switcher off the top.
-      className="sticky top-0 z-10 border-b border-border bg-popover px-3.5 py-2"
-    >
-      <ToggleGroup
-        value={[open]}
-        onValueChange={(value: string[]) => {
-          // Single-select semantics on a `multiple`-shaped primitive
-          // (ToggleGroup.stories.tsx's own note): pressing the active item
-          // hands back an empty array, and the rail always shows SOMETHING,
-          // so an empty change is a no-op rather than a fourth state.
-          const next = value[0];
-          if (next) onSurfaceChange(next as ChromePanel);
-        }}
-        spacing={0}
-        aria-label="Panel surface"
-      >
-        <ToggleGroupItem value="frames" variant="outline" aria-label="Frames" data-testid="ss-panel-surface-frames">
-          <Frame />
-        </ToggleGroupItem>
-        <ToggleGroupItem value="problems" variant="outline" aria-label="Problems" data-testid="ss-panel-surface-problems">
-          <TriangleAlert />
-        </ToggleGroupItem>
-        <ToggleGroupItem value="inspector" variant="outline" aria-label="Inspector" data-testid="ss-panel-surface-inspector">
-          <SlidersHorizontal />
-        </ToggleGroupItem>
-      </ToggleGroup>
-    </div>
   );
 }
 
@@ -352,48 +242,64 @@ export interface SystemSketchPanelProps {
   id: string;
 }
 
+/** The Frames surface's content: this document's regions and expanded
+ *  blocks (`./frames.ts`). A hook the shell calls only while Frames is the
+ *  showing surface — `useFrames` re-derives on every store change. */
+function useStudioFrames(): ShellFramesContent {
+  const editor = useEditor();
+  const frames = useFrames(editor);
+  return useMemo<ShellFramesContent>(
+    () => ({
+      items: frames.items,
+      kinds: FRAME_KINDS,
+      onFocus: frames.focus,
+      onRename: frames.rename,
+      onDelete: frames.remove,
+      notices: ["Ordered as the page orders its shapes. Saved camera views are not part of this document yet."],
+    }),
+    [frames.items, frames.focus, frames.rename, frames.remove],
+  );
+}
+
+/**
+ * The rail's HOST half. Since B-SHELL-P1 the rail itself — `PanelShell`, one
+ * surface at a time, the Frames · Problems · Inspector switch (its WHY moved
+ * with it), Escape to close, `FramesPanel` and `ProblemsPanel` — is the
+ * shell's (`@trunk/shell/shellPanelRail`, lifted from this file at 75991ce).
+ * What this app supplies is what speaks its vocabulary: the frames (regions
+ * and expanded blocks, `./frames.ts`), the problems findings (`./problems.ts`),
+ * the Inspector surface (until L-INSPECTOR) and where the rail's top clears
+ * tldraw's `SharePanel` seat.
+ */
 export function SystemSketchPanel({ open, onClose, onSurfaceChange, problems, id }: SystemSketchPanelProps) {
   const editor = useEditor();
   const top = useRailTop(open !== null);
-
-  // WHY the listener is on the window and capture-free, and WHY it is only
-  // mounted while a panel is open: tldraw's own Escape handling cancels the
-  // current tool/selection, and stealing every Escape from the canvas to
-  // close a panel that is not open is exactly the kind of global the archive
-  // paid for. Mounted only while there is something to close, and it does
-  // not stop propagation — closing the panel and cancelling the gesture at
-  // the same time is the behaviour both stock tldraw and the donor have.
-  useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, onClose]);
-
-  if (!open) return null;
+  const problemsContent = useMemo<ShellProblemsContent>(
+    () => ({
+      groups: problems.groups,
+      counts: problems.counts,
+      severities: PROBLEM_SEVERITIES,
+      onActivate: problems.reveal,
+      testIdPrefix: "ss",
+      emptyCopy: {
+        clear: ["No problems", "Add and connect Blocks; this view updates as the board changes."],
+        filtered: ["No problems", "Choose another severity filter to see the remaining problems."],
+      },
+    }),
+    [problems.groups, problems.counts, problems.reveal],
+  );
 
   return (
-    <div
+    <ShellPanelRail
+      open={open}
+      onClose={onClose}
+      onSurfaceChange={onSurfaceChange}
       id={id}
-      // The rail's own geometry. `PanelShell` "fills its given box" by
-      // contract and positions nothing itself, so the box is this div.
-      // `top` is NOT `top-2` (8px) here — `useRailTop` measures tldraw's
-      // `SharePanel` chip and clears it; see that hook's own WHY.
-      className="pointer-events-auto absolute right-2 bottom-[6.5rem] w-[340px] max-w-[calc(100%-1rem)]"
-      style={{ top }}
-    >
-      <PanelShell eyebrow="Right panel" title={PANEL_TITLE[open]} onClose={onClose} data-surface={open}>
-        <SurfaceSwitch open={open} onSurfaceChange={onSurfaceChange} />
-        {open === "frames" ? (
-          <FramesSurface editor={editor} />
-        ) : open === "problems" ? (
-          <ProblemsSurface problems={problems} />
-        ) : (
-          <InspectorSurface editor={editor} />
-        )}
-      </PanelShell>
-    </div>
+      top={top}
+      frames={useStudioFrames}
+      problems={problemsContent}
+      inspector={<InspectorSurface editor={editor} />}
+      testIdPrefix="ss-panel"
+    />
   );
 }

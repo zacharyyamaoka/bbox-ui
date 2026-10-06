@@ -41,7 +41,10 @@ import { DomCanvas } from "@trunk/hosts/domCanvas";
 import type { HostScene } from "@trunk/hosts/hostScene";
 import type { ScenePortsOf } from "@trunk/scene/sceneDiff";
 
-import { sceneFromRecords, useDocumentScene, type DocumentScene } from "../../document/sceneFromStore";
+import { useHostPort } from "@trunk/shell/BboxShell";
+
+import { sceneFromRecords, type DocumentScene } from "../../document/sceneFromStore";
+import { documentSceneOf, usePortScene } from "../portScene";
 
 /** Every test id this surface publishes hangs off this one prefix, which is
  *  the vocabulary `src/draft.smoke.test.tsx` was committed against before any
@@ -265,6 +268,14 @@ export interface CompareViewController {
  * states for being a hook rather than a context.
  */
 export function useCompareView(editor: Editor): CompareViewController {
+  const port = useHostPort();
+  // Both sides of the comparison come from ONE derivation — the port's cached
+  // scene (B-SHELL-P1) — so a baseline and the board it is compared with can
+  // never differ only in how they were projected.
+  const snapshot = useCallback(
+    () => (port ? documentSceneOf(port) : sceneFromRecords(editor.store.allRecords())),
+    [port, editor],
+  );
   const [open, setOpen] = useState(false);
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null);
 
@@ -272,11 +283,11 @@ export function useCompareView(editor: Editor): CompareViewController {
   // `useState`'s initialiser rather than an effect, so it is the board before
   // any render of this chrome could have changed it.
   const [baseline, setBaseline] = useState<{ scene: DocumentScene; label: string }>(() => ({
-    scene: sceneFromRecords(editor.store.allRecords()),
+    scene: snapshot(),
     label: "When you opened this board",
   }));
 
-  const current = useDocumentScene(editor);
+  const current = usePortScene();
 
   const comparison = useMemo(() => {
     const portsOf: ScenePortsOf = { before: portsOfScene(baseline.scene), after: portsOfScene(current) };
@@ -288,14 +299,14 @@ export function useCompareView(editor: Editor): CompareViewController {
 
   const capture = useCallback(() => {
     setBaseline({
-      scene: sceneFromRecords(editor.store.allRecords()),
+      scene: snapshot(),
       // A time, not "now": a baseline a person set at 14:03 and compares
       // against at 15:40 must say WHEN, or the pane heading is a lie by
       // omission about which board they are looking at.
       label: `Baseline set at ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
     });
     setSelectedChangeId(null);
-  }, [editor]);
+  }, [snapshot]);
 
   const group = useMemo<MenuGroupSpec>(
     () => ({

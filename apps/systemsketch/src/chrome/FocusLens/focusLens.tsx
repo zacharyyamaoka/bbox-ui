@@ -23,7 +23,7 @@ import { useEditor, useValue, type TLShapeId } from "tldraw";
 import { FocusControls } from "@trunk/editor/focusControls";
 import { focusSnapshot, focusStepLimits, type FocusDirection } from "@trunk/scene/focus";
 
-import { useDocumentScene } from "../../document/sceneFromStore";
+import { usePortScene } from "../portScene";
 import { clearFocusHiddenShapeIds, setFocusHiddenShapeIds } from "./focusVisibility";
 import "./focusLens.css";
 
@@ -72,7 +72,9 @@ function cssIdLiteral(id: string): string {
 
 export function FocusLens() {
   const editor = useEditor();
-  const scene = useDocumentScene(editor);
+  // The port's cached scene (B-SHELL-P1): a pan or a click no longer
+  // rebuilds the graph the lens walks.
+  const scene = usePortScene();
   const [state, setState] = useState<FocusLensState>(IDLE);
 
   const selectedIds = useValue(
