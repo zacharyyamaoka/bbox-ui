@@ -1276,7 +1276,10 @@
   "text": "Every new text or number field writes on each keystroke (no local buffer committed on blur — the P-030 rule) and joins the P-030 block in APP/src/textEditing.smoke.test.tsx; every new gesture is ONE undo step (APP/src/document/gestureHistory.ts). Donors that buffer until blur (packages/panel NumberInput, packages/inspector ScrubNumber) are adapted, not copied.",
   "guards": "W1 brings two ratchet tests that fail in BOTH directions: APP/src/settingsAreWired.test.ts (QUARANTINE of dead settings) and APP/src/chromeActionsAreWired.test.ts (quarantined chrome callbacks). A lane that makes a quarantined entry live removes it from the quarantine in the same commit; B-SHELL-P1 extends chromeActionsAreWired's scan to TRUNK/shell.",
   "longRuns": "Suites longer than the 10-minute Bash cap: start them with `nohup ... > <log> 2>&1 & echo $! > <pid>` and wait with repeated `timeout 570 tail --pid=$(cat <pid>) -f /dev/null`; never a foreground sleep; never kill another process's run on port 63315 — wait for it.",
-  "verify": "The integration check after every merge: `pnpm -r typecheck`; `pnpm -r --workspace-concurrency=1 test` (every package's tests, one at a time because of the shared browser port); `python3 -m pytest -q scripts/tests` when scripts/ or a launcher changed. Compare the failing set to EXPECTED_RED."
+  "verify": "The integration check after every merge: `pnpm -r typecheck`; `pnpm -r --workspace-concurrency=1 test` (every package's tests, one at a time because of the shared browser port); `python3 -m pytest -q scripts/tests` when scripts/ or a launcher changed. Compare the failing set to EXPECTED_RED.",
+  "noAudits": "Since 2026-10-05 Zach's global rule is: audits run ONLY when he asks. The run therefore has NO per-lane Codex audit. Proof of done is the lane's own acceptance, the integrator's full verification at merge, and the integrator reading the builder's diff (git diff --stat against the claimed write set; any change to an acceptance/test/story file the builder was not allowed to touch is named in the ledger).",
+  "isolatedGit": "An isolated lane agent runs git ONLY as a plain `git ...` command with its Bash cwd at its own worktree root (cd there first, in its own call) — never `git -C <path>`, never a command that names another worktree's path. The harness refuses anything else (measured 2026-09-30: every git command of two lane agents was refused). The integration tip it must start from is given in its prompt as a sha.",
+  "processes": "Every agent stops every process it started (dev servers, vitest browser runs, Xvfb displays, headless browsers) before returning, and never stops one it did not start. 2026-10-05: leftover lane servers and displays took 17 GB and the desktop down."
  },
  "deferredResiduals": [
   {
@@ -1337,5 +1340,15 @@
    "what": "the block-face origin badge (cluster 18)",
    "why": "BlockFace has three owners already; follow-up after W3."
   }
- ]
+ ],
+ "resume": {
+  "date": "2026-10-06",
+  "note": "The first build workflow (run wf_f8593c1b-ff8) was interrupted when the session ended on 2026-09-30 ~02:25. W1a-W1i and B-DEPS (63ff460) had landed. G-STALE's builder left an uncommitted corner-cluster fix and G-FLAKE's author an untracked repeat harness; both are salvaged under docs/finish-2026-09-29/salvage/ for the resumed lanes to take over.",
+  "salvage": [
+   "docs/finish-2026-09-29/salvage/G-STALE-build.diff",
+   "docs/finish-2026-09-29/salvage/G-STALE-build-untracked.tar",
+   "docs/finish-2026-09-29/salvage/finish-G-STALE.md",
+   "docs/finish-2026-09-29/salvage/G-FLAKE-harness.tar"
+  ]
+ }
 }
