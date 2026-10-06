@@ -19,7 +19,7 @@ import type { ElbowPin } from "@trunk/components/elbow";
 import { TRACE_HIT_CORRIDOR_PX } from "@trunk/components/trace.hit";
 import { PORT_HIT_PX } from "@trunk/components/port.layout";
 import { tunnelHidesRun, tunnelMouths } from "@trunk/components/tunnel";
-import type { Point } from "@trunk/components/trace.layout";
+import type { Point, TraceMarkerEnd } from "@trunk/components/trace.layout";
 
 import { wireTunnelState } from "./wireTunnel";
 import {
@@ -110,6 +110,35 @@ export interface WireShapeProps {
    * does not survive a reload, because there is nothing on it.
    */
   layer: string;
+
+  // ---- Schema v2 (B-SCHEMA). STORAGE ONLY: nothing in this commit reads any
+  // of these, and every default paints today's pixels
+  // (docs/finish-2026-09-29/schema-inventory.md §1.3). `routing` gains no
+  // `arc` (inventory §3: no lane this run can draw one, and widening an enum
+  // needs no migration).
+
+  /** P-156/P-171: the badge text; `""` = no badge. */
+  label: string;
+  /** P-156/P-171/P-137: where along the cable the badge (and the delayed
+   *  z⁻¹ pill) rides — the trunk's `labelPosition`, which clamps it. */
+  labelFraction: number;
+  /** P-096: the trunk's `TraceMarkerEnd` (`components/trace.layout.ts:91`). */
+  startMarker: TraceMarkerEnd;
+  endMarker: TraceMarkerEnd;
+  /** P-121/P-187: the trunk `Trace`'s `animated`. "Red" is `color`. */
+  animated: boolean;
+  /** Cluster 11 P-364: `null` = the variant's own weight. */
+  strokeWidth: number | null;
+  /** P-137/P-187: the delay shown in a delayed cable's pill; `""` = a bare
+   *  z⁻¹. Donor field: systemsketch `ConnectionShapeUtil.tsx:303`. */
+  delayValue: string;
+  /**
+   * Residual P-081/P-189: the one control point of a straight or curved
+   * cable, as an offset from the CHORD MIDPOINT so it travels with the blocks
+   * — the donor's `curve: {dx, dy}` (systemsketch `ConnectionShapeUtil.tsx:298`),
+   * renamed. `null` = no control point. An elbow's bends stay in `pins`.
+   */
+  bend: { dx: number; dy: number } | null;
 }
 
 declare module "@tldraw/tlschema" {
@@ -289,6 +318,15 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
     pins: T.arrayOf(ElbowPinV),
     tunnel: T.boolean,
     layer: T.string,
+    // ---- Schema v2 (B-SCHEMA).
+    label: T.string,
+    labelFraction: T.number,
+    startMarker: T.literalEnum("none", "arrow"),
+    endMarker: T.literalEnum("none", "arrow"),
+    animated: T.boolean,
+    strokeWidth: T.nullable(T.number),
+    delayValue: T.string,
+    bend: T.nullable(T.object({ dx: T.number, dy: T.number })),
   };
 
   // The sequence is what gives these props a version number in a saved file,
@@ -338,6 +376,33 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
           props.diff ??= "normal";
         },
       },
+      {
+        id: `com.tldraw.shape.${WIRE_SHAPE_TYPE}/3`,
+        // SCHEMA V2 (B-SCHEMA): every prop the finish run adds to a cable, in
+        // ONE step (schema-inventory.md §1.3).
+        //
+        // WHY — the P-028 empty-migration incident, which happened on THIS
+        // shape (see `/1`): P-028 added `props.pins` with an empty sequence,
+        // every board saved before it REFUSED TO OPEN, and the committed
+        // fixture `two-blocks.tldr` went down with it. Every prop below is
+        // rejected as `undefined` by its validator, so without this step every
+        // pre-v2 board would do the same; `src/document/schemaV2Migration.test.ts`
+        // opens a real one.
+        //
+        // FILLS, NEVER RESETS (`??=`): a writer that already sent a v2 prop
+        // keeps it. The defaults paint today's pixels and are LITERALS, never
+        // `getDefaultProps` — a shipped migration is frozen.
+        up: (props: Record<string, unknown>) => {
+          props.label ??= "";
+          props.labelFraction ??= 0.5;
+          props.startMarker ??= "none";
+          props.endMarker ??= "none";
+          props.animated ??= false;
+          props.strokeWidth ??= null;
+          props.delayValue ??= "";
+          props.bend ??= null;
+        },
+      },
     ],
   });
 
@@ -354,7 +419,29 @@ export class WireShapeUtil extends ShapeUtil<WireShape> {
     // and `tunnel: false` on the two lines above: marking is something the
     // user does, never a state a cable is born in. The ARMED value, when one
     // is set, replaces this in `createShapes` (Editor.mjs:6336-6338).
-    return { diff: "normal", variant: "data", routing: "elbow", color: "", start: { x: 0, y: 0 }, end: { x: 120, y: 0 }, pins: [], tunnel: false, layer: "" };
+    // Schema v2 (B-SCHEMA): a cable is born PLAIN — no badge, no markers
+    // (4b49cd4 made data traces arrow-less), still, the variant's own weight,
+    // a bare z⁻¹, no control point — the same rule as `pins: []`, and the
+    // same literals `/3` fills an old board with.
+    return {
+      diff: "normal",
+      variant: "data",
+      routing: "elbow",
+      color: "",
+      start: { x: 0, y: 0 },
+      end: { x: 120, y: 0 },
+      pins: [],
+      tunnel: false,
+      layer: "",
+      label: "",
+      labelFraction: 0.5,
+      startMarker: "none",
+      endMarker: "none",
+      animated: false,
+      strokeWidth: null,
+      delayValue: "",
+      bend: null,
+    };
   }
 
   /**

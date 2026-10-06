@@ -20,7 +20,7 @@ import {
   type TLShapeUtilCanBindOpts,
 } from "tldraw";
 
-import { PortAnchorV } from "../shared/props";
+import { PortAnchorV, PortFillV, SlotMemberV, SlotOriginV, type PortFill, type SlotMember, type SlotOrigin } from "../shared/props";
 import { DiffMarkStyle, type DiffMark } from "../shared/diffMark";
 import { PORT_SHAPE_TYPE, WIRE_BINDING_TYPE, WIRE_SHAPE_TYPE, type PortSide } from "../types";
 import { PortFace } from "./PortFace";
@@ -50,6 +50,35 @@ export interface PortShapeProps {
   diff: DiffMark;
   /** Exactly one MEASURED anchor, whose `portId` is `FLOATING_PORT_ID`. */
   anchors: PortShapeAnchor[];
+
+  // ---- Schema v2 (B-SCHEMA). STORAGE ONLY: nothing in this commit reads any
+  // of these, and every default paints today's pixels
+  // (docs/finish-2026-09-29/schema-inventory.md §1.2).
+  //
+  // WHY there is no `frozen` here, although clusters 7/8 ask for a frozen
+  // port: tldraw's own `isLocked` is already persisted on every shape and
+  // already answers it. A `frozen` prop beside it would be two answers to one
+  // question that can disagree — the routeMode-vs-pins argument in
+  // `WireShapeUtil`'s `pins` note. L-PORTS-SHAPE paints "not selectable" from
+  // `isLocked`. (A RAIL port has no shape and so no `isLocked`; its freeze is
+  // `ss-block.portOptions[id].frozen`.)
+
+  /** Cluster 7 P-399: `auto` = derived from the bindings, as `PortFace` does today. */
+  fill: PortFill;
+  /** Cluster 7 P-408: the trunk `Port.hidden` — gone, and not selectable either. */
+  hidden: boolean;
+  /** P-119: `null` = the direction's own text layout (`PortFace` `TEXT_LAYOUT_FOR`). */
+  labelOrigin: SlotOrigin | null;
+  secondaryOrigin: SlotOrigin | null;
+  /**
+   * P-201/P-208: the label and secondary slots as REAL member lists. A
+   * `builtin` member is a part the face paints itself (`label` = the
+   * declaration, today's `RestingLabel`; `producers` = P-250's badge, which
+   * paints nothing below two producers); a `shape` member names a child shape
+   * ("three input boxes" = three of them). A deleted default member stays
+   * deleted because it is ABSENT from its list — see `SlotMemberV`.
+   */
+  slots: { label: SlotMember[]; secondary: SlotMember[] };
 }
 
 declare module "@tldraw/tlschema" {
@@ -72,6 +101,12 @@ export class PortShapeUtil extends ShapeUtil<PortShape> {
     // same line for why this registration is the whole mechanism.
     diff: DiffMarkStyle,
     anchors: T.arrayOf(PortAnchorV),
+    // ---- Schema v2 (B-SCHEMA).
+    fill: PortFillV,
+    hidden: T.boolean,
+    labelOrigin: T.nullable(SlotOriginV),
+    secondaryOrigin: T.nullable(SlotOriginV),
+    slots: T.object({ label: T.arrayOf(SlotMemberV), secondary: T.arrayOf(SlotMemberV) }),
   };
 
   // Version 1 folds `name` + `type` into one `declaration` (ruling 8). Spelled
@@ -100,6 +135,29 @@ export class PortShapeUtil extends ShapeUtil<PortShape> {
           props.diff ??= "normal";
         },
       },
+      {
+        id: `com.tldraw.shape.${PORT_SHAPE_TYPE}/3`,
+        // SCHEMA V2 (B-SCHEMA): every prop the finish run adds to a free port,
+        // in ONE step (schema-inventory.md §1.2).
+        //
+        // WHY — the P-028 empty-migration incident: P-028 added `props.pins`
+        // to `ss-wire` with an EMPTY sequence, every board saved before it
+        // REFUSED TO OPEN, and the committed fixture `two-blocks.tldr` went
+        // down with it. Each prop below is rejected as `undefined` by its
+        // validator, so without this step every pre-v2 board would do the
+        // same; `src/document/schemaV2Migration.test.ts` opens a real one.
+        //
+        // FILLS, NEVER RESETS (`??=`): a writer that already sent a v2 prop
+        // keeps it. The defaults paint today's pixels and are LITERALS, never
+        // `getDefaultProps` — a shipped migration is frozen.
+        up: (props: Record<string, unknown>) => {
+          props.fill ??= "auto";
+          props.hidden ??= false;
+          props.labelOrigin ??= null;
+          props.secondaryOrigin ??= null;
+          props.slots ??= { label: [{ kind: "builtin", id: "label" }], secondary: [{ kind: "builtin", id: "producers" }] };
+        },
+      },
     ],
   });
 
@@ -117,7 +175,23 @@ export class PortShapeUtil extends ShapeUtil<PortShape> {
     // user does. `createShapes` replaces it with the ARMED value when one is
     // set, which is the StyleProp half that makes marking a whole new subgraph
     // one press instead of one press per shape.
-    return { w: 120, h: 32, declaration: "port", direction: "out", diff: "normal", anchors: [] };
+    // Schema v2 (B-SCHEMA): the same literals `/3` fills an old board with,
+    // so a fresh port and a migrated one cannot paint differently. Both slots
+    // start with their DEFAULT member: the declaration in `label`, the
+    // producers badge (P-250) in `secondary`.
+    return {
+      w: 120,
+      h: 32,
+      declaration: "port",
+      direction: "out",
+      diff: "normal",
+      anchors: [],
+      fill: "auto",
+      hidden: false,
+      labelOrigin: null,
+      secondaryOrigin: null,
+      slots: { label: [{ kind: "builtin", id: "label" }], secondary: [{ kind: "builtin", id: "producers" }] },
+    };
   }
 
   // WHY the whole box is filled geometry rather than a circle for the dot plus

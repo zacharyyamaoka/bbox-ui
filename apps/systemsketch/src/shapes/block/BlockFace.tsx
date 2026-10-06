@@ -30,7 +30,7 @@ import { isRegionCornerBlock } from "../region/cornerBlock";
 import { stopEditing } from "../shared/editingSession";
 import { NodeShapeFrame } from "../shared/nodeShapeComponent";
 import { BLOCK_SHAPE_TYPE, PORT_SIDES, WIRE_BINDING_TYPE } from "../types";
-import type { BlockPortSpec, BlockShape } from "./BlockShapeUtil";
+import { trunkBlockViewOf, type BlockPortSpec, type BlockShape } from "./BlockShapeUtil";
 import { portLaneRequest } from "./portLaneHost";
 import { portsFromRailItems, railGesture } from "./railLabel";
 
@@ -709,7 +709,7 @@ export function BlockFace({ shape }: { shape: BlockShape }) {
       {/* `id` is the tldraw shape id, stamped as `data-block-id` — the anchor
           of both the dot sighting (shared/measure.ts) and the drag-ownership
           lookup (shared/pointerOwnership.ts). */}
-      <BlockPort id={shape.id} view={view} edges={edges}>
+      <BlockPort id={shape.id} view={trunkBlockViewOf(view)} edges={edges}>
         <Block
           // The header is the icon and the name on one line — Notion's order,
           // icon first. `min-w-0` + `truncate` on the name half and NOT on the

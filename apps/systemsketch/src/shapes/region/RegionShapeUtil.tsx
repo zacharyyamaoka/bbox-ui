@@ -76,7 +76,14 @@ export interface RegionShapeProps {
    *  a tool creates one; never a port list of the region's own. */
   cornerBlockId: string;
   arms: RegionArm[];
+  /** Schema v2 (B-SCHEMA, P-183): the blackbox toggle's state, matching the
+   *  trunk scene contract's `region.view`. `expanded` is the frame RegionFace
+   *  draws today, unconditionally. Nothing reads it in this commit. */
+  view: RegionView;
 }
+
+/** P-183: the region's two lenses — the open frame, or the opaque box. */
+export type RegionView = "expanded" | "opaque";
 
 declare module "@tldraw/tlschema" {
   interface TLGlobalShapePropsMap {
@@ -96,15 +103,36 @@ export class RegionShapeUtil extends BaseFrameLikeShapeUtil<RegionShape> {
     name: T.string,
     cornerBlockId: T.string,
     arms: T.arrayOf(T.object({ id: T.string, title: T.string, open: T.boolean, h: T.number })),
+    view: T.literalEnum("expanded", "opaque"),
   };
 
-  // Version 0, declared now for the reason BlockShapeUtil records: the
+  // Version 0 was declared empty for the reason BlockShapeUtil records: the
   // sequence is what gives these props a version number in a saved file, and
-  // it cannot be retrofitted once boards exist in the wild.
-  static override migrations = createShapePropsMigrationSequence({ sequence: [] });
+  // it cannot be retrofitted once boards exist in the wild. Schema v2 is its
+  // first step.
+  static override migrations = createShapePropsMigrationSequence({
+    sequence: [
+      {
+        id: `com.tldraw.shape.${REGION_SHAPE_TYPE}/1`,
+        // SCHEMA V2 (B-SCHEMA, P-183): the opaque/expanded lens.
+        //
+        // WHY — the P-028 empty-migration incident: P-028 added `props.pins`
+        // to `ss-wire` with an EMPTY sequence, every board saved before it
+        // REFUSED TO OPEN, and the committed fixture `two-blocks.tldr` went
+        // down with it. `T.literalEnum` rejects `undefined`, so without this
+        // step every region saved before v2 would do the same.
+        //
+        // FILLS, NEVER RESETS (`??=`), with the LITERAL that paints today's
+        // frame (never `getDefaultProps` — a shipped migration is frozen).
+        up: (props: Record<string, unknown>) => {
+          props.view ??= "expanded";
+        },
+      },
+    ],
+  });
 
   override getDefaultProps(): RegionShapeProps {
-    return { w: 480, h: 320, kind: "plain", name: "", cornerBlockId: "", arms: [] };
+    return { w: 480, h: 320, kind: "plain", name: "", cornerBlockId: "", arms: [], view: "expanded" };
   }
 
   /**
