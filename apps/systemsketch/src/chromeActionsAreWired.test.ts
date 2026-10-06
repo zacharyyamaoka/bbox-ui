@@ -158,9 +158,12 @@ describe("every chrome control this app renders is wired, or quarantined with a 
     // Without this, a wrong root turns the whole file vacuous: zero files
     // means zero findings means nothing to quarantine and a green run.
     expect(FILES.length, "source files scanned").toBeGreaterThan(40);
-    expect(FILES.map((entry) => entry.file)).toContain("chrome/TitleBar/chromeBar.tsx");
+    expect(FILES.map((entry) => entry.file)).toContain("App.tsx");
     // And the scan really can find something — the arrows are the fixture.
-    expect(found).toContain("chrome/TitleBar/chromeBar.tsx :: onBack");
+    // WHERE they are found is not this case's business any more: B-SHELL-P1
+    // lifts the bar into TRUNK/shell, so the path is pinned by the B-SHELL-P1
+    // block below (acceptance author, B-SHELL-P1 acceptance commit).
+    expect(found.some((key) => key.endsWith(" :: onBack"))).toBe(true);
   });
 
   it("strips comments before scanning, so the repo's own prose about a dead control is not read as the control", () => {
@@ -177,5 +180,60 @@ describe("every chrome control this app renders is wired, or quarantined with a 
     expect(stripped).not.toMatch(NO_OP_HANDLER);
     expect(stripped).not.toMatch(PLACEHOLDER_COPY);
     expect(stripped).toContain("onBack: goBack");
+  });
+});
+
+/**
+ * B-SHELL-P1 (SHELL-P1/guard-scan) — added by the lane's acceptance author,
+ * committed RED before the builder existed; the builder may not edit this
+ * block or the corpus case above (docs/lanes/finish-B-SHELL-P1.md).
+ *
+ * The lift moves the chrome's wiring into the engine-free shell kit,
+ * `apps/storybook-basics/src/shell/`. This guard's SCOPE comment ("this app's
+ * own `src/`, deliberately not the trunk") was written when the trunk only
+ * held prop-taking components; the shell is different — it IS the wiring that
+ * decides what Zach can click, lifted out of this app. A scan that stopped at
+ * `src/` would lose the depth arrows the moment they moved, and the quarantine
+ * would report them "came alive" when they had only left the room
+ * (completeness-critic.md #4; lanes.json `rules.guards`).
+ *
+ * The builder changes ONLY what is scanned and how a file is keyed: shell
+ * files are keyed `@trunk/shell/<path relative to shell/>`, and a moved
+ * control's QUARANTINE entry is re-homed to that key with its excuse
+ * unchanged. Nothing is wired and nothing is deleted in P1 (its stop rule: no
+ * behaviour change).
+ */
+const SHELL_KEY_PREFIX = "@trunk/shell/";
+
+/** The depth bar's controls, which the lift moves with the chrome bar
+ *  (§4.2 `chromeBar.tsx` → shell; L-NAV's write set then names
+ *  "TRUNK/shell/** (title bar crumbs, arrows …)" as their post-lift home). */
+const MOVED_WITH_THE_BAR = ["onBack", "onForward", "onJumpToLevel", "crumbs", "depth"];
+
+describe("B-SHELL-P1 — the guard follows the chrome into TRUNK/shell", () => {
+  const found = inertControls();
+
+  it("SHELL-P1/guard-scan: TRUNK/shell is scanned, keyed @trunk/shell/<path>, and holds the lifted chrome, not only the P0 skeleton", () => {
+    const shell = FILES.filter((entry) => entry.file.startsWith(SHELL_KEY_PREFIX)).map((entry) => entry.file);
+    expect(shell, "TRUNK/shell is not in this guard's corpus").toContain(`${SHELL_KEY_PREFIX}BboxShell.tsx`);
+    // P0 left four source files there (BboxShell, hostPort, hostContract,
+    // fakeHost). A scan that reaches only those proves nothing about the
+    // windows the lift adds.
+    expect(shell.length, `only ${shell.length} shell files scanned: ${shell.join(", ")}`).toBeGreaterThan(4);
+  });
+
+  it("SHELL-P1/guard-scan: the depth bar's inert controls are found under @trunk/shell/, and every one still quarantined is re-homed there", () => {
+    for (const name of MOVED_WITH_THE_BAR) {
+      // A later lane that WIRES one deletes its entry — this guard's own rule
+      // (L-NAV, W4). While an entry exists, it must name where the lift put it.
+      for (const key of Object.keys(QUARANTINE).filter((entry) => entry.endsWith(` :: ${name}`))) {
+        expect(key.startsWith(SHELL_KEY_PREFIX), `${key} still names the app's copy of the bar`).toBe(true);
+        expect(found, `${key} is quarantined but the scan does not find it`).toContain(key);
+      }
+    }
+    // Deleting an entry instead of re-homing it is caught by the ratchet
+    // above, not here: once TRUNK/shell is scanned (previous case), an inert
+    // arrow found there with no entry fails "is quarantined with what it
+    // would take". The dispatcher also diffs the QUARANTINE names at merge.
   });
 });
