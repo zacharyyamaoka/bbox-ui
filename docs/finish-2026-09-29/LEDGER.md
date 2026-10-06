@@ -54,7 +54,7 @@ Copied from `baseline.md` (planner, 2026-09-29, main `705847c`; integration bran
 | G-FLAKE | W2 | sonnet | queued | | | |
 | G-STALE | W2 | sonnet | merged | `74c79c1` (`--no-ff` of lane tip `fde40924b3`: acceptance `db4a778`, its merge `8bf23c7`, builder `fde4092`) | not audited (no audits since 2026-10-05) | PRE `61e26e6`. **Claim checked before merging:** `git diff --stat 61e26e6..fde4092` is non-empty, 6 files; the builder's own range `db4a778..fde4092` is exactly the brief's write set — `apps/systemsketch/src/chrome/cornerClusterForm.ts` (new, +214: the pure half of `overlay.tsx` moved verbatim plus `cornerClusterForm`), `cornerClusterForm.test.ts` (new, 5 cases), `overlay.tsx` (re-export, `useCornerPlacement` form/placement deferral, `data-corner-form`, `STACKED_STRIP_CLASS`), `statusStrip.tsx` (`--ss-strip-columns` on a `display: contents` wrapper). `git diff --stat db4a778..fde4092 -- corner.smoke.test.tsx menus.smoke.test.tsx docs/lanes/finish-G-STALE.md` is EMPTY: the builder touched no ruler; the `menus.smoke` burger edit and the brief are the acceptance commit's. Re-export kept: `overlay.tsx` still exports `CORNER_INSET`, `placeCornerCluster`, `watermarkCoverRect`, `CornerRect` (corner.smoke's pure cases import them from there and pass). **Merge:** no conflicts (the lane was cut at PRE itself); no `package.json`/lockfile/`scripts/`/launcher path, so no install and no pytest owed. **Verify on the merged tree:** `pnpm -r typecheck` clean (25 projects). Full `pnpm -r --no-bail --workspace-concurrency=1 test` (load 5 → 47 as a peer lane, `wf_885983d5-b6a-3`, started its own studio suite): storybook-basics 8 failed / 3,906 — stockPrimitives "stock command" (5 s timeout), AppMenu, ContextMenu, DevPanel ×2, FitToContentHosts (all FLAKY_FILES) and StepIn ×2 (new, see EXPECTED_RED) — each file green re-run alone once (48/48, 3/3, 12/12, 5/5, 4/4, 3/3); bbox-ui 672/672, bbox-reactflow 3/3, glyph-picker 32/32, every other package green. The studio's browser project died on `Port 63315 is already in use` (the peer held it), so only its 33 unit files ran in the `-r` pass; once the port freed the studio was re-run in full: **9 failed / 777 passed** (786, +5 = `cornerClusterForm.test.ts`) = draft.smoke ×7 + menus `:164` (EXPECTED_RED, L-FILES) + app.smoke "pressing the system face" (FLAKY, W1b; green alone 4/4). The lane's acceptance on the merged tree, verbose: corner.smoke **6/6** (narrow 720×900 included), menus.smoke burger case green, `cornerClusterForm.test.ts` 5/5. **EXPECTED_RED:** corner.smoke narrow and menus `:80` removed; menus View/Preferences/Export re-cited at `:164`; StepIn added to FLAKY_FILES. **Builder's evidence (commit message, read at merge):** at 720×900 stacked the strip is 552.3–712 × 762–852 (159.7×90), watermark.top − strip.bottom = 8; `elementFromPoint` at the centre of grid, frames, problems, dev, help (36×40) and the zoom trigger (43.7×24) each hit its own cell; 1400×900 row 294.7×50 `beside-licence`, unchanged. Mutation 1 (`cornerClusterForm` forced to `"row"`) → corner.smoke narrow red with `28`, restored. Mutation 2 (form and placement in one `setState`, no deferral) → 4 runs, never 28: the deferral is the stated invariant, not a measured necessity (the brief asked for `--repeat 10`; 4 were run). Items: none in lanes.json; the two acceptance ids are settled in G3 below. |
 | B-DEPS | W2 | opus | merged | `63ff460` (committed on the integration branch by the dispatcher 2026-09-30, minutes before the session died; verified 2026-10-06 by B-DEPS-VERIFY, no repair owed) | not audited (no audits since 2026-10-05) | B-DEPS-VERIFY (PRE `d944fdb`, nothing changed): **Install:** `pnpm install --frozen-lockfile` on the integration tree exit 0 ("Already up to date"); and on a fresh `git archive HEAD` export at another checkout depth (scratchpad, never the repo) `pnpm install --frozen-lockfile --offline` → "Lockfile is up to date", 1,069 packages, exit 0 — the depth-independence the committed symlink exists for. Lockfile delta `bfec965..63ff460`: 0 lines removed, 76 added (importer `apps/bbox-reactflow`, `elkjs@0.12.0`, the directory package). **Resolution** (both trees): elkjs 0.12.0 from `apps/systemsketch` (an ESM `new ELK().layout` of a 2-node graph returns positions); react-arborist 3.16.0 from `apps/storybook-basics` (ESM import exports `Tree`, `TreeApi`, …). **bbox-reactflow:** listed in `pnpm-workspace.yaml`, `tsc -p` exit 0, `vitest run` 3/3 (`whiteboardDependency.test.ts`: resolves to dist/, worktree at the pin, one react/react-dom/@xyflow/react). **Whiteboard:** `apps/bbox-reactflow/simple-reactflow-whiteboard` → `/home/bam/simple-reactflow-whiteboard-lib`, detached HEAD `1266772` (= `bboxUi.whiteboardPin.commit`), clean, `dist/{index.js,index.d.ts,style.css}` present; the installed (injected) copy's dist/ is byte-identical to the worktree's (`diff -r`); `1266772` is not in the whiteboard's `main` and no remote branch contains it (never merged, never pushed). **Docs:** `apps/docs/src/app/global.css:20` `@source "../../../../apps/storybook-basics/src"`, `tsconfig.json` `@trunk/*`. Proof on the scratch export only (probe files deleted after; nothing entered the repo): a throwaway `trunk-block-probe` demo (trunk `Block` from `@trunk/components/block`, registered in `registry-examples.ts`, `<ComponentPreview>` on `block.mdx`) → `types:check` exit 0, `docs:build` green, headless Chromium on the exported `/docs/components/block.html`: the trunk Block 320×112, `border-top-width: 1px` solid, card shadow, zero page errors, screenshot looked at. Mutation: with the trunk `@source` line removed the rebuilt page measures `0px` and the exported CSS has no `border-[length:var(--bbox-skin-stroke-width,1px)]` rule — the line is load-bearing. **For the docs lanes (L-DOCS-COMPONENTS/EDITOR/SCENE-HOSTS):** the first build FAILED prerendering `/docs/components/block` — trunk `block.tsx` is not a client module but calls `maxDiagnosticSeverity` (`block.tsx:381`) from `./highlighter`, which is `"use client"`, so a demo that renders a trunk Block as a server component dies with "Attempted to call maxDiagnosticSeverity() from the server". A trunk demo file must start with `"use client"` (the v1 `@bbox-ui/core` demos never needed it); with it the build is green. That is a demo-authoring rule, not a B-DEPS defect. **Verify on `d944fdb`:** `pnpm -r typecheck` clean (25 projects, bbox-reactflow new). Full `pnpm -r --no-bail --workspace-concurrency=1 test` (load 4–6, 15 packages): studio 10 failed / 764 passed = exactly the 10 EXPECTED_RED; storybook-basics 2 failed / 3,914 — DevPanel "Callbacks Carry The Row Id" (`:289`, `pointer-events: none`) and FitToContentHosts "Drag A Member (tldraw)", both FLAKY_FILES, each green alone (5/5, 4/4); bbox-ui 672/672; bbox-reactflow 3/3 (new); glyph-picker 32/32; every other package green. No `scripts/` or launcher path changed, so no pytest was owed. Diff vs write set: beyond the seven write-set paths the commit adds only the skeleton lanes.json's `extra` names (README, index.html, `src/main.tsx`, `src/app.css`, vite/vitest config, tsconfig, the symlink) and its own guard `whiteboardDependency.test.ts`; no existing test, story or acceptance file touched. EXPECTED_RED unchanged. Items: none (B-DEPS carries none). |
-| B-SCHEMA | W2 | opus | queued | | | |
+| B-SCHEMA | W2 | opus | merged | `c798b03` (`--no-ff` of lane tip `6846835729`: acceptance `f666869`, its merge `7659c7a`, builder `6846835`) | not audited (no audits since 2026-10-05) | PRE `75991ce`. **Claim checked before merging:** `git diff --stat 75991ce..6846835` is non-empty, 17 files; the builder's own range `7659c7a..6846835` is 9 files, all inside the brief's re-issued write set (`docs/lanes/finish-B-SCHEMA.md` §Write set): `shapes/shared/props.ts` (+117), the five `*ShapeUtil.tsx` (props, validators, `getDefaultProps`, one appended migration each), and the one-expression `trunkBlockViewOf` plumbing at `BlockFace.tsx:712`, `sceneFromStore.ts:108`, `dropMenu.tsx:94`. **Rulers untouched:** `git diff --stat f666869..6846835` over both fixtures, `schemaV2Migration.test.ts`, `schemaV2Pixels.smoke.test.tsx`, `documentModel.test.ts`, `originResolution.test.ts`, `schema-inventory.md` and the brief is EMPTY. **Merge:** no conflict; no `package.json`/lockfile, nothing under `scripts/`, `apps/storybook-basics` or `packages/`. **Migrations:** `ss-block/5` (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:349`), `ss-port/3` (`apps/systemsketch/src/shapes/port/PortShapeUtil.tsx:139`), `ss-wire/3` (`apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:380`), `ss-code/1` (`apps/systemsketch/src/shapes/code/CodeShapeUtil.tsx:94`), `ss-region/1` (`apps/systemsketch/src/shapes/region/RegionShapeUtil.tsx:116`); each carries the P-028 WHY. **Verify on the merged tree:** `pnpm -r typecheck` clean. `pnpm -r --workspace-concurrency=1 --no-bail test` (load ~23–35, peer G-FLAKE repeat runs beside it): studio 9 failed / 779 passed / 2 skipped (98 files) = `draft.smoke` ×7 + `menus.smoke.test.tsx:164` (EXPECTED_RED) + `files.smoke` P1-4 (FLAKY W1d; green alone 18/18); storybook-basics 5 failed / 3,913 = `FitToContentHosts` ×4 (FLAKY; green alone 4/4) + `DevPanel` "Callbacks Carry The Row Id" (FLAKY; red again co-run with FitToContentHosts, then green ALONE 3/3, the DevPanel rule); every other package green. **Acceptance on the merged tree:** unit 48/48 (`schemaV2Migration`, `documentModel`, `originResolution`); `schemaV2Pixels.smoke` 1 passed / 2 skipped (the BASE-only capture), 0 differing pixels and v2 sequences reached. No new red; EXPECTED_RED unchanged. **The schema is now frozen** (barrier): a later prop is a dispatcher schema commit (`ss-block/6`, …), never a lane's. |
 | B-SHELL-P1 | W2 | opus | queued | | | |
 | L-WIRE-GESTURE | W3 | sonnet | queued | | | |
 | L-WIRE-PAINT | W3 | sonnet | queued | | | |
@@ -102,62 +102,62 @@ Copied from `baseline.md` (planner, 2026-09-29, main `705847c`; integration bran
 | P-247 (cluster 10: Arrow tool, routing kinds, edge topology) | L-WIRE-GESTURE | queued | |
 | P-316 (cluster 10: Arrow tool, routing kinds, edge topology) | L-WIRE-GESTURE | queued | |
 | P-360 (cluster 10: Arrow tool, routing kinds, edge topology) | L-WIRE-GESTURE | queued | |
-| P-434 (cluster 10: Arrow tool, routing kinds, edge topology) | L-WIRE-GESTURE | queued | |
+| P-434 (cluster 10: Arrow tool, routing kinds, edge topology) | L-WIRE-GESTURE | queued | B-SCHEMA `c798b03`: `arc` routing kind deferred — no lane this run can draw it; widening the enum later needs no migration (`docs/finish-2026-09-29/schema-inventory.md` §3, §5 Q3). |
 | P-444 (cluster 10: Arrow tool, routing kinds, edge topology) | L-WIRE-GESTURE | queued | |
 | P-456 (cluster 10: Arrow tool, routing kinds, edge topology) | L-WIRE-GESTURE | queued | |
 | P-097 | L-WIRE-PAINT | queued | |
-| P-096 | L-WIRE-PAINT | queued | |
-| P-156 | L-WIRE-PAINT | queued | |
-| P-171 | L-WIRE-PAINT | queued | |
-| P-137 | L-WIRE-PAINT | queued | |
-| P-121 | L-WIRE-PAINT | queued | |
+| P-096 | L-WIRE-PAINT | queued | storage half merged in B-SCHEMA `c798b03`: `ss-wire.startMarker` / `endMarker` `"none"\|"arrow"` (`apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:324-325`). |
+| P-156 | L-WIRE-PAINT | queued | storage half merged in B-SCHEMA `c798b03`: `ss-wire.label` `""` + `labelFraction` 0.5 (`apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:322-323`). |
+| P-171 | L-WIRE-PAINT | queued | storage half merged in B-SCHEMA `c798b03`: `ss-wire.label` + `labelFraction` (`apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:322-323`). |
+| P-137 | L-WIRE-PAINT | queued | storage half merged in B-SCHEMA `c798b03`: `ss-wire.delayValue` (`apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:328`), with `labelFraction` and `animated`. |
+| P-121 | L-WIRE-PAINT | queued | storage half merged in B-SCHEMA `c798b03`: `ss-wire.animated` (`apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:326`); "red" is the existing `color` (done-already). |
 | P-257 (cluster 11: Cable anchoring, appearance, control points) | L-WIRE-PAINT | queued | |
 | P-328 (cluster 11: Cable anchoring, appearance, control points) | L-WIRE-PAINT | queued | |
-| P-364 (cluster 11: Cable anchoring, appearance, control points) | L-WIRE-PAINT | queued | |
+| P-364 (cluster 11: Cable anchoring, appearance, control points) | L-WIRE-PAINT | queued | storage half merged in B-SCHEMA `c798b03`: `ss-wire.strokeWidth` `number\|null` (`apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:327`). |
 | P-416 (cluster 11: Cable anchoring, appearance, control points) | L-WIRE-PAINT | queued | |
 | P-054 | L-ROUTE | queued | |
 | P-167 | L-ROUTE | queued | |
 | P-103 | L-ROUTE | queued | |
-| P-015 | L-BLOCK-VIEWS | queued | |
-| P-212 | L-BLOCK-VIEWS | queued | |
-| P-141 | L-BLOCK-VIEWS | queued | |
-| P-166 | L-BLOCK-VIEWS | queued | |
+| P-015 | L-BLOCK-VIEWS | queued | storage half merged in B-SCHEMA `c798b03`: `ss-block.viewSizes` {simple, port, expanded, value} → `{w,h}\|null`, all null (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:253`). Behaviour still owed. |
+| P-212 | L-BLOCK-VIEWS | queued | storage half merged in B-SCHEMA `c798b03`: `ss-block.viewSizes` (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:253`). The expanded→simple→expanded behaviour is still owed. |
+| P-141 | L-BLOCK-VIEWS | queued | storage half merged in B-SCHEMA `c798b03`: `ss-block.sizeMode` `"fixed"\|"hug"`, default `"fixed"` (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:254`). Behaviour still owed. |
+| P-166 | L-BLOCK-VIEWS | queued | No stored state (Q-P166: Fit-to-content is an explicit command, `fitToContent(ids)`). Its opt-in automatic half is `ss-block.sizeMode: "hug"` (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:254`, B-SCHEMA `c798b03`). |
 | P-155 | L-BLOCK-VIEWS | queued | |
 | P-190 | L-BLOCK-VIEWS | queued | |
 | P-019 | L-BLOCK-VIEWS | queued | |
-| P-059 | L-BLOCK-VIEWS | queued | |
+| P-059 | L-BLOCK-VIEWS | queued | storage half merged in B-SCHEMA `c798b03`: `ss-block.view` += `"value"` (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:228`). Until the value face mounts, `trunkBlockViewOf` (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:64`) paints `value` as `port` at `BlockFace.tsx:712`, `sceneFromStore.ts:108`, `dropMenu.tsx:94`. Face and control still owed. |
 | P-086 | L-BLOCK-VIEWS | queued | |
-| P-183 | L-BLOCK-VIEWS | queued | |
+| P-183 | L-BLOCK-VIEWS | queued | storage half merged in B-SCHEMA `c798b03`: `ss-region.view` `"expanded"\|"opaque"` (`apps/systemsketch/src/shapes/region/RegionShapeUtil.tsx:106`). |
 | P-169 | L-BLOCK-VIEWS | queued | |
 | P-185 | L-BLOCK-VIEWS | queued | |
 | P-146 | L-BLOCK-VIEWS | queued | |
-| P-177 | L-BLOCK-VIEWS | queued | |
+| P-177 | L-BLOCK-VIEWS | queued | storage half merged in B-SCHEMA `c798b03`: `titleSizePx` / `titleFont` (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:261-262`), both null = today's `BLOCK_TITLE_FONT_PX`. `titleAlign`/`titleBold`/`titleColor` deferred (`docs/finish-2026-09-29/schema-inventory.md` §3). |
 | P-242 (cluster 13: Multi-select batch edits) | L-BLOCK-VIEWS | queued | |
 | P-275 (cluster 13: Multi-select batch edits) | L-BLOCK-VIEWS | queued | |
 | P-315 (cluster 13: Multi-select batch edits) | L-BLOCK-VIEWS | queued | |
 | P-355 (cluster 13: Multi-select batch edits) | L-BLOCK-VIEWS | queued | |
 | P-398 (cluster 13: Multi-select batch edits) | L-BLOCK-VIEWS | queued | |
-| P-246 (cluster 14: Block sizing and defaults) | L-BLOCK-VIEWS | queued | |
-| P-255 (cluster 14: Block sizing and defaults) | L-BLOCK-VIEWS | queued | |
+| P-246 (cluster 14: Block sizing and defaults) | L-BLOCK-VIEWS | queued | Not new state (B-SCHEMA `c798b03`): it changes the existing default `name: "block"`, pinned by `documentModel.test.ts`. A one-line dispatcher schema commit if this lane builds it (`docs/finish-2026-09-29/schema-inventory.md` §3). |
+| P-255 (cluster 14: Block sizing and defaults) | L-BLOCK-VIEWS | queued | storage half merged in B-SCHEMA `c798b03`: `ss-block.cornerRadius` `number\|null` (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:255`). |
 | P-273 (cluster 14: Block sizing and defaults) | L-BLOCK-VIEWS | queued | |
 | P-400 (cluster 14: Block sizing and defaults) | L-BLOCK-VIEWS | queued | |
 | P-461 (cluster 14: Block sizing and defaults) | L-BLOCK-VIEWS | queued | |
 | P-011 | L-PORTS-RAIL | queued | |
-| P-119 | L-PORTS-RAIL | queued | |
-| P-107 | L-PORTS-RAIL | queued | |
-| P-118 | L-PORTS-RAIL | queued | |
-| P-134 | L-PORTS-RAIL | queued | |
+| P-119 | L-PORTS-RAIL | queued | storage half merged in B-SCHEMA `c798b03`: `labelOrigin`/`secondaryOrigin` on `ss-port` (`apps/systemsketch/src/shapes/port/PortShapeUtil.tsx:107-108`) and in `ss-block.portOptions[id]` for rail ports (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:266`, `apps/systemsketch/src/shapes/shared/props.ts:168`). Left/Right offset origins deferred (trunk `SlotOrigin` has 4 values; `docs/finish-2026-09-29/schema-inventory.md` §3). |
+| P-107 | L-PORTS-RAIL | queued | storage half merged in B-SCHEMA `c798b03`: `ss-block.portLayout` `"inline"\|"offset"`, default `"inline"` (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:263`). |
+| P-118 | L-PORTS-RAIL | queued | storage half merged in B-SCHEMA `c798b03`: `ss-block.rails[side].mode` `"auto"\|"custom"` + `freeOffsets` (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:265`, `apps/systemsketch/src/shapes/shared/props.ts:142`); lanes.json's `portMode auto\|free` maps here (`docs/finish-2026-09-29/schema-inventory.md` §2). |
+| P-134 | L-PORTS-RAIL | queued | storage half merged in B-SCHEMA `c798b03`: `ss-block.functionPort`, default false (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:264`). |
 | P-078 | L-PORTS-RAIL | queued | |
 | P-219 | L-PORTS-RAIL | queued | |
-| P-269 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | |
-| P-270 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | |
+| P-269 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | storage half merged in B-SCHEMA `c798b03`: `ss-block.rails[side].enabled` / `spacing` (`apps/systemsketch/src/shapes/shared/props.ts:142`); `portOptions[id].hidden` / `frozen` (`apps/systemsketch/src/shapes/shared/props.ts:168`). |
+| P-270 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | B-SCHEMA `c798b03` stores nothing: per-port size deferred (competes with the document-wide port variant, D10 pending; `docs/finish-2026-09-29/schema-inventory.md` §3). |
 | P-271 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | |
 | P-345 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | |
-| P-356 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | |
-| P-358 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | |
+| P-356 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | storage half merged in B-SCHEMA `c798b03`: `ss-block.rails[side].enabled` / `spacing` (`apps/systemsketch/src/shapes/shared/props.ts:142`); `portOptions[id].hidden` / `frozen` (`apps/systemsketch/src/shapes/shared/props.ts:168`). |
+| P-358 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | storage half merged in B-SCHEMA `c798b03`: `ss-block.rails[side].enabled` / `spacing` (`apps/systemsketch/src/shapes/shared/props.ts:142`); `portOptions[id].hidden` / `frozen` (`apps/systemsketch/src/shapes/shared/props.ts:168`). |
 | P-386 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | |
-| P-395 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | |
-| P-433 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | |
+| P-395 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | B-SCHEMA `c798b03` stores nothing: port-edge container W/H has no rule on a block wall (`docs/finish-2026-09-29/schema-inventory.md` §3). |
+| P-433 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | storage half merged in B-SCHEMA `c798b03`: `ss-block.rails[side].enabled` / `spacing` (`apps/systemsketch/src/shapes/shared/props.ts:142`); `portOptions[id].hidden` / `frozen` (`apps/systemsketch/src/shapes/shared/props.ts:168`). |
 | P-458 (cluster 8: Port view customization (Altium-style)) | L-PORTS-RAIL | queued | |
 | P-099 | L-PORTS-SHAPE | queued | |
 | P-248 (cluster 4: Type-mismatch validation) | L-PORTS-SHAPE | queued | |
@@ -170,36 +170,36 @@ Copied from `baseline.md` (planner, 2026-09-29, main `705847c`; integration bran
 | P-451 (cluster 6: Port defaults, literal display, grammar pick) | L-PORTS-SHAPE | queued | |
 | P-250 (cluster 7: Port paint states) | L-PORTS-SHAPE | queued | |
 | P-287 (cluster 7: Port paint states) | L-PORTS-SHAPE | queued | |
-| P-399 (cluster 7: Port paint states) | L-PORTS-SHAPE | queued | |
-| P-408 (cluster 7: Port paint states) | L-PORTS-SHAPE | queued | |
-| P-188 | L-MEMBERS | queued | |
+| P-399 (cluster 7: Port paint states) | L-PORTS-SHAPE | queued | storage half merged in B-SCHEMA `c798b03`: `ss-port.fill` `auto\|filled\|empty` + `hidden` (`apps/systemsketch/src/shapes/port/PortShapeUtil.tsx:105-106`); rail ports `portOptions[id].fill`/`hidden` (`apps/systemsketch/src/shapes/shared/props.ts:168`). A free port's "not selectable" is stock `isLocked`. |
+| P-408 (cluster 7: Port paint states) | L-PORTS-SHAPE | queued | storage half merged in B-SCHEMA `c798b03`: `ss-port.fill` / `hidden` (`apps/systemsketch/src/shapes/port/PortShapeUtil.tsx:105-106`); rail ports `portOptions[id]` (`apps/systemsketch/src/shapes/shared/props.ts:168`). |
+| P-188 | L-MEMBERS | queued | storage half merged in B-SCHEMA `c798b03`: `membersLayout`, `memberInset`, `memberWidth`, `memberGap` 12, `memberGutter` 12, `insetBackground`, `expandedWeights`, `blockType` (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:267-274`). |
 | P-161 | L-MEMBERS | queued | |
 | P-079 | L-MEMBERS | queued | |
-| P-201 | L-MEMBERS | queued | |
-| P-208 | L-MEMBERS | queued | |
+| P-201 | L-MEMBERS | queued | storage half merged in B-SCHEMA `c798b03`: `ss-port.slots {label, secondary}: SlotMember[]` (`apps/systemsketch/src/shapes/port/PortShapeUtil.tsx:109`, `apps/systemsketch/src/shapes/shared/props.ts:194`); a deleted default member stays deleted (pinned in `documentModel.test.ts`). |
+| P-208 | L-MEMBERS | queued | storage half merged in B-SCHEMA `c798b03`: `ss-port.slots` (`apps/systemsketch/src/shapes/port/PortShapeUtil.tsx:109`); three shape members round-trip in `documentModel.test.ts`. |
 | P-110 | L-MEMBERS | queued | |
-| P-226 | L-MEMBERS | queued | |
+| P-226 | L-MEMBERS | queued | storage half merged in B-SCHEMA `c798b03`: `ss-block.expandedWeights` `Record<string,number>`, default `{}` (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:273`). |
 | P-064 | L-CODE | queued | |
 | P-065 | L-CODE | queued | |
 | P-068 | L-CODE | queued | |
 | P-075 | L-CODE | queued | |
 | P-128 | L-CODE | queued | |
 | P-091 | L-CODE | queued | |
-| P-127 | L-CODE | queued | |
-| P-264 (cluster 18: Code cell: origin state and display) | L-CODE | queued | |
-| P-278 (cluster 18: Code cell: origin state and display) | L-CODE | queued | |
+| P-127 | L-CODE | queued | storage half merged in B-SCHEMA `c798b03`: `ss-code.lineNumbers` / `fontSizePx` (`apps/systemsketch/src/shapes/code/CodeShapeUtil.tsx:83-84`). |
+| P-264 (cluster 18: Code cell: origin state and display) | L-CODE | queued | B-SCHEMA `c798b03` stores nothing: the block-face origin badge is `lanes.json` `deferredOther` (after W3); validator would be `ss-code.origin`'s (`docs/finish-2026-09-29/schema-inventory.md` §3). |
+| P-278 (cluster 18: Code cell: origin state and display) | L-CODE | queued | B-SCHEMA `c798b03` stores nothing: the trunk dropped flatten (`codeEditor.tsx:21`), so it would be a flag nothing renders (`docs/finish-2026-09-29/schema-inventory.md` §3). |
 | P-279 (cluster 18: Code cell: origin state and display) | L-CODE | queued | |
 | P-321 (cluster 18: Code cell: origin state and display) | L-CODE | queued | |
-| P-431 (cluster 18: Code cell: origin state and display) | L-CODE | queued | |
+| P-431 (cluster 18: Code cell: origin state and display) | L-CODE | queued | B-SCHEMA `c798b03` stores nothing: no lane this run builds an overflow control; the trunk dropped the grow modes (`docs/finish-2026-09-29/schema-inventory.md` §3). |
 | P-442 (cluster 18: Code cell: origin state and display) | L-CODE | queued | |
 | P-142 | L-DIAG | queued | |
 | P-100 | L-DIAG | queued | |
 | P-112 | L-DIAG | queued | |
-| P-074 | L-LINKING | queued | |
-| P-109 | L-LINKING | queued | |
+| P-074 | L-LINKING | queued | storage half merged in B-SCHEMA `c798b03`: `ss-block.definitionId`, default `""` = not linked (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:275`). |
+| P-109 | L-LINKING | queued | storage half merged in B-SCHEMA `c798b03`: `definitionId` + `draftOrdinal` (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:275-276`); `definitionKey` is derived, not stored (`TRUNK/scene/linking.ts:52-56`). |
 | P-210 | L-LINKING | queued | |
 | P-211 | L-LINKING | queued | |
-| P-213 | L-GLYPH | queued | |
+| P-213 | L-GLYPH | queued | B-SCHEMA `c798b03`: `ss-glyph` is this lane's NEW shape kind; its migration sequence starts at 0 (`docs/finish-2026-09-29/schema-inventory.md`). |
 | P-191 | L-COMPARE | queued | |
 | P-330 (cluster 24: Diff, lint, golden tooling) | L-COMPARE | queued | |
 | P-368 (cluster 24: Diff, lint, golden tooling) | L-COMPARE | queued | |
@@ -221,20 +221,20 @@ Copied from `baseline.md` (planner, 2026-09-29, main `705847c`; integration bran
 | P-297 (cluster 34: Selection/edit chrome parity nits) | L-GESTURES | queued | |
 | P-327 (cluster 34: Selection/edit chrome parity nits) | L-GESTURES | queued | |
 | P-010 | L-MENU-CONTEXT | queued | |
-| P-133 | L-MENU-CONTEXT | queued | |
+| P-133 | L-MENU-CONTEXT | queued | storage half merged in B-SCHEMA `c798b03`: `showHeader` / `showHeaderDivider` / `showFooter` / `showFooterDivider`, all true (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:256-259`). `showFooter: true` is a reversible default for Zach (`docs/finish-2026-09-29/schema-inventory.md` §5 Q1; follow-up table). |
 | P-178 | L-MENU-CONTEXT | queued | |
 | P-154 | L-MENU-CONTEXT | queued | |
 | P-056 | L-MENU-CONTEXT | queued | |
-| P-130 | L-MENU-CONTEXT | queued | |
+| P-130 | L-MENU-CONTEXT | queued | storage half merged in B-SCHEMA `c798b03`: `ss-block.showCard`, default false (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:260`). |
 | P-051 | L-MENU-CONTEXT | queued | |
 | P-052 | L-PILL | queued | |
 | P-102 | L-PILL | queued | |
 | P-076 | L-PILL | queued | re-scope first: W1c (Two Faces, `a671d01`) landed the shape switcher and replaced STYLE_ROWS with `TWO_FACES_RECIPE` (`apps/systemsketch/src/chrome/ContextualPopupMenu/appearanceModel.ts:289`); still owed: 21-colour palette, vertical align, line shape, start/end point |
-| P-319 (cluster 15: Text/size vocabulary) | L-PILL | queued | |
-| P-396 (cluster 15: Text/size vocabulary) | L-PILL | queued | |
-| P-404 (cluster 15: Text/size vocabulary) | L-PILL | queued | |
-| P-415 (cluster 15: Text/size vocabulary) | L-PILL | queued | |
-| P-447 (cluster 15: Text/size vocabulary) | L-PILL | queued | |
+| P-319 (cluster 15: Text/size vocabulary) | L-PILL | queued | B-SCHEMA `c798b03`: the size cascade / per-port size is deferred (D10; `docs/finish-2026-09-29/schema-inventory.md` §3). The cluster's title size ladder and typeface vocabulary are stored as `titleSizePx` / `titleFont` (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:261-262`). |
+| P-396 (cluster 15: Text/size vocabulary) | L-PILL | queued | storage half merged in B-SCHEMA `c798b03`: cluster 15's size ladder / typeface vocabulary ride on `ss-block.titleSizePx` / `titleFont` (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:261-262`). |
+| P-404 (cluster 15: Text/size vocabulary) | L-PILL | queued | storage half merged in B-SCHEMA `c798b03`: cluster 15's size ladder / typeface vocabulary ride on `ss-block.titleSizePx` / `titleFont` (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:261-262`). |
+| P-415 (cluster 15: Text/size vocabulary) | L-PILL | queued | storage half merged in B-SCHEMA `c798b03`: cluster 15's size ladder / typeface vocabulary ride on `ss-block.titleSizePx` / `titleFont` (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:261-262`). |
+| P-447 (cluster 15: Text/size vocabulary) | L-PILL | queued | storage half merged in B-SCHEMA `c798b03`: cluster 15's size ladder / typeface vocabulary ride on `ss-block.titleSizePx` / `titleFont` (`apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:261-262`). |
 | P-057 | L-INSPECTOR | queued | |
 | P-063 | L-INSPECTOR | queued | |
 | P-138 | L-INSPECTOR | queued | |
@@ -247,7 +247,7 @@ Copied from `baseline.md` (planner, 2026-09-29, main `705847c`; integration bran
 | P-200 | L-INSPECTOR | queued | |
 | P-083 | L-INSPECTOR | queued | |
 | P-144 | L-INSPECTOR | queued | |
-| P-194 | L-INSPECTOR | queued | |
+| P-194 | L-INSPECTOR | queued | B-SCHEMA `c798b03` stores NOTHING for it: the seven block slot lists are deferred (`docs/finish-2026-09-29/schema-inventory.md` §3, §5 Q2). The P-194 line here ('compose with the trunk Bar') needs no stored lists. |
 | P-274 (cluster 33: Inspector presentation and field commit) | L-INSPECTOR | queued | |
 | P-439 (cluster 33: Inspector presentation and field commit) | L-INSPECTOR | queued | |
 | P-020 | L-FILES | queued | |
@@ -265,7 +265,7 @@ Copied from `baseline.md` (planner, 2026-09-29, main `705847c`; integration bran
 | P-435 (cluster 22: File resilience and format housekeeping) | L-FILES | queued | |
 | P-070 | L-NAV | queued | |
 | P-215 | L-NAV | queued | |
-| P-276 (cluster 20: Pages, frames panel, imports, history) | L-NAV | queued | |
+| P-276 (cluster 20: Pages, frames panel, imports, history) | L-NAV | queued | B-SCHEMA `c798b03`: saved views are page meta (`TLPage.meta.savedViews`, free JSON, no migration), not shape state, and need Zach's yes (`docs/finish-2026-09-29/schema-inventory.md` §3). |
 | P-307 (cluster 20: Pages, frames panel, imports, history) | L-NAV | queued | |
 | P-311 (cluster 20: Pages, frames panel, imports, history) | L-NAV | queued | |
 | P-323 (cluster 20: Pages, frames panel, imports, history) | L-NAV | queued | |
@@ -304,6 +304,14 @@ Copied from `baseline.md` (planner, 2026-09-29, main `705847c`; integration bran
 | follow-up: no committed test pins grid / zoom / dev / help as one click in the stacked form | G-STALE → W5 | follow-up | At 720 px only Frames and Problems are pressed by a committed test (`railClose.smoke.test.tsx:133-145`). Grid, zoom, dev and help being hit-testable when stacked rests on the builder's `elementFromPoint` numbers in `fde4092`'s message (all six hit their own cell). The lane's brief ruled out new tests; a W5 guard (or the B-SHELL-P1 lift) should pin it. |
 | follow-up: the `sps` channel chip above a taller (90 px) stacked strip | G-STALE → D11 (EXT-SWITCHER) | follow-up | `apps/systemsketch/stable-preview.json:20` tells the shared runtime to avoid `[data-slot="status-strip"]` by its live box, so no config change should be owed. Unverified: `sps` cannot serve this app until D11. |
 | for Zach: stacked 2×3 strip at narrow widths is the default | G-STALE | reversible default | The alternative is today's single row lifted above the dock, 28 px over the licence text — a one-line amendment to `corner.smoke.test.tsx:132` plus reverting `cornerClusterForm`. D4 said build, so the stack shipped; his call if he prefers the row. |
+| B-SCHEMA (all P-ids in the brief's item table marked build) | B-SCHEMA | done (storage only) | none: this lane only stores state. Every new prop is persisted and migrated, but nothing reads it yet. The first reader of each one is the lane named in `docs/finish-2026-09-29/schema-inventory.md` §1, 'reads / writes' column (L-BLOCK-VIEWS, L-PORTS-RAIL, L-PORTS-SHAPE, L-MEMBERS, L-LINKING, L-WIRE-PAINT, L-ROUTE, L-CODE, L-PILL, L-INSPECTOR, L-MENU-CONTEXT). Each queued item row above names its prop and file:line; those rows stay queued until their feature and control merge (`rules.mechanismVsControl`). |
+| P-059 value view (type plumbing) | B-SCHEMA | done | `apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:64` `trunkBlockViewOf` (value → port), called at `BlockFace.tsx:712`, `sceneFromStore.ts:108` and `dropMenu.tsx:94`. Pinned by `documentModel.test.ts:269` (block closed vocabularies). |
+| mechanism: migrations | B-SCHEMA | done | `apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:349` `ss-block/5`, `apps/systemsketch/src/shapes/port/PortShapeUtil.tsx:139` `ss-port/3`, `apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:380` `ss-wire/3`, `apps/systemsketch/src/shapes/code/CodeShapeUtil.tsx:94` `ss-code/1`, `apps/systemsketch/src/shapes/region/RegionShapeUtil.tsx:116` `ss-region/1`. Tested by `apps/systemsketch/src/document/schemaV2Migration.test.ts` (B-SCHEMA-open `:224`, -resave `:247`, -fill `:280`, -why `:347`); 48/48 unit on the merged tree. |
+| B-SCHEMA/acceptance: a legacy `.bbox` saved before v2 opens, round-trips, and re-saves with only the new defaulted props | B-SCHEMA | done | Fixture `apps/systemsketch/src/document/fixtures/legacy-v1.bbox` (saved at BASE by the app's own `serializeBoard`, SHA-256 pinned by B-SCHEMA-fixture `schemaV2Migration.test.ts:197`); open `:224`, resave `:247` (ss-* at 5/3/3/1/1, every other sequence unchanged), fill `:280` (`??=`, never `=`). Command: `pnpm --dir apps/systemsketch exec vitest --project=unit run src/document/schemaV2Migration.test.ts`. |
+| B-SCHEMA/acceptance: `documentModel.test` pins the new defaults exactly | B-SCHEMA | done | `apps/systemsketch/src/document/documentModel.test.ts` exact default bags (block `:115`, code `:317`, port `:347`, wire `:425`, region `:554`), fully-populated non-default round trips (block `:190`, code `:323`, port `:371` incl. a deleted default slot member and three shape members `:393`, wire `:468`, region `:560`) and accept-then-refuse vocabularies (`:269`, `:406`, `:468`). `originResolution.test.ts` amended: `ss-code` sequence is exactly `["…/ss-code/1"]` and leaves `origin` byte-identical. |
+| B-SCHEMA/acceptance: pixel-identical fixture board before/after (subtract-the-images, zero diff) | B-SCHEMA | done | `apps/systemsketch/src/document/schemaV2Pixels.smoke.test.tsx:374` opens `legacy-v1.bbox` through `loadBoardText` (File ▸ Open), checks no chrome overlaps the clip (`getBoundingClientRect`), subtracts from `legacy-v1.png`: 0 differing pixels, then the store is at the v2 sequences. 1 passed / 2 skipped (the BASE-only capture, gated by `VITE_BSCHEMA_CAPTURE=1`) on the merged tree. |
+| B-SCHEMA/acceptance: WHY at each migration naming the P-028 empty-migration incident | B-SCHEMA | done | WHYs at `apps/systemsketch/src/shapes/block/BlockShapeUtil.tsx:353`, `apps/systemsketch/src/shapes/port/PortShapeUtil.tsx:143`, `apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:384`, `apps/systemsketch/src/shapes/code/CodeShapeUtil.tsx:97`, `apps/systemsketch/src/shapes/region/RegionShapeUtil.tsx:119`; pinned by B-SCHEMA-why `schemaV2Migration.test.ts:347` (TypeScript-parsed, so a neighbour's comment cannot answer for a step). |
+| B-SCHEMA residuals P-187, P-081 (no G3 row of their own) | B-SCHEMA | done (storage only) | P-187: `ss-wire.delayValue` + `labelFraction` + `animated` (`apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:323-328`); P-081: `ss-wire.bend` `{dx,dy}\|null` (`apps/systemsketch/src/shapes/wire/WireShapeUtil.tsx:329`, donor `curve` → `bend`, `/home/bam/systemsketch/src/blocks/connections/ConnectionShapeUtil.tsx:298-304`). Readers: L-WIRE-PAINT / L-ROUTE per `docs/finish-2026-09-29/schema-inventory.md` §1. |
 | L-REG (lanes.json items/clusters) | L-REG | obsolete | `lanes.json` L-REG has `items: []` and `clusters: []`; `untriaged-clusters.md` and `residuals.json` schedule nothing to it. Its scope was the two acceptance lines and the six `extra` lines, each settled in G3 above. |
 | follow-up: README + llms-intro still say the adapters are not installable | L-REG → W5-VERIFY (unowned) | follow-up | `README.md:501` (item list names 5 of 47) and `:507-509` ("**Known gap:** … not installable"); `apps/docs/content/llms-intro.md:52-56` ("## Known gaps"). Both false since `35a0349`. |
 | follow-up: docs component index + v1 install paths | L-REG → L-DOCS-COMPONENTS | follow-up | `apps/docs/content/docs/components/index.mdx:95-102` ("not yet installable", "reference only"); v1 now lands under `components/bbox/v1/`, so `port.mdx:43,64` and `block.mdx:43,72` (`components/bbox/port.tsx`, `@/components/bbox/block`) name the old path. |
@@ -311,6 +319,10 @@ Copied from `baseline.md` (planner, 2026-09-29, main `705847c`; integration bran
 | follow-up: mark CONTROL-FLOW-PLAN §11 item 6 done; its preset paragraph is stale | L-REG → dispatcher | follow-up | `docs/CONTROL-FLOW-PLAN.md:337` (item 6) and `:456-469` ("Until §11 item 6 lands, a consumer installs `region` …"). |
 | follow-up: re-run the generator + the install acceptance after every trunk change | L-REG → W5-VERIFY / G5 | follow-up | `python3 docs/build_menu_registry_items.py --check`, `npx shadcn@latest build`, `python3 -m pytest -q docs/acceptance/registry/test_registry_installs.py` (~8 min at load ~40). Every later lane that edits a shipped trunk source must rebuild `public/r` (the `registrySnapshot` ratchet forces it). |
 | follow-up: `block-node-reactflow` depends on the `BlockPort` API | L-REG → L-PORTS-RAIL | follow-up | `TRUNK/hosts/blockNodeReactflow.tsx` imports `BlockEdgeSpec` / `BlockPortLayout` / `BlockView` from `components/blockPort.tsx`; L-PORTS-RAIL (W3) edits `blockPort.tsx` and must keep the node and `Hosts/BlockNodeReactflow` green, then rebuild `public/r`. |
+| B-SCHEMA (lanes.json items/clusters) | B-SCHEMA | obsolete | `lanes.json` B-SCHEMA has `items: []` and `clusters: []`; its scope was the `extra` lines (the storage half of other lanes' items) and the four acceptance lines, each settled in G3 above. |
+| for Zach: `ss-block.showFooter` defaults to `true` | B-SCHEMA | reversible default | `docs/finish-2026-09-29/schema-inventory.md` §5 Q1. Consequence: when L-BLOCK-VIEWS lands Q-P146's footer, every block, old boards included, grows a footer band. The alternative `false` keeps old boards as they are but hides the burger until the footer is shown. Changing it is a one-line dispatcher schema commit; an existing saved value never migrates. |
+| for Zach: P-194's seven block slot lists deferred; `arc` routing kind deferred | B-SCHEMA | reversible default | `docs/finish-2026-09-29/schema-inventory.md` §5 Q2, Q3. Slot lists would be two answers to one question with `showHeader`/`showFooter`/`showDescription`/`glyph`; `arc` has no lane that can draw it this run and widening the enum later needs no migration. |
+| follow-up: the schema is frozen after the barrier | B-SCHEMA → every W3 lane | follow-up | A lane that finds it needs a new stored prop does not add one: the dispatcher lands a schema commit (`ss-block/6`, `ss-port/4`, …) with the P-028 WHY and the `documentModel.test.ts` default pin, alone. Deferred storage waiting for that: `titleAlign`/`titleBold`/`titleColor` (P-177, after L-PILL settles P-076's palette), per-port size (P-270/P-319, D10), block origin badge (P-264, after W3), code overflow (P-431/P-168), Left/Right offset `SlotOrigin` (P-119, needs a trunk design first), edges ending on edges (P-444/P-456). `docs/finish-2026-09-29/schema-inventory.md` §3. |
 
 ## G1 — every branch in branch-dispositions.json, dispositioned (W1i, 2026-09-30)
 
