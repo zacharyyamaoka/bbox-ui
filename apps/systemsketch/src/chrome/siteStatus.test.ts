@@ -243,8 +243,7 @@ describe("statusMismatchesOwn", () => {
 
   it("flags the DOCK'S STABLE WHITEBOARD against a moved checkout", () => {
     // The judge's HIGH finding #4, as a contract test. This is exactly what
-    // the retired scripts/launch_systemsketch.py's `health_document` answered
-    // (the launcher was deleted 2026-09-29) — the
+    // scripts/launch_systemsketch.py's `health_document` now answers — the
     // shape it answered BEFORE ({product, build, channel} only) is the next
     // test, and it could not produce a mismatch no matter how far the
     // checkout had moved.

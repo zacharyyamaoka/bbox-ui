@@ -5,13 +5,11 @@
 // this app; this file is that button, as a row in the burger menu.
 //
 // WHY it navigates the SAME window rather than opening a second one: the
-// archived app is the same artifact one version back, and Back (Alt+←) steps
-// you home again. A page cannot start processes, so this row only works while
-// the archived app's own Stable server is up (its own dock entry,
-// systemsketch.desktop, starts it). The retired launcher
-// (`scripts/launch_systemsketch.py`, deleted 2026-09-29 for the shared
-// stable-preview-switcher runtime) used to start it on every press and share
-// the old app's Chrome profile; neither survives the switch.
+// dock launcher (`scripts/launch_systemsketch.py`) opens this app in the old
+// app's own Chrome profile, so the archived app's origin keeps its storage
+// when the window steps across, and Back (Alt+←) steps you home again. A page
+// cannot start processes, so the launcher is also what makes sure the old
+// Stable server is up before this row can be pressed.
 //
 // WHY the row only exists on a loopback origin: the archived app is a local
 // install on this machine, never a deployed site. Served from anywhere else,

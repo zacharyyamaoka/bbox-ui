@@ -41,12 +41,9 @@ It was never one cache. Measured that day, three separate things:
 So this module owns the icons, rendered from the same files the site draws —
 Zach, 2026-09-09: "just have like a logo reference so you just ever need to
 update it once in the entire system and then everything points to it". The
-retired launcher (scripts/launch_systemsketch.py, deleted 2026-09-29) re-synced
-on every window open; the shared stable-preview-switcher runtime that replaced
-it runs no repo code on a press, so after an artwork change run this script by
-hand (`python3 scripts/dock_icon.py`). Its entry names `Icon=bbox-ui`, which is
-still this file's icon: stable-preview.json deliberately sets no `icon`, so
-`sps install-desktop` never overwrites the fitted, outlined one installed here.
+launcher re-syncs on every window open, so an edit to the artwork reaches the
+dock the next time the icon is pressed (from main — the dock runs main), and a
+stray run of the archived installer heals itself the same way.
 """
 
 from __future__ import annotations

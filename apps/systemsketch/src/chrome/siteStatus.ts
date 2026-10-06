@@ -12,8 +12,8 @@
 // scripts/bboxui_server.py's Stable servers answer, the same shape the
 // dev-server status plugins — apps/systemsketch/statusEndpoint.ts,
 // apps/storybook-basics/.storybook/statusEndpoint.ts — answer for Preview,
-// and the same shape the retired dock launcher, scripts/launch_systemsketch.py
-// (deleted 2026-09-29), answered for the pinned Stable whiteboard).
+// and the same shape scripts/launch_systemsketch.py's dock server answers
+// for the pinned Stable whiteboard).
 //
 // WHY this lives apart from sites.ts rather than folding into it:
 // `siteActionsFor` is a plain, synchronous function with an existing test
@@ -165,9 +165,8 @@ export function describeStatus(status: SiteStatus): string {
  * A signal missing on either side is skipped, not treated as a mismatch: an
  * honest "can't tell" beats a false alarm. That degradation used to swallow
  * the ONE case that matters, because the dock's Stable whiteboard answered
- * with neither field — the retired `scripts/launch_systemsketch.py`'s
- * `health_document` (deleted 2026-09-29) later carried both, and the test
- * that pins it stays as the contract for any server that answers this shape.
+ * with neither field — see `scripts/launch_systemsketch.py`'s
+ * `health_document`, which now carries both, and the test below that pins it.
  */
 export function statusMismatchesOwn(target: SiteStatus, own: SiteStatus): boolean {
   if (target.kind !== "live" || own.kind !== "live") return false;

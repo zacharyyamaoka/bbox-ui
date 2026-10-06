@@ -119,6 +119,34 @@ class RecordingRoutesOnTheDevHost(unittest.TestCase):
                 thread.join(timeout=5)
 
 
+class RecordingRoutesOnTheDockStableServer(unittest.TestCase):
+    """``launch_systemsketch.StableHandler`` is the dock's one Stable origin."""
+
+    def test_the_handler_dispatches_recordings_the_way_it_dispatches_workspace(self) -> None:
+        import launch_systemsketch
+
+        handler = launch_systemsketch.StableHandler
+        self.assertTrue(
+            hasattr(handler, "recordings"),
+            "StableHandler needs a `recordings` mount beside `workspace` — "
+            "the dock serves the built app and its API from ONE origin, so a "
+            "second port for recordings would need a second trusted origin.",
+        )
+        self.assertIsNone(handler.recordings, "unmounted by default, like `workspace`")
+
+        source = Path(launch_systemsketch.__file__).read_text(encoding="utf-8")
+        self.assertIn(
+            "self.recordings.handle_get(self)",
+            source,
+            "do_GET must delegate to the recordings mount",
+        )
+        self.assertIn(
+            "self.recordings.handle_post(self)",
+            source,
+            "do_POST must delegate to the recordings mount",
+        )
+
+
 class RecordingRoutesThroughTheStandaloneCli(unittest.TestCase):
     """What the vite dev plugin actually spawns: ``serve … --recordings``."""
 

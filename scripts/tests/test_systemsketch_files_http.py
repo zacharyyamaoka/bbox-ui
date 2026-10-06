@@ -17,6 +17,7 @@ Run: ``python3 -m unittest discover -s scripts/tests -t scripts/tests -v``
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 import signal
@@ -30,6 +31,7 @@ import unittest.mock
 import urllib.error
 import urllib.parse
 import urllib.request
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -41,6 +43,7 @@ from systemsketch_files import (  # noqa: E402
     LISTENING_BANNER,
     PRODUCT,
     RecordingDesktop,
+    WorkspaceApi,
     make_server,
 )
 
@@ -348,6 +351,51 @@ class CliTests(unittest.TestCase):
             legacy = home / ".local/share/systemsketch/runtime/locks/workspace"
             legacy.mkdir(parents=True)
             self.assertEqual(systemsketch_files.default_lock_root(home), legacy)
+
+
+class DockMountTests(unittest.TestCase):
+    """The dock's Stable server serves the app AND the routes, same origin."""
+
+    def test_the_stable_handler_delegates_workspace_routes_and_still_serves_the_build(self) -> None:
+        import launch_systemsketch  # noqa: E402 — scripts/ is on sys.path above
+
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary).resolve()
+            dist = base / "dist"
+            dist.mkdir()
+            (dist / "index.html").write_text("<!doctype html><title>SystemSketch</title>")
+            files_root = base / "home"
+            (files_root / "SystemSketch").mkdir(parents=True)
+            api = WorkspaceApi(files_root, base / "locks", RecordingDesktop(base / "desktop.jsonl", base / "trash"))
+            previous = getattr(launch_systemsketch.StableHandler, "workspace", None)
+            launch_systemsketch.StableHandler.workspace = api
+            server = ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(launch_systemsketch.StableHandler, directory=str(dist)))
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                host, port = server.server_address[:2]
+                http = Http(f"http://{host}:{port}")
+                path = str(files_root / "SystemSketch" / "Dock.tldr")
+                self.assertEqual(http.post("/api/workspace/file", {"path": path, "source": tldr(), "baseDigest": None})[0], 200)
+                status, _, listing = http.get("/api/workspace/list")
+                self.assertEqual(status, 200)
+                self.assertEqual([d["title"] for d in listing["documents"]], ["Dock"])
+                with urllib.request.urlopen(http.origin + "/", timeout=10) as response:
+                    self.assertIn(b"SystemSketch", response.read())
+                # /api/health stays the launcher's own (the build it serves), not the file host's.
+                self.assertEqual(http.get("/api/health")[2]["product"], launch_systemsketch.PRODUCT)
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+                launch_systemsketch.StableHandler.workspace = previous
+
+    def test_the_launcher_serves_the_real_home_folder_by_default_and_honours_an_override(self) -> None:
+        import launch_systemsketch  # noqa: E402
+
+        self.assertEqual(launch_systemsketch.files_root_from({}), Path.home())
+        self.assertEqual(launch_systemsketch.files_root_from({"SYSTEMSKETCH_FILES_ROOT": "/tmp/elsewhere"}), Path("/tmp/elsewhere"))
+
 
 
 # --------------------------------------------------------------- the CSRF fence
