@@ -77,10 +77,29 @@ const CITED_PATHS = [
   "/home/bam/systemsketch/src/behaviorTree/behaviorTreeDrag.ts",
 ] as const;
 
+/**
+ * Where the donor tree is checked out. The citations stay absolute
+ * `/home/bam/systemsketch/...` paths (that is what the headers say, and the
+ * reverse-direction test below matches them byte for byte); only the
+ * existence check is re-rooted.
+ *
+ * WHY (2026-11-25): on any machine but Zach's, `/home/bam/systemsketch` does
+ * not exist, so these eight cases failed on every CI run — hidden until then
+ * behind the gate job's Node 20 install failure. The donor is public
+ * (github.com/zacharyyamaoka/systemsketch), so CI checks it out at a pinned
+ * commit and points `SYSTEMSKETCH_DONOR_ROOT` at it. The gate keeps its
+ * teeth: an unset variable falls back to the real path, and a missing tree
+ * still fails — there is deliberately no skip.
+ */
+const DONOR_PREFIX = "/home/bam/systemsketch/";
+const DONOR_ROOT = process.env.SYSTEMSKETCH_DONOR_ROOT || DONOR_PREFIX;
+const onDisk = (cited: string) => `${DONOR_ROOT.replace(/\/?$/, "/")}${cited.slice(DONOR_PREFIX.length)}`;
+
 describe("A12 · every cited donor path exists on disk", () => {
   for (const path of CITED_PATHS) {
-    it(`${path.replace("/home/bam/systemsketch/", "systemsketch/")} exists`, () => {
-      expect(existsSync(path)).toBe(true);
+    it(`${path.replace(DONOR_PREFIX, "systemsketch/")} exists`, () => {
+      expect(path.startsWith(DONOR_PREFIX)).toBe(true);
+      expect(existsSync(onDisk(path))).toBe(true);
     });
   }
 

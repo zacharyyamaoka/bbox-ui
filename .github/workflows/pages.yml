@@ -32,9 +32,25 @@ jobs:
         with:
           node-version: 22  # pnpm 11 needs Node >= 22.13 (node:sqlite); CI was red on Node 20 from 2026-09-16
           cache: pnpm
+      # magnetProvenance.test.ts (A12) existsSync's every donor file the magnet
+      # kit cites. The donor is public; pin the commit its citations were
+      # checked against (the eight files are byte-identical to the local
+      # donor HEAD those headers were written from) so a later donor rename
+      # fails here on purpose, not at random.
+      - uses: actions/checkout@v4
+        with:
+          repository: zacharyyamaoka/systemsketch
+          ref: 52ec958214ef7e93396db4b4f3911057df98e4a6
+          path: .donors/systemsketch
       - run: pnpm install --frozen-lockfile
+      # The `storybook` Vitest project runs every story in real Chromium. The
+      # runner has no Playwright browser, so without this the project died at
+      # launch ("Executable doesn't exist") and 178 story files never ran.
+      - run: pnpm --filter bbox-storybook-basics exec playwright install --with-deps chromium
       - run: pnpm -r run typecheck
       - run: pnpm -r run test
+        env:
+          SYSTEMSKETCH_DONOR_ROOT: ${{ github.workspace }}/.donors/systemsketch
 
   build-and-publish:
     needs: gate
