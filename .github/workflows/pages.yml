@@ -30,7 +30,7 @@ jobs:
           version: 11.5.3
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22  # pnpm 11 needs Node >= 22.13 (node:sqlite); CI was red on Node 20 from 2026-09-16
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r run typecheck
@@ -65,7 +65,7 @@ jobs:
           version: 11.5.3
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22  # pnpm 11 needs Node >= 22.13 (node:sqlite); CI was red on Node 20 from 2026-09-16
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter bbox-storybook run build-storybook
