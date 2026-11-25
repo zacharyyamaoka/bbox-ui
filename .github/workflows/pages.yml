@@ -42,6 +42,22 @@ jobs:
           repository: zacharyyamaoka/systemsketch
           ref: 52ec958214ef7e93396db4b4f3911057df98e4a6
           path: .donors/systemsketch
+      # apps/bbox-reactflow depends on simple-reactflow-whiteboard through a
+      # committed symlink to the absolute worktree path in its package.json
+      # (bboxUi.whiteboardPin), and whiteboardDependency.test.ts asserts that
+      # worktree sits at the pinned commit with a built dist/. Recreate it at
+      # exactly that path, from the manifest, BEFORE install (pnpm copies the
+      # `file:` dep at install time); its `prepare` script builds dist/.
+      - name: Materialize the pinned simple-reactflow-whiteboard worktree
+        run: |
+          PIN_DIR=$(jq -r .bboxUi.whiteboardPin.worktree apps/bbox-reactflow/package.json)
+          PIN_SHA=$(jq -r .bboxUi.whiteboardPin.commit apps/bbox-reactflow/package.json)
+          sudo mkdir -p "$(dirname "$PIN_DIR")"
+          sudo chown "$(id -u):$(id -g)" "$(dirname "$PIN_DIR")"
+          git clone -q https://github.com/zacharyyamaoka/simple-reactflow-whiteboard.git "$PIN_DIR"
+          git -C "$PIN_DIR" checkout -q --detach "$PIN_SHA"
+          pnpm --dir "$PIN_DIR" install --frozen-lockfile
+          test -f "$PIN_DIR/dist/index.js"
       - run: pnpm install --frozen-lockfile
       # The `storybook` Vitest project runs every story in real Chromium. The
       # runner has no Playwright browser, so without this the project died at
