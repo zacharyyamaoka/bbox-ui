@@ -47,6 +47,11 @@ jobs:
       # runner has no Playwright browser, so without this the project died at
       # launch ("Executable doesn't exist") and 178 story files never ran.
       - run: pnpm --filter bbox-storybook-basics exec playwright install --with-deps chromium
+      # The text-ink stories (DetachToPrimitive F3) compare the live DOM's
+      # system sans against tldraw's bundled font, with tolerances measured on
+      # a box where sans-serif/system-ui resolve to Noto Sans. The runner has
+      # no Noto and falls back to the wider DejaVu Sans, failing by <1 px.
+      - run: sudo apt-get install -y --no-install-recommends fonts-noto-core && fc-match sans-serif
       - run: pnpm -r run typecheck
       - run: pnpm -r run test
         env:
