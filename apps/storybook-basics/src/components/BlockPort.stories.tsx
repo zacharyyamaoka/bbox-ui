@@ -906,6 +906,12 @@ export const FunctionPort: Story = {
 /* function port's non-movement teeth.                                  */
 /* ------------------------------------------------------------------ */
 
+// WHY each wait is two animation frames THEN the old timeout (2026-11-25):
+// dnd-kit measures droppable rects a frame after activation, so a fixed 30ms
+// sleep let the drop move outrun that measurement on a loaded CI runner and
+// the drag silently reordered nothing (PortEdge Anchor Layouts › Ellipse,
+// first seen once the gate actually ran Chromium). Frame-aligned waits are
+// never shorter than before, so no assertion got looser.
 /**
  * `PortEdge.stories.tsx`'s `dragCard`, reused by value (Block.stories.tsx
  * already does the same): a genuine `@dnd-kit/core` `PointerSensor` drag,
@@ -924,13 +930,13 @@ async function dragElement(from: Element, to: Element) {
   const endX = toRect.left + toRect.width / 2;
   const endY = toRect.top + toRect.height / 2;
   fire(from, "pointerdown", startX, startY);
-  await new Promise((r) => setTimeout(r, 30));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 30))));
   fire(from, "pointermove", startX, startY + 10); // clears activationConstraint.distance
-  await new Promise((r) => setTimeout(r, 30));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 30))));
   fire(from, "pointermove", endX, endY);
-  await new Promise((r) => setTimeout(r, 30));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 30))));
   fire(from, "pointerup", endX, endY);
-  await new Promise((r) => setTimeout(r, 100));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 100))));
 }
 
 function FunctionPortIsFixedDemo() {

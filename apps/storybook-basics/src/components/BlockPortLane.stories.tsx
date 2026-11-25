@@ -915,6 +915,12 @@ export const LaneRefusedInSimpleView: Story = {
 /* LaneVsMemberDrag — two DndContexts, one open lane (D13).              */
 /* ------------------------------------------------------------------ */
 
+// WHY each wait is two animation frames THEN the old timeout (2026-11-25):
+// dnd-kit measures droppable rects a frame after activation, so a fixed 30ms
+// sleep let the drop move outrun that measurement on a loaded CI runner and
+// the drag silently reordered nothing (PortEdge Anchor Layouts › Ellipse,
+// first seen once the gate actually ran Chromium). Frame-aligned waits are
+// never shorter than before, so no assertion got looser.
 /**
  * A real pointer drag session. `@dnd-kit`'s PointerSensor needs
  * `pointerdown` → a move that clears its 4px activation distance → the real
@@ -930,13 +936,13 @@ async function pointerDrag(from: Element, to: Element): Promise<void> {
   const endX = toRect.left + toRect.width / 2;
   const endY = toRect.top + toRect.height / 2;
   fire(from, "pointerdown", startX, startY);
-  await new Promise((r) => setTimeout(r, 30));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 30))));
   fire(from, "pointermove", startX, startY + 10);
-  await new Promise((r) => setTimeout(r, 30));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 30))));
   fire(from, "pointermove", endX, endY);
-  await new Promise((r) => setTimeout(r, 30));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 30))));
   fire(from, "pointerup", endX, endY);
-  await new Promise((r) => setTimeout(r, 100));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 100))));
 }
 
 /**

@@ -17,6 +17,12 @@ function required<T extends Element>(root: ParentNode, selector: string, what: s
   return found;
 }
 
+// WHY each wait is two animation frames THEN the old timeout (2026-11-25):
+// dnd-kit measures droppable rects a frame after activation, so a fixed 30ms
+// sleep let the drop move outrun that measurement on a loaded CI runner and
+// the drag silently reordered nothing (PortEdge Anchor Layouts › Ellipse,
+// first seen once the gate actually ran Chromium). Frame-aligned waits are
+// never shorter than before, so no assertion got looser.
 /**
  * A genuine `@dnd-kit/core` `PointerSensor` drag, not a style-only stand-in:
  * pointerdown on the source card, a small pointermove to clear the 4px
@@ -42,13 +48,13 @@ async function dragCard(from: Element, to: Element) {
   const endX = toRect.left + toRect.width / 2;
   const endY = toRect.top + toRect.height / 2;
   fire(from, "pointerdown", startX, startY);
-  await new Promise((r) => setTimeout(r, 30));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 30))));
   fire(from, "pointermove", startX, startY + 10); // clears activationConstraint.distance
-  await new Promise((r) => setTimeout(r, 30));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 30))));
   fire(from, "pointermove", endX, endY);
-  await new Promise((r) => setTimeout(r, 30));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 30))));
   fire(from, "pointerup", endX, endY);
-  await new Promise((r) => setTimeout(r, 100));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 100))));
 }
 
 /* ------------------------------------------------------------------ */
@@ -1183,6 +1189,12 @@ export const GroupedSpacing: Story = {
 /* or shrinks mid-gesture, for a single port AND a grouped pair.        */
 /* ------------------------------------------------------------------ */
 
+// WHY each wait is two animation frames THEN the old timeout (2026-11-25):
+// dnd-kit measures droppable rects a frame after activation, so a fixed 30ms
+// sleep let the drop move outrun that measurement on a loaded CI runner and
+// the drag silently reordered nothing (PortEdge Anchor Layouts › Ellipse,
+// first seen once the gate actually ran Chromium). Frame-aligned waits are
+// never shorter than before, so no assertion got looser.
 /**
  * Like `dragCard`, but returns the dragged element's rect measured MID
  * gesture (after the activation-constraint move, before pointerup) instead
@@ -1202,18 +1214,18 @@ async function dragCardMeasuringMidGesture(from: Element, to: Element): Promise<
   const endX = toRect.left + toRect.width / 2;
   const endY = toRect.top + toRect.height / 2;
   fire(from, "pointerdown", startX, startY);
-  await new Promise((r) => setTimeout(r, 30));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 30))));
   fire(from, "pointermove", startX, startY + 10); // clears activationConstraint.distance
-  await new Promise((r) => setTimeout(r, 30));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 30))));
   const midX = (startX + endX) / 2;
   const midY = (startY + endY) / 2;
   fire(from, "pointermove", midX, midY);
-  await new Promise((r) => setTimeout(r, 30));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 30))));
   const mid = from.getBoundingClientRect();
   fire(from, "pointermove", endX, endY);
-  await new Promise((r) => setTimeout(r, 30));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 30))));
   fire(from, "pointerup", endX, endY);
-  await new Promise((r) => setTimeout(r, 100));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 100))));
   const after = from.getBoundingClientRect();
   return { before, mid, after };
 }

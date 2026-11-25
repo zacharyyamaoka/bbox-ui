@@ -434,6 +434,12 @@ function band(label: string, width?: number) {
   );
 }
 
+// WHY each wait is two animation frames THEN the old timeout (2026-11-25):
+// dnd-kit measures droppable rects a frame after activation, so a fixed 30ms
+// sleep let the drop move outrun that measurement on a loaded CI runner and
+// the drag silently reordered nothing (PortEdge Anchor Layouts › Ellipse,
+// first seen once the gate actually ran Chromium). Frame-aligned waits are
+// never shorter than before, so no assertion got looser.
 /**
  * PortEdge.stories.tsx's `dragCard`, reused by value: a genuine
  * `PointerSensor` drag. `isPrimary: true` is load-bearing — dnd-kit's
@@ -453,16 +459,16 @@ async function dragMemberMeasuring(from: Element, to: Element): Promise<{ before
   const endX = toRect.left + toRect.width / 2;
   const endY = toRect.top + toRect.height / 2;
   fire(from, "pointerdown", startX, startY);
-  await new Promise((r) => setTimeout(r, 30));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 30))));
   fire(from, "pointermove", startX, startY + 10); // clears activationConstraint.distance
-  await new Promise((r) => setTimeout(r, 30));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 30))));
   fire(from, "pointermove", (startX + endX) / 2, (startY + endY) / 2);
-  await new Promise((r) => setTimeout(r, 30));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 30))));
   const mid = from.getBoundingClientRect();
   fire(from, "pointermove", endX, endY);
-  await new Promise((r) => setTimeout(r, 30));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 30))));
   fire(from, "pointerup", endX, endY);
-  await new Promise((r) => setTimeout(r, 100));
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 100))));
   const after = from.getBoundingClientRect();
   return { before, mid, after };
 }
