@@ -102,6 +102,17 @@ export default defineConfig({
             headless: true,
             instances: [{ browser: "chromium" }],
           },
+          // WHY serial on CI (2026-11-25): the first CI run that actually had
+          // Chromium (before it, this project died at launch) ran story files
+          // in parallel on a 4-core runner and failed 4 of 178 — AppMenu and
+          // DevPanel clicking a Base UI popup still at `pointer-events: none`,
+          // FileNavigatorGeometry and DetachToPrimitive measuring 1-3 px off.
+          // Each passes alone, twice, and the whole project passes 178/178
+          // with --no-file-parallelism; they race the load, not the code.
+          // Local runs stay parallel for speed (~4 min serial vs faster).
+          // The real fix is play functions that await settled state
+          // (findBy*, animations done, document.fonts.ready) — owed per story.
+          fileParallelism: !process.env.CI,
           // WHY no setupFiles/setProjectAnnotations here: Storybook 10.3+
           // has addon-vitest apply preview.tsx's annotations (decorators,
           // GlyphResolverProvider) automatically. A manual
