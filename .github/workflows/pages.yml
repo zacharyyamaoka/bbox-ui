@@ -72,7 +72,8 @@ jobs:
       # One package at a time: run in parallel, systemsketch's browser suite
       # starved packages/glyph-picker's jsdom tests (32 tests, 104 s) into
       # vitest's unhandled "Timeout calling onTaskUpdate" (LEDGER FLAKY_FILES).
-      - run: pnpm -r --workspace-concurrency=1 run test
+      # --no-bail: report every package, not just the first red one.
+      - run: pnpm -r --workspace-concurrency=1 --no-bail run test
         env:
           SYSTEMSKETCH_DONOR_ROOT: ${{ github.workspace }}/.donors/systemsketch
 
